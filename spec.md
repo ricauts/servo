@@ -184,7 +184,7 @@ The Company Brain thesis: scattered domain knowledge is the blocker to AI automa
 | Knowledge pulled from fragmented sources | Tickets *are* the fragment stream (email → ticket via `POST /api/inbound/email`); desk memory via `search_tickets` / `read_ticket` / `requester_history` (`src/lib/ai/tools/history.ts`) | **The knowledge base (`kb-*`): upload spreadsheets and manuals, chunked with pointers back to sheet+range / page, a deterministic keyword/entity graph, and retrieval that is ACL-filtered before anything reaches model context** |
 | Kept current | Skills are versioned and UI-editable; sync never clobbers admin edits (`src/lib/bootstrap.ts:79-112`); QA flags runs that ignored an applicable skill (`src/lib/ai/engine.ts:739-756`) — drift detection v0 | Deterministic ticket → skill distillation with provenance (`reb-05`), counted by KPIs (`reb-06`) |
 | Turned into reliable automation | Deny-by-default tool policies, risk levels, approval gates and resume (`src/lib/ai/engine.ts:474-604`, `Approval`) | KB-backed answers with citations, and auto-delivery only when policy authorises it (`kb-10`, `kb-11`) |
-| Trust | Per-step audit trail (`AgentRun` / `AgentStep`); approvals name their human | **`p0-01`** — the MCP path currently leaves no trail at all |
+| Trust | Per-step audit trail (`AgentRun` / `AgentStep`); approvals name their human; `McpCall` audits the MCP path | — |
 
 The ticket queue is the capture loop. The skills are the executable file. The knowledge base is the substrate the loop reads from. The audit trail is why anyone lets it run.
 
@@ -200,7 +200,7 @@ Machine-checked by `scripts/claims-audit.mjs` (`reb-07`) against the fenced bann
 | QA catches an agreed procedure being ignored | **yes** | — | `src/lib/ai/engine.ts:739-756` |
 | The desk searches its own resolved tickets before acting | **yes** | — | `src/lib/ai/tools/history.ts` — no vector store, works offline |
 | Full audit trail of **engine runs** | **yes** (scoped) | — | `AgentRun` / `AgentStep` in `prisma/schema.prisma` |
-| "Every agent action is audited" / "all tool calls leave a trail" | **NO — false today** | unblocked by `p0-01` | `src/app/api/mcp/route.ts` executes with no audit row |
+| "Every agent action is audited" / "all tool calls leave a trail" | **yes** | — | `AgentRun`/`AgentStep` for engine runs; `McpCall` for the MCP path (`p0-01`, merged 2026-08-27) |
 | "The AI control plane for your company" (present tense, public) | **NO** | unblocked by `p0-01` | see §1.1 for the exact allowed replacement wording |
 | Self-hostable, MIT, BYOK, offline mock mode, SSO, secrets encrypted at rest | **yes** | — | `LICENSE`; `src/lib/ai/settings.ts`; `src/lib/ai/mock.ts`; `src/lib/authjs.ts`; `src/lib/secret-store.ts` |
 | Admin egress allowlist for outbound tool traffic | **yes** | — | `src/lib/egress.ts` (README currently calls this roadmap — `reb-01` fixes that) |
@@ -1569,7 +1569,7 @@ Nothing widens tool exposure before `p0-01` lands.
 
 ```
 ### [p0-01] Route MCP tools/call through an audited, policy-rechecked executor
-status: review
+status: done
 date: 2026-08-27
 size: two-ticks
 tier: C
@@ -2567,5 +2567,5 @@ Append-only. One line per tick, including no-op ticks. The adopt-first note is *
 
 | date | item id | what changed | commit |
 |---|---|---|---|
-| 2026-08-27 | p0-01 | `executeMcpToolCall()` in `src/lib/mcp.ts` becomes the single execute site for `tools/call`: it re-reads the `ToolPolicy` row itself (refusing unless `enabled && !requiresApproval`, and refusing `CORE_TOOLS`) and writes exactly one `McpCall` row — `EXECUTED` / `REFUSED_POLICY` / `REFUSED_UNKNOWN` / `ERROR` — on every call. `src/app/api/mcp/route.ts` now has zero `tool.execute()` calls, asserted by a test that reads the route source. `McpCall` added to `prisma/schema.prisma`, `McpCallDecision` to `src/lib/types.ts`. Wire behaviour unchanged: withheld tools still answer as tool errors, unknown names still `-32602`. Adopt-first: nothing to adopt — this is a policy/audit path over Servo's own registry inside existing files; `@modelcontextprotocol/sdk` (MIT) stays the client-side adoption and is untouched. Tier C by the landing rule (the approval gate itself) ⇒ PR, status `review`, not merged. The §1.3 ledger row for "all tool calls leave a trail" flips only when the owner merges. | branch `feat/p0-01`, PR — |
+| 2026-08-27 | p0-01 | `executeMcpToolCall()` in `src/lib/mcp.ts` becomes the single execute site for `tools/call`: it re-reads the `ToolPolicy` row itself (refusing unless `enabled && !requiresApproval`, and refusing `CORE_TOOLS`) and writes exactly one `McpCall` row — `EXECUTED` / `REFUSED_POLICY` / `REFUSED_UNKNOWN` / `ERROR` — on every call. `src/app/api/mcp/route.ts` now has zero `tool.execute()` calls, asserted by a test that reads the route source. `McpCall` added to `prisma/schema.prisma`, `McpCallDecision` to `src/lib/types.ts`. Wire behaviour unchanged: withheld tools still answer as tool errors, unknown names still `-32602`. Adopt-first: nothing to adopt — this is a policy/audit path over Servo's own registry inside existing files; `@modelcontextprotocol/sdk` (MIT) stays the client-side adoption and is untouched. Tier C by the landing rule (the approval gate itself) ⇒ PR, status `review`, not merged. The §1.3 ledger row for "all tool calls leave a trail" flips only when the owner merges. | merge `feat/p0-01` (PR #5, reviewed and merged by the owner) |
 | 2026-08-27 | loop-02 | `scripts/loop-guard.mjs` ships the §0.8 rails as executable checks: pure functions over plain strings (branch, porcelain, staged diff, DATABASE_URL, changed files) plus a CLI that exits 1 with a rail-named reason. Rail 1 compares the *parsed* database name (dev/demo refused, `servo_test_*` passes — a password containing "dev.db" does not trip it); rail 1b (`--db-push`) allows `prisma db push` only on `servo_test_*`; rail 2 scans added diff lines for the spec's secret patterns outside `tests/`+`fixtures/` paths; rail 3 refuses main/master; rail 4 catches any `prisma/*.db*` path in porcelain (path read from index 3, rename-aware); rail 5 demands a migration for a schema change and reports itself inert until `prisma/migrations/` exists. `tests/loop-guard.test.ts`: every rail has passing+failing fixtures; Node builtins only. Adopt-first: nothing to adopt — bespoke repo rails over git/env strings; generic scanners (gitleaks & co.) express none of rails 1/1b/3/4/5 and rail 2's pattern list is spec-fixed. Tier A: merged `--no-ff` to main, `npm run typecheck && npm test` green (224 tests, 17 files). | merge `feat/loop-02` |

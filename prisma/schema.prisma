@@ -259,6 +259,22 @@ model ToolPolicy {
   requiresApproval Boolean @default(false)
 }
 
+// One row per MCP tools/call — executed, refused or thrown. External MCP
+// clients run outside the engine loop, so they leave no AgentRun/AgentStep
+// trail; this is the audit record for that surface. `decision` is the
+// McpCallDecision union in src/lib/types.ts.
+model McpCall {
+  id            String   @id @default(cuid())
+  toolName      String
+  inputJson     String // JSON string, parsed defensively on read
+  resultPreview String // truncated to RESULT_LIMIT (4000)
+  decision      String // EXECUTED | REFUSED_POLICY | REFUSED_UNKNOWN | ERROR
+  callerLabel   String   @default("mcp-external")
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // An admin-defined HTTP tool/integration the resolver can call. Enable/disable
 // and risk/approval live in the matching ToolPolicy row (same toolName).
 // {input.field} placeholders are substituted from the model's tool input;

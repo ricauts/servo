@@ -16,7 +16,9 @@ import { emitTicketEvent } from "@/lib/webhooks";
 import { notifyTicketCreated } from "@/lib/notify";
 import { runTriage } from "@/lib/ai/engine";
 import { nextTicketNumber } from "@/lib/tickets";
+import { RESULT_LIMIT } from "@/lib/ai/tools/types";
 import type { ToolContext, ToolDef } from "@/lib/ai/tools";
+import type { McpCallDecision } from "@/lib/types";
 
 export const MCP_SETTING_KEYS = {
   token: "integration.mcp.token", // never returned by the API
@@ -148,4 +150,124 @@ export async function mcpToolContext(): Promise<ToolContext | null> {
   });
   if (!agentUser) return null;
   return { ticketId: "mcp-external", runId: "mcp-external", agentUser };
+}
+
+/** What one tools/call produced, plus the decision recorded on its audit row. */
+export interface McpCallResult {
+  decision: McpCallDecision;
+  /** Tool result or refusal text, already truncated to RESULT_LIMIT. */
+  text: string;
+  isError: boolean;
+  /** Set when the failure is protocol-level (unknown tool, unconfigured
+   *  server) rather than a tool result the caller can read and adapt to. */
+  rpcErrorCode?: number;
+}
+
+function truncate(text: string): string {
+  return text.length > RESULT_LIMIT ? text.slice(0, RESULT_LIMIT) : text;
+}
+
+function inputToJson(args: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(args ?? {}) ?? "{}";
+  } catch {
+    return "{}";
+  }
+}
+
+/**
+ * The single execute site for MCP tool calls, and the only place `tools/call`
+ * may run a tool. Two things happen here that a caller-facing filter cannot
+ * guarantee:
+ *
+ * 1. The policy is re-read at the execute site and enforced independently of
+ *    what `getMcpTools()` returned — defence in depth, not an optimisation.
+ * 2. Every call leaves exactly one `McpCall` row: executed, refused or thrown.
+ *    External MCP clients run outside the engine loop and so have no
+ *    AgentRun/AgentStep trail; this row is the trail.
+ *
+ * It never throws at the caller: a tool that crashes is an `ERROR` row and a
+ * readable tool-error string.
+ */
+export async function executeMcpToolCall(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<McpCallResult> {
+  const outcome = await resolveMcpToolCall(name, args);
+  await db.mcpCall.create({
+    data: {
+      toolName: name,
+      inputJson: inputToJson(args),
+      resultPreview: outcome.text,
+      decision: outcome.decision,
+      callerLabel: "mcp-external",
+    },
+  });
+  return outcome;
+}
+
+async function resolveMcpToolCall(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<McpCallResult> {
+  const native = NATIVE_TOOLS[name];
+  const registry = await getToolRegistry();
+  const tool = native ?? registry[name];
+
+  if (!tool) {
+    return {
+      decision: "REFUSED_UNKNOWN",
+      text: `Unknown tool: ${name}`,
+      isError: true,
+      rpcErrorCode: -32602,
+    };
+  }
+
+  // Native MCP tools have no registry policy row; every registry tool is
+  // policy-checked here regardless of what tools/list served.
+  if (!native) {
+    const refusal = await mcpPolicyRefusal(name);
+    if (refusal) return { decision: "REFUSED_POLICY", text: truncate(refusal), isError: true };
+  }
+
+  const ctx = await mcpToolContext();
+  if (!ctx) {
+    return {
+      decision: "ERROR",
+      text: "Servo has no system agents yet — run setup.",
+      isError: true,
+      rpcErrorCode: -32603,
+    };
+  }
+
+  try {
+    const text = truncate(await tool.execute(args, ctx));
+    return { decision: "EXECUTED", text, isError: text.startsWith("Error:") };
+  } catch (err) {
+    return {
+      decision: "ERROR",
+      text: truncate(err instanceof Error ? err.message : "Tool crashed."),
+      isError: true,
+    };
+  }
+}
+
+/**
+ * Why this registry tool may not run over MCP, or null when it may. Reuses
+ * `mcpToolWithholdReason()`'s texts and re-reads the policy row itself, so the
+ * refusal does not depend on what `getMcpTools()` filtered.
+ */
+async function mcpPolicyRefusal(name: string): Promise<string | null> {
+  if (CORE_TOOLS.includes(name)) {
+    return (
+      (await mcpToolWithholdReason(name)) ??
+      `Error: "${name}" only runs inside a ticket's agent run and is not available over MCP.`
+    );
+  }
+  const policy = await db.toolPolicy.findUnique({ where: { toolName: name } });
+  if (policy?.enabled && !policy.requiresApproval) return null;
+  return (
+    (await mcpToolWithholdReason(name)) ??
+    `Error: "${name}" is not available over MCP.`
+  );
 }
