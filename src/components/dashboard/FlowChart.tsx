@@ -43,12 +43,12 @@ export default function FlowChart({ data }: { data: Point[] }) {
       <AreaChart data={data} margin={{ left: 0, right: 12, top: 8 }}>
         <defs>
           <linearGradient id="fillCreated" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-created)" stopOpacity={0.5} />
-            <stop offset="95%" stopColor="var(--color-created)" stopOpacity={0.04} />
+            <stop offset="5%" stopColor="var(--chart-3)" stopOpacity={0.5} />
+            <stop offset="95%" stopColor="var(--chart-3)" stopOpacity={0.04} />
           </linearGradient>
           <linearGradient id="fillResolved" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-resolved)" stopOpacity={0.5} />
-            <stop offset="95%" stopColor="var(--color-resolved)" stopOpacity={0.04} />
+            <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.5} />
+            <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.04} />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} />
@@ -80,7 +80,7 @@ export default function FlowChart({ data }: { data: Point[] }) {
           dataKey="created"
           type="monotone"
           fill="url(#fillCreated)"
-          stroke="var(--color-created)"
+          stroke="var(--chart-3)"
           strokeWidth={2}
           isAnimationActive={false}
         />
@@ -88,7 +88,7 @@ export default function FlowChart({ data }: { data: Point[] }) {
           dataKey="resolved"
           type="monotone"
           fill="url(#fillResolved)"
-          stroke="var(--color-resolved)"
+          stroke="var(--chart-1)"
           strokeWidth={2}
           isAnimationActive={false}
         />

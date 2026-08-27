@@ -32,5 +32,8 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: No hardcoded colours (design tokens only)
+        run: npm run lint:hex
+
       - name: Production build
         run: npm run build

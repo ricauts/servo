@@ -26,6 +26,7 @@ import {
   STATUS_TONE,
 } from "@/lib/labels";
 import type { Category, Priority, TicketStatus } from "@/lib/types";
+import { UNASSIGNED_COLOR } from "@/lib/avatar";
 
 export type TicketRow = {
   id: string;
@@ -129,7 +130,7 @@ export default function TicketsTable({ rows }: { rows: TicketRow[] }) {
                 <span className="flex items-center gap-2">
                   <Avatar
                     name={t.assigneeName}
-                    color={t.assigneeColor ?? "#888888"}
+                    color={t.assigneeColor ?? UNASSIGNED_COLOR}
                     size={20}
                     isAi={t.assigneeIsAi}
                   />

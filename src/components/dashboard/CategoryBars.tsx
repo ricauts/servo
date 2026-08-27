@@ -48,7 +48,7 @@ export default function CategoryBars({
         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
         <Bar
           dataKey="count"
-          fill="var(--color-count)"
+          fill="var(--chart-2)"
           radius={4}
           barSize={18}
           isAnimationActive={false}

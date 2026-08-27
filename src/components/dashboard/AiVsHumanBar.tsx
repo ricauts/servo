@@ -32,8 +32,8 @@ export default function AiVsHumanBar({
   }
 
   const data = [
-    { kind: "ai", count: ai, fill: "var(--color-ai)" },
-    { kind: "human", count: human, fill: "var(--color-human)" },
+    { kind: "ai", count: ai, fill: "var(--chart-2)" },
+    { kind: "human", count: human, fill: "var(--chart-1)" },
   ];
 
   return (
