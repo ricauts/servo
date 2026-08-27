@@ -87,7 +87,7 @@ export default function InboundEmailForm({
           POST /api/inbound/email
         </code>
         . Unknown senders become requesters; a subject carrying{" "}
-        <code className="font-mono text-[11px]">#1029</code> is filed as a
+        <code className="font-mono text-[11px]">{/* no-hex-lint:allow — ticket number in copy, not a colour */}#1029</code> is filed as a
         comment on that ticket, anything else opens a new one and goes through
         triage.
       </p>

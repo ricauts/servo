@@ -31,6 +31,7 @@ import {
   RISK_TONE,
 } from "@/lib/labels";
 import type { ApprovalStatus, RiskLevel } from "@/lib/types";
+import { AVATAR_FALLBACK_COLOR } from "@/lib/avatar";
 
 type CommentWithAuthor = Comment & { author: User };
 type ApprovalWithDecider = Approval & { decider: User | null };
@@ -283,7 +284,7 @@ function ItemBody({
     <RunGroup
       run={run}
       agentName={agentName}
-      agentColor={agents[run.agentUserId]?.color ?? "#165A56"}
+      agentColor={agents[run.agentUserId]?.color ?? AVATAR_FALLBACK_COLOR}
     >
       {traceParts(run.steps).map((part) =>
         part.kind === "call" ? (

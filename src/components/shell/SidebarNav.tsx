@@ -91,10 +91,11 @@ export default function SidebarNav({
             {item.count !== undefined && item.count > 0 && (
               <span
                 className={cn(
-                  "rounded-full px-1.5 py-px font-mono text-[10.5px] leading-4",
+                  "rounded-full border px-1.5 py-px font-mono text-[10.5px] leading-4",
                   item.countTone === "attention"
-                    ? "bg-primary font-semibold text-primary-foreground"
-                    : "bg-sidebar-accent text-sidebar-foreground/70",
+                    ? // Pending approvals read as critical: the ds chip triple.
+                      "border-[color:var(--critical-chip-line)] bg-[color:var(--critical-chip)] font-semibold text-[color:var(--critical-chip-ink)]"
+                    : "border-transparent bg-sidebar-accent text-sidebar-foreground/70",
                 )}
               >
                 {item.count}
