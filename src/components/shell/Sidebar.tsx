@@ -8,6 +8,7 @@ import SidebarNav from "@/components/shell/SidebarNav";
 import UserSwitcher from "@/components/shell/UserSwitcher";
 import ThemeToggle from "@/components/shell/ThemeToggle";
 import MobileTopbar from "@/components/shell/MobileTopbar";
+import { navForUser } from "@/components/shell/nav-items";
 
 export default async function Sidebar() {
   // On /setup (fresh install) or /login (no session) the shell hides itself.
@@ -18,24 +19,35 @@ export default async function Sidebar() {
   const config = await getAuthConfig();
   const ssoMode = config.mode === "oidc";
 
+  // Counts are role-scoped (§9.2): a requester sees their OWN open tickets
+  // and no approvals chip at all — global queue numbers never reach them.
+  const seesApprovals = can(user, "approval.view");
   const [pendingApprovals, openTickets, users] = await Promise.all([
-    db.approval.count({ where: { status: "PENDING" } }),
-    db.ticket.count({ where: { status: { notIn: ["RESOLVED", "CLOSED"] } } }),
+    seesApprovals
+      ? db.approval.count({ where: { status: "PENDING" } })
+      : Promise.resolve(undefined),
+    db.ticket.count({
+      where: {
+        status: { notIn: ["RESOLVED", "CLOSED"] },
+        ...(user.role === "REQUESTER" ? { requesterId: user.id } : {}),
+      },
+    }),
     ssoMode
       ? Promise.resolve([])
       : db.user.findMany({
-          where: { role: { not: "AI_AGENT" } },
+          where: { role: { notIn: ["AI_AGENT"] } },
           orderBy: { name: "asc" },
           select: { id: true, name: true, role: true, color: true },
         }),
   ]);
+  const counts = { tickets: openTickets, approvals: pendingApprovals };
+  const entries = navForUser(user);
 
   return (
     <>
       <MobileTopbar
-        counts={{ tickets: openTickets, approvals: pendingApprovals }}
-        showTeamNav={can(user, "group.view")}
-        showIntegrations={user.role === "ADMIN"}
+        entries={entries}
+        counts={counts}
         users={users}
         currentUserId={user.id}
         hideSwitcher={ssoMode}
@@ -53,11 +65,7 @@ export default async function Sidebar() {
         <ThemeToggle />
       </div>
 
-      <SidebarNav
-        counts={{ tickets: openTickets, approvals: pendingApprovals }}
-        showTeamNav={can(user, "group.view")}
-        showIntegrations={user.role === "ADMIN"}
-      />
+      <SidebarNav entries={entries} counts={counts} />
 
         <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border p-3">
           <p className="px-2 font-mono text-[10px] uppercase tracking-wider text-sidebar-foreground/50">
