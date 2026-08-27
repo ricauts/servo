@@ -10,7 +10,7 @@ Servo is an open-source, MIT-licensed, self-hosted service desk where humans and
 
 ### 0.1 How the owner launches it
 
-From the repo root (`C:/Desarrollos/servo`), using the `/loop` skill:
+From the repo root, using the `/loop` skill:
 
 ```
 /loop 5h Execute one tick of the loop protocol in spec.md: read the whole file,
