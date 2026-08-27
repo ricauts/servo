@@ -19,10 +19,9 @@ files a dated owner action under "Questions for the owner" in `spec.md`.
 > resolved ticket can become a skill your AI runs next time.
 
 Ships as-is on every surface (README opening, `package.json` description,
-banner tagline). The control-plane headline ("the AI control plane for your
-company") is the destination and the title of the spec — it is **not
-claimable in public**; the allowed interim sentence for the audit claim is
-the ledger row below, verbatim.
+banner tagline). The control-plane headline — the title of the spec — is the
+destination, **not claimable in public**; the allowed interim sentence for
+the audit claim is the ledger row below, verbatim.
 
 ## Boilerplate paragraph
 
@@ -61,10 +60,10 @@ ROADMAP to TRUE-TODAY only in the same commit that ships the behaviour.
 
 `scripts/claims-audit.mjs` reads this block. Matching is word-boundary and
 context-aware: an `allow` entry permits its phrase even when a `banned`
-phrase is a substring of it ("self-hosted" never trips "hosted"). This
-fenced block excludes itself from its own scan. `exempt` entries scope a
-phrase's ban away from named paths — each carries the item that will retire
-it.
+phrase is a substring of it — the self-hosting capability words in the
+`allow` list never trip the first entry of the `banned` list. This fenced
+block excludes itself from its own scan. `exempt` entries scope a phrase's
+ban away from named paths — each carries the item that will retire it.
 
 ```banned-phrases
 # Banned on every user-visible surface: present-tense product claims that

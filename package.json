@@ -10,7 +10,8 @@
     "setup": "prisma generate && prisma db push && tsx prisma/seed-core.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "demo": "prisma generate && prisma db push && tsx prisma/seed-demo.ts"
+    "demo": "prisma generate && prisma db push && tsx prisma/seed-demo.ts",
+    "claims:audit": "node scripts/claims-audit.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -32,5 +32,8 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Claims audit (banned phrases)
+        run: npm run claims:audit
+
       - name: Production build
         run: npm run build
