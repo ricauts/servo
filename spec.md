@@ -1569,8 +1569,8 @@ Nothing widens tool exposure before `p0-01` lands.
 
 ```
 ### [p0-01] Route MCP tools/call through an audited, policy-rechecked executor
-status: todo
-date: -
+status: review
+date: 2026-08-27
 size: two-ticks
 tier: C
 depends-on: -
@@ -2567,4 +2567,4 @@ Append-only. One line per tick, including no-op ticks. The adopt-first note is *
 
 | date | item id | what changed | commit |
 |---|---|---|---|
-|  |  |  |  |
+| 2026-08-27 | p0-01 | `executeMcpToolCall()` in `src/lib/mcp.ts` becomes the single execute site for `tools/call`: it re-reads the `ToolPolicy` row itself (refusing unless `enabled && !requiresApproval`, and refusing `CORE_TOOLS`) and writes exactly one `McpCall` row — `EXECUTED` / `REFUSED_POLICY` / `REFUSED_UNKNOWN` / `ERROR` — on every call. `src/app/api/mcp/route.ts` now has zero `tool.execute()` calls, asserted by a test that reads the route source. `McpCall` added to `prisma/schema.prisma`, `McpCallDecision` to `src/lib/types.ts`. Wire behaviour unchanged: withheld tools still answer as tool errors, unknown names still `-32602`. Adopt-first: nothing to adopt — this is a policy/audit path over Servo's own registry inside existing files; `@modelcontextprotocol/sdk` (MIT) stays the client-side adoption and is untouched. Tier C by the landing rule (the approval gate itself) ⇒ PR, status `review`, not merged. The §1.3 ledger row for "all tool calls leave a trail" flips only when the owner merges. | branch `feat/p0-01`, PR — |

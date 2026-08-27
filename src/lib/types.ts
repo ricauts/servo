@@ -26,6 +26,10 @@ export type Category =
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
 
+/** Outcome of one MCP tools/call, recorded on every McpCall row. ERROR exists
+ * because a tool that throws must still leave a trail. */
+export type McpCallDecision = "EXECUTED" | "REFUSED_POLICY" | "REFUSED_UNKNOWN" | "ERROR";
+
 /** Escalation tiers within a group, lowest to highest. */
 export type Seniority = "JUNIOR" | "MID" | "SENIOR";
 export const SENIORITIES: Seniority[] = ["JUNIOR", "MID", "SENIOR"];
