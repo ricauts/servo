@@ -1,0 +1,5 @@
+// Needs ffmpeg on PATH. The repo carries one at node_modules/ffmpeg-static;
+// prepend that directory if the system has none.
+import puppeteer from "puppeteer-core";
+
+export const record = () => puppeteer;

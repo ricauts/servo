@@ -1,0 +1,3 @@
+export async function loadAnything(spec: string) {
+  return import(spec);
+}

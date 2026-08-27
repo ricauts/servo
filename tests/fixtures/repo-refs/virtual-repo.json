@@ -1,0 +1,73 @@
+{
+  "note": "A miniature repository for tests/repo-refs.test.ts. See README.md for why the content files carry a .fixture suffix.",
+  "files": {
+    "src/app/page.tsx": "app-page.tsx.fixture",
+    "src/app/helper.ts": "helper.ts.fixture",
+    "src/components/index.ts": "barrel-index.ts.fixture",
+    "src/components/barrelled-widget.tsx": "barrelled-widget.tsx.fixture",
+    "src/components/toolbar.tsx": "toolbar.tsx.fixture",
+    "src/components/Widget.tsx": "barrelled-widget.tsx.fixture",
+    "src/components/DeadWidget.tsx": "dead-widget.tsx.fixture",
+    "src/lib/utils.ts": "utils.ts.fixture",
+    "src/lib/screenshot.ts": "dynamic-literal.ts.fixture",
+    "src/lib/spec-only.ts": "spec-only.ts.fixture",
+    "docs/NOTES.md": "docs-mention.md.fixture",
+    "scripts/shrink.mjs": "undeclared-user.mjs.fixture",
+    "scripts/record.mjs": "lockfile-claim.mjs.fixture",
+    "agents/keeper.md": "agent-note.md.fixture",
+    "spec.md": "spec.md.fixture",
+    ".claude/worktree/src/components/Shadow.tsx": "claude-shadow.tsx.fixture",
+    "package-lock.json": null,
+    "prisma/dev.db": null
+  },
+  "scopedDynamicFiles": {
+    "src/lib/loader.ts": "dynamic-template.ts.fixture",
+    "src/lib/locales/en.js": "locale-en.js.fixture"
+  },
+  "opaqueDynamicFile": {
+    "src/lib/anything.ts": "dynamic-opaque.ts.fixture"
+  },
+  "tsconfig": "{\n  \"compilerOptions\": {\n    \"jsx\": \"preserve\",\n    \"paths\": { \"@/*\": [\"./src/*\"] }\n  },\n  \"include\": [\"**/*.ts\", \"**/*.tsx\"]\n}\n",
+  "packageJson": {
+    "dependencies": {
+      "puppeteer-core": "^25.4.0",
+      "tw-animate-css": "^1.4.0"
+    },
+    "devDependencies": {
+      "gifenc": "^1.0.3"
+    }
+  },
+  "packageLock": "{ \"packages\": { \"node_modules/puppeteer-core\": {}, \"node_modules/tw-animate-css\": {}, \"node_modules/gifenc\": {}, \"node_modules/sharp\": {} } }",
+  "gitignore": "node_modules/\nprisma/*.db\n.claude/\n",
+  "dynamicShapes": {
+    "concat": {
+      "src/lib/concat.ts": "dynamic-concat.ts.fixture",
+      "src/lib/plugins/one.js": "locale-en.js.fixture"
+    },
+    "alias": {
+      "src/lib/alias.ts": "dynamic-alias.ts.fixture",
+      "src/locales/en.js": "locale-en.js.fixture"
+    },
+    "attributes": {
+      "src/lib/attrs.ts": "dynamic-attributes.ts.fixture",
+      "src/lib/data.json": "data.json.fixture"
+    },
+    "multiline": {
+      "src/lib/split-loader.ts": "dynamic-multiline.ts.fixture",
+      "src/lib/split/en.js": "locale-en.js.fixture"
+    },
+    "computedRequire": {
+      "src/lib/dispatch.cjs": "require-computed.cjs.fixture",
+      "src/lib/handlers/one.js": "locale-en.js.fixture"
+    }
+  },
+  "requireFiles": {
+    "src/lib/cjs-user.cjs": "require-local.cjs.fixture",
+    "src/lib/helper.ts": "helper.ts.fixture"
+  },
+  "mentionSources": {
+    "ci.yml": "mention-sources.yml.fixture",
+    "run.sh": "mention-sources.sh.fixture",
+    "config.json": "mention-sources.json.fixture"
+  }
+}

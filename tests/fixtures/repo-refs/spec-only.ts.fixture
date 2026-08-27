@@ -1,0 +1,3 @@
+export function specOnly() {
+  return "named by spec.md and by nothing else";
+}

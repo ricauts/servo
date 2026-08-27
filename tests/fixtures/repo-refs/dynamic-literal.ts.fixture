@@ -1,0 +1,4 @@
+export async function capture(executablePath: string) {
+  const puppeteer = (await import("puppeteer-core")).default;
+  return puppeteer.launch({ executablePath });
+}

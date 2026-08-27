@@ -1,6 +1,10 @@
 // loop-03: the landing-tier classifier and the two guards it delegates to.
 // Every rule gets fixture coverage — no database, no network, no dependency.
 
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { classifyMigration } from "../scripts/migration-guard.mjs";
 import { classifyPermissionsDiff } from "../scripts/permissions-guard.mjs";
@@ -8,7 +12,20 @@ import {
   addedContentByFile,
   classifyLanding,
   diffTouchesRuntimeDependencies,
+  parseNameStatusWithScore,
+  removedDependencyEntries,
+  removedDependencyNames,
+  removedExportedSymbols,
 } from "../scripts/landing-tier.mjs";
+
+/** A dependency block long enough that git's three lines of context hide its header. */
+const DEPS: Record<string, string> = {
+  "@types/node": "^22.10.0",
+  "@types/react": "^19.0.0",
+  gifenc: "^1.0.3",
+  postcss: "^8.4.49",
+  typescript: "^5.7.3",
+};
 
 function fileDiff(file: string, added: string[], removed: string[] = [], context: string[] = []): string {
   return [
@@ -286,5 +303,213 @@ describe("landing-tier classifier", () => {
     expect(byFile.get("prisma/migrations/0001_a/migration.sql")).toBe("CREATE TABLE A(id TEXT);");
     expect(byFile.get("src/x.ts")).toBe("export const x = 1;");
     expect(byFile.has("src/untouched.ts")).toBe(false);
+  });
+});
+
+// hyg-01 §13.1 clause 2: the classifier and the written deletion rail must
+// agree. Deleting a tracked file, removing an exported symbol or dropping a
+// dependency line is Tier C; a PURE rename is not a deletion.
+describe("landing-tier: the deletion rule", () => {
+  it("keeps the rename similarity score parseNameStatus drops", () => {
+    const parsed = parseNameStatusWithScore(
+      ["M\tsrc/a.ts", "D\tsrc/gone.ts", "R100\tsrc/old.ts\tsrc/new.ts", "R087\tsrc/x.ts\tsrc/y.ts"].join("\n"),
+    );
+    expect(parsed).toEqual([
+      { status: "M", score: null, path: "src/a.ts", fromPath: null },
+      { status: "D", score: null, path: "src/gone.ts", fromPath: null },
+      { status: "R", score: 100, path: "src/new.ts", fromPath: "src/old.ts" },
+      { status: "R", score: 87, path: "src/y.ts", fromPath: "src/x.ts" },
+    ]);
+  });
+
+  it("classifies a deleted tracked file as C", async () => {
+    const verdict = await classifyLanding({
+      files: [{ status: "D", path: "src/components/legacy/Button.tsx" }],
+      diffText: "",
+    });
+    expect(verdict.tier).toBe("C");
+    expect(verdict.reasons.join(" ")).toMatch(/deleted/);
+  });
+
+  it("leaves a PURE rename at A, and raises a rename-plus-edit to C", async () => {
+    const pure = await classifyLanding({
+      files: [{ status: "R", score: 100, path: "src/components/common/Badge.tsx", fromPath: "src/components/legacy/Badge.tsx" }],
+      diffText: "",
+    });
+    expect(pure.tier).toBe("A");
+
+    const edited = await classifyLanding({
+      files: [{ status: "R", score: 87, path: "src/components/common/Badge.tsx", fromPath: "src/components/legacy/Badge.tsx" }],
+      diffText: "",
+    });
+    expect(edited.tier).toBe("C");
+    expect(edited.reasons.join(" ")).toMatch(/R87/);
+  });
+
+  it("treats a rename with no score as C — unknown must not resolve to safe", async () => {
+    const verdict = await classifyLanding({
+      files: [{ status: "R", path: "src/b.ts" }],
+      diffText: "",
+    });
+    expect(verdict.tier).toBe("C");
+  });
+
+  it("classifies a removed exported symbol as C, but not one moved within the diff", async () => {
+    const removed = fileDiff("src/lib/utils.ts", [], ["export function timeAgo(d: Date) {}"]);
+    expect(removedExportedSymbols(removed)).toEqual(["timeAgo"]);
+    expect((await classifyLanding({ files: [changed("src/lib/utils.ts")], diffText: removed })).tier).toBe("C");
+
+    const moved = fileDiff(
+      "src/lib/utils.ts",
+      ["export function timeAgo(d: Date | string) {}"],
+      ["export function timeAgo(d: Date) {}"],
+    );
+    expect(removedExportedSymbols(moved)).toEqual([]);
+    expect((await classifyLanding({ files: [changed("src/lib/utils.ts")], diffText: moved })).tier).toBe("A");
+  });
+
+  it("classifies a removed package.json dependency line as C, in either block", async () => {
+    const dropped = [
+      "diff --git a/package.json b/package.json",
+      "--- a/package.json",
+      "+++ b/package.json",
+      "@@ -46,3 +46,2 @@",
+      '  "devDependencies": {',
+      '-    "gifenc": "^1.0.3",',
+    ].join("\n");
+    expect(removedDependencyNames(dropped)).toEqual(["gifenc"]);
+    // devDependencies do not raise the ADD rule, but removing one still does:
+    // npm ci breaks either way.
+    expect(diffTouchesRuntimeDependencies(dropped)).toBe(false);
+    expect((await classifyLanding({ files: [changed("package.json")], diffText: dropped })).tier).toBe("C");
+
+    const bumped = [
+      "diff --git a/package.json b/package.json",
+      "--- a/package.json",
+      "+++ b/package.json",
+      "@@ -46,3 +46,3 @@",
+      '  "devDependencies": {',
+      '-    "gifenc": "^1.0.3",',
+      '+    "gifenc": "^1.0.4",',
+    ].join("\n");
+    expect(removedDependencyNames(bumped)).toEqual([]);
+  });
+
+  it("catches a removed export in every form the tree actually uses", async () => {
+    const cases: [string, string[], string][] = [
+      ["declaration", ["export function timeAgo(d: Date) {}"], "timeAgo"],
+      ["abstract class", ["export abstract class Base {}"], "Base"],
+      ["type alias", ["export type RunKind = string;"], "RunKind"],
+      ["one-line list", ["export { Card, CardTitle };"], "CardTitle"],
+      ["type-only list", ["export type { SlaTicketFields };"], "SlaTicketFields"],
+      ["destructured const", ["export const { alpha, beta } = obj;"], "beta"],
+      ["star re-export", ['export * from "./legacy";'], "*:./legacy"],
+      ["namespaced star", ['export * as legacy from "./legacy";'], "legacy"],
+    ];
+    for (const [label, removed, name] of cases) {
+      const diff = fileDiff("src/lib/x.ts", [], removed);
+      expect(removedExportedSymbols(diff), label).toContain(name);
+      expect((await classifyLanding({ files: [changed("src/lib/x.ts")], diffText: diff })).tier, label).toBe("C");
+    }
+  });
+
+  it("catches a name removed from a MULTILINE export list, where the header is only context", () => {
+    // Fourteen files in src/ use this shape. In a diff the removed line is just
+    // "  Bar," — a line-local regex sees no `export` at all and calls it Tier A.
+    const diff = [
+      "diff --git a/src/components/ui/card.tsx b/src/components/ui/card.tsx",
+      "--- a/src/components/ui/card.tsx",
+      "+++ b/src/components/ui/card.tsx",
+      "@@ -80,6 +80,5 @@",
+      " export {",
+      "   Card,",
+      "   CardHeader,",
+      "-  CardFooter,",
+      "   CardTitle,",
+      " };",
+    ].join("\n");
+    expect(removedExportedSymbols(diff)).toEqual(["CardFooter"]);
+  });
+
+  it("does not let a removal in one file be cancelled by an addition in another", () => {
+    const diff = [
+      fileDiff("src/a.tsx", [], ["export default function A() {}"]),
+      fileDiff("src/b.tsx", ["export default function B() {}"], []),
+    ].join("\n");
+    expect(removedExportedSymbols(diff)).toEqual(["default"]);
+  });
+
+  it("catches a dependency removed mid-list, where git's context never shows the block header", async () => {
+    // This is what `git diff` actually produces: three lines of context and no
+    // `"devDependencies": {` in sight.
+    const diff = [
+      "diff --git a/package.json b/package.json",
+      "--- a/package.json",
+      "+++ b/package.json",
+      "@@ -50,7 +50,6 @@",
+      '     "@types/react": "^19.0.0",',
+      '     "@types/react-dom": "^19.0.0",',
+      '-    "gifenc": "^1.0.3",',
+      '     "oauth2-mock-server": "^9.1.0",',
+      '     "postcss": "^8.4.49",',
+    ].join("\n");
+    expect(removedDependencyEntries(diff)).toEqual([{ name: "gifenc", block: "block-unknown" }]);
+    expect((await classifyLanding({ files: [changed("package.json")], diffText: diff })).tier).toBe("C");
+  });
+
+  it("does not fire on a version bump, or on a removed npm script", async () => {
+    const bump = [
+      "diff --git a/package.json b/package.json",
+      "--- a/package.json",
+      "+++ b/package.json",
+      "@@ -50,7 +50,7 @@",
+      '-    "gifenc": "^1.0.3",',
+      '+    "gifenc": "^1.0.4",',
+    ].join("\n");
+    expect(removedDependencyEntries(bump)).toEqual([]);
+
+    const script = [
+      "diff --git a/package.json b/package.json",
+      "--- a/package.json",
+      "+++ b/package.json",
+      "@@ -8,7 +8,6 @@",
+      '   "scripts": {',
+      '     "dev": "next dev -p 3000",',
+      '-    "demo": "prisma generate",',
+      '     "typecheck": "tsc --noEmit"',
+    ].join("\n");
+    expect(removedDependencyNames(script)).toEqual([]);
+    expect((await classifyLanding({ files: [changed("package.json")], diffText: script })).tier).toBe("A");
+  });
+
+  it("classifies a REAL git diff of a deletion, produced by git itself", () => {
+    // The synthetic fixtures above can flatter the parsers. This one is the
+    // exact bytes git emits.
+    const dir = mkdtempSync(path.join(os.tmpdir(), "landing-tier-"));
+    try {
+      const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+      git("init", "-q");
+      git("config", "user.email", "t@example.com");
+      git("config", "user.name", "t");
+      writeFileSync(path.join(dir, "package.json"), JSON.stringify({ devDependencies: DEPS }, null, 2) + "\n");
+      writeFileSync(path.join(dir, "mod.ts"), "export {\n  Alpha,\n  Beta,\n  Gamma,\n};\n");
+      git("add", "-A");
+      git("commit", "-qm", "base");
+      const { gifenc: _dropped, ...rest } = DEPS;
+      writeFileSync(path.join(dir, "package.json"), JSON.stringify({ devDependencies: rest }, null, 2) + "\n");
+      writeFileSync(path.join(dir, "mod.ts"), "export {\n  Alpha,\n  Gamma,\n};\n");
+      git("add", "-A");
+      const diff = git("diff", "--cached");
+      expect(removedDependencyNames(diff)).toEqual(["gifenc"]);
+      expect(removedExportedSymbols(diff)).toEqual(["Beta"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("puts .dockerignore beside Dockerfile and docker-compose.yml", async () => {
+    const verdict = await classifyLanding({ files: [changed(".dockerignore")], diffText: "" });
+    expect(verdict.tier).toBe("C");
+    expect(verdict.reasons.join(" ")).toMatch(/\.dockerignore/);
   });
 });
