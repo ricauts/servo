@@ -5,6 +5,7 @@ import { Menu } from "lucide-react";
 import SidebarNav from "@/components/shell/SidebarNav";
 import UserSwitcher from "@/components/shell/UserSwitcher";
 import ThemeToggle from "@/components/shell/ThemeToggle";
+import type { NavEntry } from "@/components/shell/nav-items";
 import {
   Sheet,
   SheetContent,
@@ -21,16 +22,15 @@ interface SwitcherUser {
 }
 
 export default function MobileTopbar({
+  entries,
   counts,
-  showTeamNav = false,
-  showIntegrations = false,
   hideSwitcher = false,
   users,
   currentUserId,
 }: {
-  counts: { tickets: number; approvals: number };
-  showTeamNav?: boolean;
-  showIntegrations?: boolean;
+  /** The registry filtered by the server — same single owner as the sidebar. */
+  entries: NavEntry[];
+  counts?: { tickets: number; approvals?: number };
   hideSwitcher?: boolean;
   users: SwitcherUser[];
   currentUserId: string;
@@ -58,12 +58,7 @@ export default function MobileTopbar({
               Servo<span className="text-primary">.</span>
             </SheetTitle>
           </SheetHeader>
-          <SidebarNav
-            counts={counts}
-            showTeamNav={showTeamNav}
-            showIntegrations={showIntegrations}
-            onNavigate={() => setOpen(false)}
-          />
+          <SidebarNav entries={entries} counts={counts} onNavigate={() => setOpen(false)} />
           {!hideSwitcher && (
             <div className="mt-auto border-t border-sidebar-border p-3">
               <UserSwitcher users={users} currentUserId={currentUserId} />

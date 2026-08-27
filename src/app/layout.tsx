@@ -4,8 +4,10 @@ import "./globals.css";
 import Sidebar from "@/components/shell/Sidebar";
 import CommandPalette from "@/components/shell/CommandPalette";
 import ThemeProvider from "@/components/shell/ThemeProvider";
+import { navForUser } from "@/components/shell/nav-items";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { getCurrentUserOrNull } from "@/lib/auth";
 
 const lato = Lato({
   subsets: ["latin"],
@@ -31,11 +33,15 @@ export const metadata: Metadata = {
 // The whole app is a live database UI; never prerender.
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The server layout computes the user's nav once; the palette renders
+  // from the registry, never from a page list of its own (ux-01).
+  const user = await getCurrentUserOrNull();
+  const entries = user ? navForUser(user) : [];
   return (
     <html
       lang="en"
@@ -53,7 +59,7 @@ export default function RootLayout({
             <Sidebar />
             <main className="min-w-0 flex-1">{children}</main>
           </div>
-          <CommandPalette />
+          <CommandPalette entries={entries} />
           <Toaster />
         </ThemeProvider>
       </body>
