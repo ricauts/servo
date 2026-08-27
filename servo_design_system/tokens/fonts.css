@@ -1,0 +1,9 @@
+/* Servo webfonts. Both faces are Google Fonts, loaded from the Google CDN —
+   no self-hosted binaries ship with this system (see readme.md → Fonts). */
+@import url("https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,300..900;1,300..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+:root{
+  --font-core:"Chivo","Helvetica Neue",Arial,sans-serif;
+  --font-display:"Chivo","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}

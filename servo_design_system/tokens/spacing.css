@@ -1,0 +1,30 @@
+:root{
+  --space-0:0px;
+  --space-1:2px;
+  --space-2:4px;
+  --space-3:6px;
+  --space-4:8px;
+  --space-5:10px;
+  --space-6:12px;
+  --space-7:16px;
+  --space-8:20px;
+  --space-9:24px;
+  --space-10:32px;
+  --space-11:40px;
+  --space-12:56px;
+  --space-13:72px;
+  --space-14:96px;
+
+  --control-h-xs:24px;
+  --control-h-sm:28px;
+  --control-h-md:32px;   /* the app's default control height */
+  --control-h-lg:36px;
+  --control-h-xl:44px;   /* marketing / touch */
+
+  --card-pad:16px;
+  --card-pad-sm:12px;
+  --page-pad:24px;
+  --sidebar-w:240px;
+  --container:1200px;
+  --measure:68ch;
+}

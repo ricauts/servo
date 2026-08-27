@@ -1,0 +1,36 @@
+/* Two faces only: Chivo carries every UI and display size; IBM Plex Mono
+   carries labels, identifiers, numbers and machine output. */
+:root{
+  --text-mono-xs:10.5px;   /* uppercase tracked labels, badges */
+  --text-mono-sm:11.5px;
+  --text-mono-md:12.5px;   /* ticket ids, tool names, transcript */
+  --text-xs:11.5px;
+  --text-sm:12.5px;
+  --text-ui:13.5px;        /* the app's base size */
+  --text-md:14px;
+  --text-lg:16px;
+  --text-xl:20px;
+  --text-2xl:24px;
+  --text-3xl:30px;
+  --display-sm:40px;
+  --display-md:56px;
+  --display-lg:72px;
+  --display-xl:104px;
+
+  --leading-tight:1.05;
+  --leading-snug:1.25;
+  --leading-normal:1.45;
+  --leading-relaxed:1.6;
+
+  --tracking-display:-0.03em;   /* display sizes are tightened */
+  --tracking-heading:-0.015em;
+  --tracking-normal:0;
+  --tracking-label:0.14em;      /* mono uppercase labels */
+  --tracking-label-wide:0.2em;
+
+  --weight-regular:400;
+  --weight-medium:500;
+  --weight-semibold:600;
+  --weight-bold:700;
+  --weight-black:900;           /* wordmark only */
+}

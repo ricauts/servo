@@ -1,0 +1,61 @@
+/* ---------------------------------------------------------------------------
+   Optional accent themes. Servo blue is the default and needs no class; add one
+   of these to <html> or <body> to reskin the accent (and the ink cast with it).
+   Status tones never change: good is green, critical is red, in every theme.
+
+     <body class="servo-theme-moss">                dark, moss accent
+     <body class="servo-theme-copper servo-light">  light desk, copper accent
+--------------------------------------------------------------------------- */
+/* Moss */
+.servo-theme-moss{
+  --ink-950:#101513;--ink-900:#151B18;--ink-850:#1A211D;--ink-800:#212925;--ink-700:#2A332E;--ink-600:#354039;--ink-500:#455148;
+  --accent-100:#D6F0E1;--accent-200:#A9DEC1;--accent-300:#7FD7A8;--accent-400:#4FBE85;--accent-500:#4FBE85;--accent-600:#3C9E6C;--accent-700:#2C7551;--accent-900:#123A26;
+  --brand:#4FBE85;--brand-hover:#7FD7A8;--brand-press:#3C9E6C;--brand-ink:#0B1712;
+  --brand-soft:#123A26;--brand-soft-line:#2C7551;--focus-ring:#4FBE8559;--line-brand:#2C7551;
+  --text-brand:#7FD7A8;--text-link:#7FD7A8;--text-link-hover:#A9DEC1;
+  --brand-chip:#123A26;--brand-chip-line:#2C7551;--brand-chip-ink:#7FD7A8;
+  --chart-2:#4FBE85;
+}
+.servo-theme-moss.servo-light,.servo-theme-moss .servo-light{
+  --brand:#2C7551;--brand-hover:#3C9E6C;--brand-press:#2C7551;--brand-ink:#FFFFFF;
+  --text-brand:#2C7551;--text-link:#2C7551;--text-link-hover:#2C7551;
+  --brand-soft:#D6F0E1;--brand-soft-line:#A9DEC1;--focus-ring:#4FBE8559;
+  --brand-chip:#D6F0E1;--brand-chip-line:#A9DEC1;--brand-chip-ink:#2C7551;
+  --chart-2:#2C7551;
+}
+
+/* Copper */
+.servo-theme-copper{
+  --ink-950:#141110;--ink-900:#191514;--ink-850:#1E1918;--ink-800:#251F1D;--ink-700:#2E2724;--ink-600:#3A322D;--ink-500:#4B413A;
+  --accent-100:#F7E2D3;--accent-200:#EDC0A2;--accent-300:#DE9B72;--accent-400:#C97848;--accent-500:#C97848;--accent-600:#A65D34;--accent-700:#7E4526;--accent-900:#3A2015;
+  --brand:#C97848;--brand-hover:#DE9B72;--brand-press:#A65D34;--brand-ink:#FFFFFF;
+  --brand-soft:#3A2015;--brand-soft-line:#7E4526;--focus-ring:#C9784859;--line-brand:#7E4526;
+  --text-brand:#DE9B72;--text-link:#DE9B72;--text-link-hover:#EDC0A2;
+  --brand-chip:#3A2015;--brand-chip-line:#7E4526;--brand-chip-ink:#DE9B72;
+  --chart-2:#C97848;
+}
+.servo-theme-copper.servo-light,.servo-theme-copper .servo-light{
+  --brand:#8A4B26;--brand-hover:#A65D34;--brand-press:#7E4526;--brand-ink:#FFFFFF;
+  --text-brand:#7E4526;--text-link:#7E4526;--text-link-hover:#8A4B26;
+  --brand-soft:#F7E2D3;--brand-soft-line:#EDC0A2;--focus-ring:#C9784859;
+  --brand-chip:#F7E2D3;--brand-chip-line:#EDC0A2;--brand-chip-ink:#7E4526;
+  --chart-2:#8A4B26;
+}
+
+/* Graphite */
+.servo-theme-graphite{
+  --ink-950:#101214;--ink-900:#15181B;--ink-850:#1A1E22;--ink-800:#212529;--ink-700:#292E33;--ink-600:#343A41;--ink-500:#454C55;
+  --accent-100:#E3E7EB;--accent-200:#C2C9D1;--accent-300:#9BA5B0;--accent-400:#78838F;--accent-500:#78838F;--accent-600:#5C666F;--accent-700:#454D55;--accent-900:#23282D;
+  --brand:#78838F;--brand-hover:#9BA5B0;--brand-press:#5C666F;--brand-ink:#0F1113;
+  --brand-soft:#23282D;--brand-soft-line:#454D55;--focus-ring:#78838F59;--line-brand:#454D55;
+  --text-brand:#9BA5B0;--text-link:#9BA5B0;--text-link-hover:#C2C9D1;
+  --brand-chip:#23282D;--brand-chip-line:#454D55;--brand-chip-ink:#9BA5B0;
+  --chart-2:#78838F;
+}
+.servo-theme-graphite.servo-light,.servo-theme-graphite .servo-light{
+  --brand:#454D55;--brand-hover:#5C666F;--brand-press:#454D55;--brand-ink:#FFFFFF;
+  --text-brand:#454D55;--text-link:#454D55;--text-link-hover:#454D55;
+  --brand-soft:#E3E7EB;--brand-soft-line:#C2C9D1;--focus-ring:#78838F59;
+  --brand-chip:#E3E7EB;--brand-chip-line:#C2C9D1;--brand-chip-ink:#454D55;
+  --chart-2:#454D55;
+}

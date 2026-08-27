@@ -1,0 +1,73 @@
+<!-- @dsCard group="Components" viewport="900x880" name="Core primitives" subtitle="Buttons, fields, badges, cards, feedback — every state." -->
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Servo core primitives</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{padding:20px;background:var(--bg)}.grp{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}.lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint)}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.grp-fields .row{align-items:flex-start}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const { Button, Input, Textarea, Select, Switch, Field, Card, Badge, Avatar, Alert, Tabs, Table, Separator, Skeleton, Spinner, EmptyState, Tooltip, Dialog, Icon } = window.ServoDesignSystem_824c45;
+
+function Group({ label, className = "", children }) { return <div className={"grp " + className}><div className="lbl">{label}</div><div className="row">{children}</div></div>; }
+
+function Demo() {
+  const [on, setOn] = React.useState(true);
+  const [tab, setTab] = React.useState("pending");
+  return (
+    <div>
+      <Group label="Button variants">
+        <Button variant="primary" iconStart={<Icon name="sparkles" size={14} />}>Run AI resolver</Button>
+        <Button variant="outline">Regenerate</Button>
+        <Button variant="ghost">Discard</Button>
+        <Button variant="subtle">Escalate</Button>
+        <Button variant="danger" iconStart={<Icon name="x" size={14} />}>Reject</Button>
+        <Button variant="link">View transcript</Button>
+        <Button variant="primary" disabled>Disabled</Button>
+        <Button variant="outline" size="sm" icon><Icon name="ellipsis" size={14} /></Button>
+      </Group>
+      <Group label="Sizes">
+        <Button variant="outline" size="xs">xs</Button>
+        <Button variant="outline" size="sm">sm</Button>
+        <Button variant="outline" size="md">md</Button>
+        <Button variant="outline" size="lg">lg</Button>
+        <Button variant="primary" size="xl">Book a demo</Button>
+        <Button variant="primary" size="sm"><Spinner size={13} />Approving…</Button>
+      </Group>
+      <Group label="Fields" className="grp-fields">
+        <div style={{ width: 200 }}><Field label="Reason" hint="Logged on the ticket."><Input placeholder="Why?" /></Field></div>
+        <div style={{ width: 160 }}><Field label="Priority"><Select options={["Low","Medium","High","Urgent"]} defaultValue="High" /></Field></div>
+        <div style={{ width: 180 }}><Field label="API key" error="Key rejected (401)."><Input mono invalid defaultValue="sk-ant-…9f2" /></Field></div>
+        <div style={{ paddingTop: 18 }}><Switch checked={on} onChange={setOn} label="Requires approval" /></div>
+      </Group>
+      <Group label="Badges & identity">
+        <Badge tone="serious">Open</Badge><Badge tone="brand">Triaged</Badge><Badge tone="info">In progress</Badge>
+        <Badge tone="warn">Waiting approval</Badge><Badge tone="good">Resolved</Badge><Badge tone="neutral">Closed</Badge>
+        <Badge tone="brand" solid>AI</Badge><Badge tone="critical">High risk</Badge>
+        <Avatar name="Ana Rodríguez" size={24} /><Avatar name="Bruno Chen" size={24} /><Avatar name="Servo Resolver" isAi size={24} />
+        <Tooltip kbd="Ctrl K">Search &amp; jump</Tooltip>
+      </Group>
+      <Group label="Feedback">
+        <div style={{ flex: "1 1 300px" }}><Alert tone="warn" title="Run paused">A gated tool needs a human decision before it executes.</Alert></div>
+        <div style={{ flex: "1 1 260px" }}><Alert tone="critical" title="Request failed (403)">HIGH-risk approvals require an admin.</Alert></div>
+      </Group>
+      <div className="row" style={{ alignItems: "stretch" }}>
+        <Card title="Approvals" description="Last 30 days" style={{ flex: "1 1 240px" }} footer={<Button variant="ghost" size="sm">Open queue</Button>}>
+          <Tabs tabs={[{ value: "pending", label: "Pending", count: 2 }, { value: "history", label: "History" }]} value={tab} onChange={setTab} />
+          <Table columns={[{ key: "n", label: "#", mono: true }, { key: "tool", label: "Tool" }, { key: "risk", label: "Risk", render: (r) => <Badge tone={r.tone}>{r.risk}</Badge> }]}
+            rows={[{ n: "#1061", tool: "github_merge_pr", risk: "High", tone: "critical" }, { n: "#1058", tool: "sql_write", risk: "Medium", tone: "warn" }]} />
+        </Card>
+        <div style={{ flex: "1 1 220px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <EmptyState icon="inbox" title="Nothing waiting">Approvals land here when an agent reaches a gated tool.</EmptyState>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}><Skeleton width="70%" height={12} /><Skeleton width="45%" height={12} /></div>
+          <Separator />
+        </div>
+        <div style={{ flex: "0 0 300px" }}><Dialog inline title="Merge pull request?" description="servo/fix-nav-contrast → main" tone="danger" confirmLabel="Merge" /></div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script></body></html>

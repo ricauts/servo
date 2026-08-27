@@ -1,0 +1,28 @@
+:root{
+  /* Corners stay tight — techy, not friendly. Pills only for badges/chips. */
+  --radius-1:4px;
+  --radius-2:6px;
+  --radius-3:8px;    /* buttons, inputs */
+  --radius-4:10px;   /* cards, panels */
+  --radius-5:14px;   /* marketing panels, screenshots */
+  --radius-full:999px;
+
+  --border-hairline:1px;
+  --focus-width:3px;
+
+  /* On dark, depth comes from hairlines + a top inset highlight, not shadow. */
+  --shadow-0:none;
+  --shadow-1:0 1px 2px #00000073;
+  --shadow-2:0 2px 6px #00000080,0 1px 2px #0000004d;
+  --shadow-3:0 12px 32px -8px #000000a6,0 2px 6px #00000059;
+  --inset-top:inset 0 1px 0 #FFFFFF0F;
+  --glow-brand:0 0 0 1px #4E66E440,0 8px 28px -10px #4E66E459;
+
+  --blur-panel:blur(14px); /* @kind other */
+  --blur-scrim:blur(3px); /* @kind other */
+
+  /* Technical texture: 1px dot grid, and the hairline rule set */
+  --dot-grid:radial-gradient(#FFFFFF14 1px,transparent 1px); /* @kind other */
+  --dot-grid-size:24px 24px;
+  --scanline:repeating-linear-gradient(180deg,#FFFFFF08 0 1px,transparent 1px 4px); /* @kind other */
+}

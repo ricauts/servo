@@ -1,0 +1,10 @@
+/* Minimal element defaults so specimen cards and kits start from the brand. */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text-body);font-family:var(--font-core);font-size:var(--text-ui);line-height:var(--leading-normal);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4,h5,h6{font-family:var(--font-display);color:var(--text-strong);letter-spacing:var(--tracking-heading);line-height:var(--leading-snug);margin:0;font-weight:var(--weight-semibold)}
+code,pre,kbd{font-family:var(--font-mono)}
+a{color:var(--text-link);text-decoration:none}
+a:hover{color:var(--text-link-hover);text-decoration:underline;text-underline-offset:2px}
+::selection{background:var(--brand);color:var(--brand-ink)}
+:focus-visible{outline:none;box-shadow:0 0 0 var(--focus-width) var(--focus-ring);border-color:var(--brand)}
+.servo-label{font-family:var(--font-mono);font-size:var(--text-mono-xs);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-muted)}

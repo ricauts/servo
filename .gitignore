@@ -20,4 +20,11 @@ prisma/*.db-journal
 # misc
 .DS_Store
 *.tsbuildinfo
-servo_design_system/.spec-build/
+.spec-build/
+
+# The design system ships with the repo — spec.md §0.5 requires it before UI ticks.
+# Two subdirectories stay out: uploads/ is 14MB of design-tool scratch, and
+# docs/assets/ holds app screenshots in the retired green palette (one of which
+# carries a real name on internal tickets).
+servo_design_system/uploads/
+servo_design_system/docs/assets/

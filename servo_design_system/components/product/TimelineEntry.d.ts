@@ -1,0 +1,2 @@
+export interface TimelineEntryProps{author:string;isAi?:boolean;badge?:{tone:"neutral"|"brand"|"good"|"warn"|"serious"|"critical"|"info";label:string};/** What they did, e.g. "opened this ticket" */action?:string;when?:string;/** Dashed, muted treatment for machine-written notes */system?:boolean;last?:boolean;children?:React.ReactNode}
+export function TimelineEntry(props:TimelineEntryProps):JSX.Element;

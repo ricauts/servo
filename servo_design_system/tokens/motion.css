@@ -1,0 +1,13 @@
+:root{
+  --dur-1:120ms; /* @kind other */   /* hover, color */
+  --dur-2:180ms; /* @kind other */   /* enter/exit of small surfaces */
+  --dur-3:280ms; /* @kind other */   /* panels, sheets */
+  --dur-4:600ms; /* @kind other */   /* marketing reveals */
+  --ease-out:cubic-bezier(0.2,0,0,1); /* @kind other */
+  --ease-in-out:cubic-bezier(0.4,0,0.2,1); /* @kind other */
+  --ease-linear:linear; /* @kind other */
+  --press-shift:1px;   /* controls nudge down 1px on :active */
+}
+@media (prefers-reduced-motion:reduce){
+  :root{--dur-1:0ms; /* @kind other */--dur-2:0ms; /* @kind other */--dur-3:0ms; /* @kind other */--dur-4:0ms /* @kind other */}
+}
