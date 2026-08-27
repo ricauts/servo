@@ -2,7 +2,7 @@
   "name": "servo",
   "version": "1.0.0",
   "private": true,
-  "description": "Open-source AI-powered service desk. Self-host it, bring your own key.",
+  "description": "The open-source desk where humans and AI agents work one queue - and every resolved ticket can become a skill your AI runs next time. Self-host it, bring your own key.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
