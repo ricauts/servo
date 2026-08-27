@@ -1,0 +1,5 @@
+export async function loadSplit(lang: string) {
+  return import(
+    `./split/${lang}.js`
+  );
+}

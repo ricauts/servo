@@ -1,0 +1,4 @@
+# Keeper
+
+Runtime data the desk reads at boot. Nothing imports this file; it is loaded
+by directory scan, which is why it is on the never-delete list.

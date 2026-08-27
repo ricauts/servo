@@ -1,0 +1,15 @@
+export function cn(...parts: string[]) {
+  return parts.join(" ");
+}
+
+export function timeAgo(d: Date): string {
+  return String(d);
+}
+
+export type LocalOnly = { a: number };
+
+export function usedInOwnFile(x: LocalOnly) {
+  return x.a;
+}
+
+export const SEED: LocalOnly = { a: usedInOwnFile({ a: 1 }) };
