@@ -1590,8 +1590,8 @@ acceptance:
 
 ```
 ### [loop-02] loop-guard preflight script
-status: todo
-date: -
+status: done
+date: 2026-08-27
 size: one-tick
 tier: A
 depends-on: -
@@ -2568,3 +2568,4 @@ Append-only. One line per tick, including no-op ticks. The adopt-first note is *
 | date | item id | what changed | commit |
 |---|---|---|---|
 | 2026-08-27 | p0-01 | `executeMcpToolCall()` in `src/lib/mcp.ts` becomes the single execute site for `tools/call`: it re-reads the `ToolPolicy` row itself (refusing unless `enabled && !requiresApproval`, and refusing `CORE_TOOLS`) and writes exactly one `McpCall` row — `EXECUTED` / `REFUSED_POLICY` / `REFUSED_UNKNOWN` / `ERROR` — on every call. `src/app/api/mcp/route.ts` now has zero `tool.execute()` calls, asserted by a test that reads the route source. `McpCall` added to `prisma/schema.prisma`, `McpCallDecision` to `src/lib/types.ts`. Wire behaviour unchanged: withheld tools still answer as tool errors, unknown names still `-32602`. Adopt-first: nothing to adopt — this is a policy/audit path over Servo's own registry inside existing files; `@modelcontextprotocol/sdk` (MIT) stays the client-side adoption and is untouched. Tier C by the landing rule (the approval gate itself) ⇒ PR, status `review`, not merged. The §1.3 ledger row for "all tool calls leave a trail" flips only when the owner merges. | branch `feat/p0-01`, PR — |
+| 2026-08-27 | loop-02 | `scripts/loop-guard.mjs` ships the §0.8 rails as executable checks: pure functions over plain strings (branch, porcelain, staged diff, DATABASE_URL, changed files) plus a CLI that exits 1 with a rail-named reason. Rail 1 compares the *parsed* database name (dev/demo refused, `servo_test_*` passes — a password containing "dev.db" does not trip it); rail 1b (`--db-push`) allows `prisma db push` only on `servo_test_*`; rail 2 scans added diff lines for the spec's secret patterns outside `tests/`+`fixtures/` paths; rail 3 refuses main/master; rail 4 catches any `prisma/*.db*` path in porcelain (path read from index 3, rename-aware); rail 5 demands a migration for a schema change and reports itself inert until `prisma/migrations/` exists. `tests/loop-guard.test.ts`: every rail has passing+failing fixtures; Node builtins only. Adopt-first: nothing to adopt — bespoke repo rails over git/env strings; generic scanners (gitleaks & co.) express none of rails 1/1b/3/4/5 and rail 2's pattern list is spec-fixed. Tier A: merged `--no-ff` to main, `npm run typecheck && npm test` green (224 tests, 17 files). | merge `feat/loop-02` |
