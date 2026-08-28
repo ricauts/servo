@@ -2,7 +2,7 @@
   "name": "servo",
   "version": "1.0.0",
   "private": true,
-  "description": "Open-source AI-powered service desk. Self-host it, bring your own key.",
+  "description": "The open-source desk where humans and AI agents work one queue - and every resolved ticket can become a skill your AI runs next time. Self-host it, bring your own key.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
@@ -10,10 +10,12 @@
     "setup": "prisma generate && prisma db push && tsx prisma/seed-core.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "demo": "prisma generate && prisma db push && tsx prisma/seed-demo.ts"
+    "demo": "prisma generate && prisma db push && tsx prisma/seed-demo.ts",
+    "lint:hex": "node scripts/no-hex-lint.mjs",
+    "claims:audit": "node scripts/claims-audit.mjs"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed-core.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -6,13 +6,13 @@
 
 [![CI](https://github.com/ricauts/servo/actions/workflows/ci.yml/badge.svg)](https://github.com/ricauts/servo/actions/workflows/ci.yml)
 
-**An open-source, self-hostable AI-powered service desk.** Email becomes tickets; AI agents triage them, draft every reply and work requests with real tools (SQL, device inventory, **real GitHub repos/branches/PRs, live Azure queries**), pause for **human approval** before anything risky, get an automated **QA review** afterwards — and everything feeds a **KPI dashboard**, including how many AI replies ship untouched.
+**An open-source, self-hostable AI-powered service desk.** Email becomes tickets; AI agents triage them, draft every reply and work requests with real tools (SQL, device inventory, **real GitHub repos/branches/PRs, live Azure queries**), pause for **human approval** before anything risky, get an automated **QA review** afterwards — and everything feeds a **KPI dashboard**, including how many AI replies ship untouched. Humans and AI agents work one queue — and every resolved ticket can become a skill your AI runs next time.
 
 <p align="center">
   <img src="docs/assets/screenshot-dashboard.png" alt="Servo KPI dashboard" width="100%" />
 </p>
 
-Bring your own model — Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint — or evaluate entirely offline with the built-in deterministic mock provider. Self-host it with real SSO (any OIDC IdP), per-requester data isolation, secrets encrypted at rest, and a first-run wizard that takes a clean install to a working desk in one screen.
+Bring your own model — Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint — or evaluate entirely offline with the built-in deterministic mock provider. Self-host it with real SSO (any OIDC IdP — `src/lib/authjs.ts`), per-requester data isolation, secrets encrypted at rest, and a first-run wizard that takes a clean install to a working desk in one screen.
 
 > **Status: production-ready for self-hosting.** Fresh installs start clean (no demo data), sign in through your identity provider, and store secrets encrypted. Follow the [production checklist](#production-checklist) and read [SECURITY.md](SECURITY.md) before exposing an install to real users.
 
@@ -43,7 +43,7 @@ Bring your own model — Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint 
 - **Custom tools & integrations** — admins define new HTTP tools from Settings (method, URL, headers, body template with `{input.field}` placeholders, and a stored secret injected via `{secret}`). They join the resolver's registry like built-in tools, with the same risk levels and human-approval gates — the fastest path to integrating a webhook, an internal API, or a SaaS endpoint.
 - **Specialized agents as `.md` files** — resolver personas (Analytics, Developer, Cybersecurity…) are Markdown documents with YAML frontmatter (`name`, `categories`, `tools`) and a system-prompt body. Drop files into `agents/` or create/edit them from the UI; the resolver automatically uses the enabled specialist covering the ticket's category. A **visual tool picker** per agent (checkboxes with each tool's risk and approval policy) narrows what it may call — no YAML editing — while core tools stay always-on and the .md frontmatter is rewritten to match.
 - **Desk skills as `.md` files** — the procedures the desk has agreed to follow (how a lockout is handled, what to check before a database change, when to escalate instead of resolving), versioned as `skills/<slug>/SKILL.md` and editable from the **Skills** page. Progressive disclosure, the way Claude Code loads skills: the resolver's prompt carries only each skill's name and description, and the body costs one `read_skill` call — so a desk can hold dozens of procedures without bloating every prompt. `categories: []` makes a skill desk-wide; a skill never overrides an approval gate; and **QA is told which skills applied and which the run actually read**, so an agreed procedure that gets ignored is caught before the ticket closes. External MCP clients can read them too.
-- **Role-based permissions** — ADMIN, AGENT, and REQUESTER roles with a permission matrix; HIGH-risk approvals and group management are admin-only.
+- **Role-based permissions** — ADMIN, AGENT, and REQUESTER roles with an enforced permission matrix (`src/lib/permissions.ts`); HIGH-risk approvals and group management are admin-only.
 - **Offline evaluation mode** — without an OIDC tenant Servo runs a demo user switcher, so you can experience every role (and the whole agent loop, on the mock provider) with no auth provider, no API key and no network.
 - **shadcn/ui frontend** — Tailwind v4 + [shadcn/ui](https://ui.shadcn.com) components and charts (Recharts), themed with Servo's green-accent OKLCH palette; light mode by default with a dark-mode toggle.
 - **Docker-ready** — one `docker compose up --build` gives you a self-contained instance with persistent SQLite volumes.
@@ -172,6 +172,17 @@ The seed creates these users, switchable from the user switcher in the sidebar:
 3. **Approval pause** — when a tool policy says *requires approval*, the run stops, its full conversation is persisted, and an approval request appears in the Approvals inbox and on the ticket. On approval the tool executes and the loop continues from the exact same conversation state; on rejection the agent receives the rejection as an error result and wraps up gracefully.
 4. **QA** — if the run executed medium/high-risk tools and QA is enabled, a reviewer agent audits the transcript. A FAIL verdict reassigns the ticket to a human agent with a system comment.
 
+## The knowledge loop
+
+The desk gets smarter with every ticket it closes:
+
+1. **Tickets are the capture loop.** Mail, web, or API — every request lands in one queue (`src/app/tickets/`, `POST /api/inbound/email`, `POST /api/mcp`).
+2. **Agents work them under the gate.** Every tool carries a risk level and an approval flag; anything gated pauses the run for a named human and resumes from persisted state once they decide (`src/lib/ai/engine.ts`).
+3. **Procedures become skills.** The desk's agreed procedures live as versioned `SKILL.md` files the AI reads before it acts (`skills/`, `src/lib/skill-format.ts`) — and QA is told which skills applied and which the run actually read, so an agreed procedure being ignored is caught before the ticket closes.
+4. **Everything is audited.** Engine runs persist every step (`AgentRun` / `AgentStep` in `prisma/schema.prisma`), and every MCP tool call — executed or refused — is policy-checked at the execute site and recorded (`src/lib/mcp.ts`).
+
+*Roadmap:* distilling a resolved ticket into a draft skill automatically (today an admin writes the skill from the ticket timeline), and a company knowledge base with cited answers.
+
 See [ROADMAP.md](ROADMAP.md) for what's shipped, in progress (document upload + RAG knowledge base for agents, WhatsApp/Telegram intake, Postgres/MySQL connectors) and next. [docs/USER-GUIDE.md](docs/USER-GUIDE.md) has the day-to-day usage guide (setup, integrations, the AI reply loop, approvals, troubleshooting), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full engine design, [docs/DEMO.md](docs/DEMO.md) for a 5-minute guided tour, and [docs/DESIGN.md](docs/DESIGN.md) for the color system (WCAG-audited light/dark tokens).
 
 ## Project structure
@@ -179,9 +190,15 @@ See [ROADMAP.md](ROADMAP.md) for what's shipped, in progress (document upload + 
 ```
 agents/
   *.md                 # specialized resolver agents (frontmatter + system prompt)
+skills/
+  <slug>/SKILL.md      # the procedures the AI reads before it acts
 prisma/
   schema.prisma        # data model (SQLite; enum-likes are strings)
-  seed.ts              # demo users, tickets, runs, approvals, sandbox ops DB
+  seed-core.ts         # fresh-install bootstrap: AI users, default tool + SLA
+                       #   policies, agent profiles, skills, ops schema.
+                       #   No human users, no sample data. Idempotent.
+  seed-demo.ts         # optional showcase dataset (`npm run demo`): demo users,
+                       #   tickets, runs, approvals, sandbox ops DB. Wipes first.
 src/
   app/                 # Next.js App Router pages + API routes
     api/               # tickets, runs, approvals, settings, kpis, users
@@ -200,17 +217,37 @@ src/
     escalation*.ts     # group routing + seniority tier rules
     types.ts           # shared unions and payload shapes (source of truth)
   components/          # UI primitives, shell, and feature components
+tests/
+  *.test.ts            # the vitest suite (`npm test`), offline on the mock provider
+  fixtures/            # test corpora and pinned baselines
+scripts/
+  *.mjs / *.cjs        # repo guards and lints, operator utilities
+  *.ts / *.sh          # the container entrypoint and the tsx-run relay
+.github/
+  workflows/ci.yml     # typecheck, tests, the repo lints and a production build,
+                       #   on every push and PR to main
+servo_design_system/
+  readme.md            # design source of truth; SKILL.md is the entry point to it
+  tokens/*.css         # the semantic colour, type, spacing and motion tokens
+  guidelines/*.card.html
 docs/
   ARCHITECTURE.md      # stack, data model, engine flow, tool policies
   DEMO.md              # 5-minute guided demo script
+  design/*.md          # per-area design rationale behind the work order
 ```
+
+`servo_design_system/` is **design truth to read before UI work, not application
+code the build compiles.** Read its `SKILL.md`, then `readme.md` and the
+guideline cards for the area, before changing the interface. The build's only
+tie to that directory is the eight `tokens/*.css` files `src/app/globals.css`
+imports; no component, kit or document in it is imported by application code.
 
 ## Roadmap
 
 - Real AWS and GCP integrations, and Azure write operations (GitHub and read-only Azure already work with credentials)
-- OpenAI-compatible providers alongside Anthropic (Anthropic-compatible endpoints like Z.AI already work via the Base URL setting)
-- SSO and real RBAC (the current roles/permissions are a demo matrix)
-- Email/Slack notifications
+- A company knowledge base: upload manuals and spreadsheets, retrieval with citations for agents (Postgres on pgvector)
+- WhatsApp / Telegram intake channels, and Slack notifications (email in and out already ships — `src/lib/inbound-email.ts`, `src/lib/notify.ts`)
+- Skill, agent and plugin bundles as drop-in packages, and per-user MCP tokens
 
 ## Security
 
@@ -219,7 +256,7 @@ The full model lives in [SECURITY.md](SECURITY.md). The short version:
 - **Real sign-in** via any OIDC IdP, with a server-side domain allowlist; requesters only ever see their own tickets. Demo mode (the user switcher) exists for offline evaluation only — never expose it to a network you don't trust.
 - **Secrets are encrypted at rest** (AES-256-GCM via `SERVO_ENCRYPTION_KEY`) and never returned by any API.
 - **Risky agent actions sit behind human-approval gates**, read-only SQL is enforced at the driver, and unmet objectives escalate to a human instead of being marked resolved.
-- Honest residuals: custom HTTP tools are SSRF-by-design for admins (restrict who is an admin; egress allowlist is on the roadmap), and there is no built-in rate limiting yet — front a public install with a proxy/WAF.
+- Honest residuals: custom HTTP tools are SSRF-by-design for admins (restrict who is an admin; the egress allowlist ships in Integrations — `src/lib/egress.ts`), and there is no built-in rate limiting yet — front a public install with a proxy/WAF.
 
 ## License
 

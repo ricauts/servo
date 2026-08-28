@@ -12,11 +12,21 @@
 import matter from "gray-matter";
 import { CATEGORIES } from "@/lib/types";
 
+/** The six portable Agent Skills frontmatter fields (agentskills.io). */
+export type SkillParseMode = "strict" | "lenient";
+
 export interface ParsedSkill {
   name: string;
   description: string;
   categories: string[];
   body: string;
+  /** Portable Agent Skills fields, carried for round-tripping. */
+  license?: string;
+  compatibility?: string;
+  allowedTools?: string[];
+  metadata?: Record<string, unknown>;
+  /** Non-fatal notes from lenient parsing (dropped unknown categories, …). */
+  warnings: string[];
 }
 
 /** One catalogue line: what the resolver picks from before reading a body. */
@@ -34,8 +44,17 @@ export interface SkillCatalogEntry {
  */
 export const SKILL_CATALOG_LIMIT = 40;
 
-/** Descriptions are catalogue lines, not documents — keep them scannable. */
-const DESCRIPTION_LIMIT = 300;
+/**
+ * Descriptions may be documents now (imports must not fail on prose), but a
+ * catalogue LINE is still a one-liner: the section below truncates to this
+ * so the resolver prompt budget does not move when the parse limit rose.
+ */
+const DESCRIPTION_LIMIT = 1024;
+const CATALOG_LINE_LIMIT = 300;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /**
  * Parse and validate a SKILL.md document. Throws with a human-readable
@@ -44,9 +63,21 @@ const DESCRIPTION_LIMIT = 300;
  * `description` is required, unlike on an agent profile: it is the only thing
  * the resolver sees before deciding whether to spend a tool call reading the
  * body, so a skill without one is invisible in practice.
+ *
+ * Agent Skills compatibility (cnp-04): the six portable fields are accepted
+ * (name, description, license, compatibility, metadata, allowed-tools) and
+ * unknown extra frontmatter keys are tolerated, never fatal. Categories are
+ * read from `metadata.categories` first, with top-level `categories:` as the
+ * Servo legacy form. STRICT mode (the UI/API default) rejects unknown
+ * category values exactly as before; LENIENT mode (import/plugin paths)
+ * drops them with a warning so an external skill still loads.
  */
-export function parseSkillMarkdown(markdown: string): ParsedSkill {
+export function parseSkillMarkdown(
+  markdown: string,
+  { mode = "strict" }: { mode?: SkillParseMode } = {},
+): ParsedSkill {
   const { data, content } = matter(markdown);
+  const warnings: string[] = [];
 
   const name = typeof data.name === "string" ? data.name.trim() : "";
   if (!name) throw new Error("Frontmatter must include a non-empty `name`.");
@@ -60,15 +91,25 @@ export function parseSkillMarkdown(markdown: string): ParsedSkill {
   }
   if (description.length > DESCRIPTION_LIMIT) {
     throw new Error(
-      `\`description\` must be at most ${DESCRIPTION_LIMIT} characters (it is a one-line catalogue entry); this one is ${description.length}.`,
+      `\`description\` must be at most ${DESCRIPTION_LIMIT} characters; this one is ${description.length}.`,
     );
   }
 
-  const categories = Array.isArray(data.categories)
-    ? data.categories.map(String)
-    : [];
-  for (const c of categories) {
-    if (!CATEGORIES.includes(c as (typeof CATEGORIES)[number])) {
+  const metadata = isRecord(data.metadata) ? data.metadata : undefined;
+  const fromMetadata =
+    metadata && Array.isArray(metadata.categories)
+      ? metadata.categories.map(String)
+      : null;
+  const fromTopLevel = Array.isArray(data.categories) ? data.categories.map(String) : null;
+  const raw = fromMetadata ?? fromTopLevel ?? [];
+
+  const categories: string[] = [];
+  for (const c of raw) {
+    if (CATEGORIES.includes(c as (typeof CATEGORIES)[number])) {
+      categories.push(c);
+    } else if (mode === "lenient") {
+      warnings.push(`Dropped unknown category "${c}" (lenient import).`);
+    } else {
       throw new Error(`Unknown category "${c}". Valid: ${CATEGORIES.join(", ")}.`);
     }
   }
@@ -78,7 +119,55 @@ export function parseSkillMarkdown(markdown: string): ParsedSkill {
     throw new Error("The document body (the procedure) cannot be empty.");
   }
 
-  return { name, description, categories, body };
+  const license = typeof data.license === "string" && data.license.trim() ? data.license.trim() : undefined;
+  const compatibility =
+    typeof data.compatibility === "string" && data.compatibility.trim()
+      ? data.compatibility.trim()
+      : undefined;
+  const allowedRaw = data["allowed-tools"];
+  const allowedTools = Array.isArray(allowedRaw)
+    ? allowedRaw.map(String).filter(Boolean)
+    : typeof allowedRaw === "string" && allowedRaw.trim()
+      ? allowedRaw
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : undefined;
+
+  return {
+    name,
+    description,
+    categories,
+    body,
+    ...(license !== undefined ? { license } : {}),
+    ...(compatibility !== undefined ? { compatibility } : {}),
+    ...(allowedTools !== undefined ? { allowedTools } : {}),
+    ...(metadata !== undefined ? { metadata } : {}),
+    warnings,
+  };
+}
+
+/**
+ * Serialize back to SKILL.md in the Agent Skills portable form: exactly the
+ * six portable fields (categories nested under `metadata`), then the body.
+ * parse → serialize → parse is stable, so an imported skill round-trips.
+ */
+export function serializeSkillMarkdown(
+  skill: Omit<ParsedSkill, "warnings">,
+): string {
+  const data: Record<string, unknown> = {
+    name: skill.name,
+    description: skill.description,
+  };
+  if (skill.license) data.license = skill.license;
+  if (skill.compatibility) data.compatibility = skill.compatibility;
+  const metadata: Record<string, unknown> = { ...(skill.metadata ?? {}) };
+  if (skill.categories.length > 0) metadata.categories = [...skill.categories];
+  if (Object.keys(metadata).length > 0) data.metadata = metadata;
+  if (skill.allowedTools && skill.allowedTools.length > 0) {
+    data["allowed-tools"] = [...skill.allowedTools];
+  }
+  return matter.stringify(`${skill.body}\n`, data);
 }
 
 /**
@@ -125,7 +214,13 @@ export function skillCatalogSection(
   const lines = ordered
     .map((s) => {
       const scope = s.categories.length === 0 ? "every ticket" : s.categories.join(", ");
-      return `- ${s.slug} (${scope}): ${s.description}`;
+      // A long description may be a document now; a catalogue LINE is not.
+      // The prompt budget does not move when the parse limit rose (cnp-04).
+      const line =
+        s.description.length > CATALOG_LINE_LIMIT
+          ? s.description.slice(0, CATALOG_LINE_LIMIT - 1) + "…"
+          : s.description;
+      return `- ${s.slug} (${scope}): ${line}`;
     })
     .join("\n");
   return `## Desk skills
