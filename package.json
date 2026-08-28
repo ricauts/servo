@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "demo": "prisma generate && prisma db push && tsx prisma/seed-demo.ts",
-    "lint:hex": "node scripts/no-hex-lint.mjs"
+    "lint:hex": "node scripts/no-hex-lint.mjs",
+    "claims:audit": "node scripts/claims-audit.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

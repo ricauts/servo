@@ -35,5 +35,8 @@ jobs:
       - name: No hardcoded colours (design tokens only)
         run: npm run lint:hex
 
+      - name: Claims lint (docs/POSITIONING.md is the policy)
+        run: npm run claims:audit
+
       - name: Production build
         run: npm run build
