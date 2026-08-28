@@ -15,7 +15,7 @@
     "claims:audit": "node scripts/claims-audit.mjs"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed-core.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

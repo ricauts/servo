@@ -190,9 +190,15 @@ See [ROADMAP.md](ROADMAP.md) for what's shipped, in progress (document upload + 
 ```
 agents/
   *.md                 # specialized resolver agents (frontmatter + system prompt)
+skills/
+  <slug>/SKILL.md      # the procedures the AI reads before it acts
 prisma/
   schema.prisma        # data model (SQLite; enum-likes are strings)
-  seed.ts              # demo users, tickets, runs, approvals, sandbox ops DB
+  seed-core.ts         # fresh-install bootstrap: AI users, default tool + SLA
+                       #   policies, agent profiles, skills, ops schema.
+                       #   No human users, no sample data. Idempotent.
+  seed-demo.ts         # optional showcase dataset (`npm run demo`): demo users,
+                       #   tickets, runs, approvals, sandbox ops DB. Wipes first.
 src/
   app/                 # Next.js App Router pages + API routes
     api/               # tickets, runs, approvals, settings, kpis, users
@@ -211,10 +217,30 @@ src/
     escalation*.ts     # group routing + seniority tier rules
     types.ts           # shared unions and payload shapes (source of truth)
   components/          # UI primitives, shell, and feature components
+tests/
+  *.test.ts            # the vitest suite (`npm test`), offline on the mock provider
+  fixtures/            # test corpora and pinned baselines
+scripts/
+  *.mjs / *.cjs        # repo guards and lints, operator utilities
+  *.ts / *.sh          # the container entrypoint and the tsx-run relay
+.github/
+  workflows/ci.yml     # typecheck, tests, the repo lints and a production build,
+                       #   on every push and PR to main
+servo_design_system/
+  readme.md            # design source of truth; SKILL.md is the entry point to it
+  tokens/*.css         # the semantic colour, type, spacing and motion tokens
+  guidelines/*.card.html
 docs/
   ARCHITECTURE.md      # stack, data model, engine flow, tool policies
   DEMO.md              # 5-minute guided demo script
+  design/*.md          # per-area design rationale behind the work order
 ```
+
+`servo_design_system/` is **design truth to read before UI work, not application
+code the build compiles.** Read its `SKILL.md`, then `readme.md` and the
+guideline cards for the area, before changing the interface. The build's only
+tie to that directory is the eight `tokens/*.css` files `src/app/globals.css`
+imports; no component, kit or document in it is imported by application code.
 
 ## Roadmap
 
