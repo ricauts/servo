@@ -224,8 +224,8 @@ scripts/
   *.mjs / *.cjs        # repo guards and lints, operator utilities
   *.ts / *.sh          # the container entrypoint and the tsx-run relay
 .github/
-  workflows/ci.yml     # typecheck, tests, the repo lints and a production build,
-                       #   on every push and PR to main
+  workflows/ci.yml     # typecheck, tests, the colour and claims lints, and a
+                       #   production build, on every push and PR to main
 servo_design_system/
   readme.md            # design source of truth; SKILL.md is the entry point to it
   tokens/*.css         # the semantic colour, type, spacing and motion tokens
@@ -241,6 +241,11 @@ code the build compiles.** Read its `SKILL.md`, then `readme.md` and the
 guideline cards for the area, before changing the interface. The build's only
 tie to that directory is the eight `tokens/*.css` files `src/app/globals.css`
 imports; no component, kit or document in it is imported by application code.
+
+The block above is a guide to the tree, not an exhaustive listing. Two root
+files worth knowing: [`spec.md`](spec.md) is the live work order, and
+[`THIRD_PARTY.md`](THIRD_PARTY.md) is the attribution register — every piece of
+code in here that someone else wrote, with its upstream licence and copyright.
 
 ## Roadmap
 

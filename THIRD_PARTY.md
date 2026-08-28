@@ -83,12 +83,33 @@ a permissive code licence says nothing about what ships beside it.
   only Servo-authored edit inside the 23 files is a lint-suppression comment at
   `src/components/ui/chart.tsx:68`. Every export in `src/lib/utils.ts` other than
   `cn` is Servo's own.
-- **Obligations:** attribution only. MIT requires the copyright notice and the
-  permission notice to travel with copies of the software; this entry is where
-  they travel, since the copied files carry no header of their own. That is a
-  deliberate departure from `docs/PORTING-LEDGER.md`'s rule that copied code
-  keeps its notice in-file: re-heading 23 CLI-managed files would be overwritten
-  by the next `shadcn` run, so the notice is centralised here instead.
+- **Obligations:** attribution only. MIT requires the copyright notice *and* the
+  permission notice to travel with copies of the software. The copied files
+  carry no header of their own — and re-heading 23 CLI-managed files would be
+  undone by the next `shadcn` run — so both notices travel here, reproduced in
+  full rather than linked:
+
+  > MIT License
+  >
+  > Copyright (c) 2023 shadcn
+  >
+  > Permission is hereby granted, free of charge, to any person obtaining a copy
+  > of this software and associated documentation files (the "Software"), to deal
+  > in the Software without restriction, including without limitation the rights
+  > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  > copies of the Software, and to permit persons to whom the Software is
+  > furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in all
+  > copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  > SOFTWARE.
 
 **A note on why this entry exists.** Upstream's documentation says the code the
 CLI writes into your project is yours to own and change, and that is true of
@@ -106,10 +127,11 @@ rather than implied.
 
 **Established.** A scan of every tracked file for SPDX identifiers, `@license`
 headers and copyright notices returns no SPDX identifier and no `@license`
-header anywhere, and the copyright notices it does return are either Servo's own
-(`LICENSE`, `README.md`) or notices *quoted inside* licence audits in `spec.md`
-and `docs/design/` — descriptions of components under consideration, not code in
-this tree.
+header anywhere. The copyright notices it does return fall into three groups:
+Servo's own (`LICENSE`, `README.md`); notices *quoted inside* licence audits in
+`spec.md` and `docs/design/` — descriptions of components under consideration,
+not code in this tree; and the shadcn/ui notice in this file, which is the one
+genuine third-party notice in the repository and is here by design.
 
 **The limit of that method, stated plainly.** A header scan cannot prove absence
 of vendoring, because vendored code need not carry a header — the shadcn/ui
@@ -128,13 +150,21 @@ first lines:
 Whether those upstreams are the owner's own tooling or someone else's is not
 something this tree records, and it is not a question to guess at: an attribution
 register that invents a provenance is worse than one that names the gap. The
-gap is filed as a numbered owner question in `spec.md`, and an entry is added
-here the moment it is answered.
+gap is filed as **owner question 41** in `spec.md`, and an entry is added here
+the moment it is answered.
 
-For contrast, `servo_design_system/_ds_bundle.js` carries a manifest naming its
-sources as that directory's own `components/*.jsx`, and no bundle under
-`servo_design_system/` embeds a third-party library — the React it uses is taken
-from a runtime global, not compiled in.
+**The two starters are also compiled into a fourth file.**
+`servo_design_system/_ds_bundle.js` opens with a manifest listing 31
+`components/*.jsx` sources, but the manifest does not describe the whole file:
+the bundle additionally embeds `ui_kits/desk/*` and `ui_kits/site/*`, and lines
+3300 and 4021 are `doc-page.js` and `image-slot.js` verbatim, "Copied omelette
+starter" headers and all — roughly 2,000 of its 5,295 lines. So `_ds_bundle.js`
+inherits whatever answer question 41 gets; it is not cleared by its own
+manifest, and an earlier draft of this file wrongly said it was.
+
+What *is* established about the bundles: none of them embeds a third-party
+library. React is taken from a runtime global rather than compiled in, and the
+only licence-shaped strings inside are marketing copy.
 
 `docs/PORTING-LEDGER.md` records the complementary result for the porting
 programme specifically: desk memory, the egress-guarded web read and the skills
