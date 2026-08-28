@@ -16,9 +16,9 @@ differently.
   An entry describing what Servo was in August 2026 stays as written even once
   that is no longer the case; correcting it would destroy the only record of
   what a past run actually decided and why. These two headings are what
-  `docs/POSITIONING.md`'s banned-phrase exemptions and the backlog items that
-  cite "the marked history section of the porting ledger" refer to, by these
-  exact names. Rename either heading and the exemption stops resolving —
+  `docs/POSITIONING.md`'s banned-phrase exemptions and the `db-10` backlog item
+  cite as "the marked history section of the porting ledger", by these exact
+  names. Rename either heading and the exemption stops resolving —
   loudly, not silently: `scripts/claims-audit.mjs` validates that every section
   an exemption names exists, and fails the build naming the heading it could
   not find. Rename one only together with the canon entry that points at it.
