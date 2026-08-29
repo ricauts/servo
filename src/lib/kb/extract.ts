@@ -20,6 +20,7 @@
 import { fork } from "node:child_process";
 import path from "node:path";
 import { chunkSpreadsheetSheets, type SheetRows } from "@/lib/kb/extract-xlsx";
+import { chunkPdfPages } from "@/lib/kb/extract-pdf";
 
 /** Resource caps — measured BEFORE parsing, on the bytes themselves. */
 export const EXTRACT_LIMITS = {
@@ -150,11 +151,12 @@ export function extractHardened(
 
     child.on("message", (msg: {
       ok: boolean;
-      kind?: "text" | "sheets";
+      kind?: "text" | "sheets" | "pages";
       text?: string;
       status?: string;
       error?: string;
       sheets?: SheetRows[];
+      pages?: string[];
     }) => {
       clearTimeout(wallClock);
       if (!msg.ok) {
@@ -165,6 +167,22 @@ export function extractHardened(
         // The worker parsed and normalized; the typed module owns the
         // windowing and the A1 locator math (kb-06).
         const verdict = chunkSpreadsheetSheets(msg.sheets ?? []);
+        if (verdict.status === "UNSUPPORTED") {
+          finish({ status: "UNSUPPORTED", text: "", error: verdict.error });
+          return;
+        }
+        finish({
+          status: "EXTRACTED",
+          text: verdict.chunks.map((c) => c.text).join("\n\n"),
+          chunks: verdict.chunks,
+        });
+        return;
+      }
+      if (msg.kind === "pages") {
+        // One chunk per page with {page} locators; the scanned-document
+        // verdict and the oversized-page split live in the typed module
+        // (kb-07).
+        const verdict = chunkPdfPages(msg.pages ?? []);
         if (verdict.status === "UNSUPPORTED") {
           finish({ status: "UNSUPPORTED", text: "", error: verdict.error });
           return;

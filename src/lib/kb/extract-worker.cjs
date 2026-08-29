@@ -39,7 +39,7 @@ async function extract(bytes, contentType) {
     return { kind: "text", text: bytes.toString("utf8"), status: "EXTRACTED" };
   }
   if (ct === "application/pdf") {
-    return { text: "", status: "UNSUPPORTED", error: "PDF extraction arrives with kb-07." };
+    return extractPdf(bytes);
   }
   if (isXlsxFamily(ct)) return extractSpreadsheet(bytes);
   if (ct.indexOf("ms-excel") !== -1 || ct.indexOf("excel") !== -1 || ct.indexOf("sheet") !== -1) {
@@ -59,6 +59,23 @@ async function extract(bytes, contentType) {
  *  .xlsm), however the uploader's form labels them. */
 function isXlsxFamily(ct) {
   return ct.indexOf("spreadsheetml") !== -1 || ct.indexOf("xlsx") !== -1;
+}
+
+/** Extract the text layer of a PDF, page by page. unpdf wraps Mozilla's
+ *  pdf.js as pure ESM with zero runtime dependencies — hence the dynamic
+ *  import from this CommonJS worker (Node 22 runs it natively, no bundler).
+ *  The empty/absent text layer verdict is NOT decided here: the typed
+ *  chunker (extract-pdf.ts) owns it, so the scanned-document message lives
+ *  in exactly one place. */
+async function extractPdf(bytes) {
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  try {
+    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+    const { text } = await extractText(pdf, { mergePages: false });
+    return { kind: "pages", pages: text };
+  } catch (err) {
+    throw new Error("PDF could not be parsed: " + (err && err.message ? err.message : String(err)));
+  }
 }
 
 /** Parse a workbook and normalize each sheet to the shape

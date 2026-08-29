@@ -80,6 +80,26 @@ a permissive code licence says nothing about what ships beside it.
   shipping the dependency: its licence travels inside `node_modules` to
   every install. Nothing of it is copied into this tree.
 
+### unpdf (kb-07)
+
+- **Upstream:** <https://github.com/unjs/unpdf>
+- **Licence:** MIT, verified from the `LICENSE` file shipped in the installed
+  package (`node_modules/unpdf/LICENSE`, identical to
+  <https://github.com/unjs/unpdf/blob/main/LICENSE>) on 2026-08-28.
+- **Copyright:** `Copyright (c) 2023-PRESENT Johann Schopplich`
+- **What we use:** an ordinary npm dependency (1.8.1), not vendored code. It
+  wraps Mozilla's pdf.js (Apache-2.0, unbundled by upstream) as pure ESM
+  with **zero runtime dependencies**, and extracts a PDF's text layer per
+  page inside the forked extraction worker (`src/lib/kb/extract-worker.cjs`,
+  spec kb-07) — dynamically imported, since the worker is CommonJS and the
+  package is ESM-only. The entry records the adopt-first verdict for the
+  new RUNTIME dependency: **pdf-parse v2 was considered and REJECTED** —
+  it drags `@napi-rs/canvas` (a native module) into the image for no
+  benefit here, where only text is read.
+- **Obligations:** attribution only, discharged by `package.json` shipping
+  the dependency: its licence travels inside `node_modules` to every
+  install. Nothing of it is copied into this tree.
+
 ### shadcn/ui
 
 - **Upstream:** <https://github.com/shadcn-ui/ui> — two layers of its component

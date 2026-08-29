@@ -1,0 +1,75 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Length 194 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+14 TL
+(Servo field manual - page one.) Tj T*
+(The spindle inventory baseline is reconciled weekly.) Tj T*
+(Reference code INV-2024-113 denotes the Q3 stock take.) Tj T*
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 3 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 197 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+14 TL
+(Servo field manual - page two.) Tj T*
+(Calibration intervals: motors every 90 days, encoders every 30.) Tj T*
+(Escalate any drift beyond 0.02 mm to the desk.) Tj T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+7 0 obj
+<< /Length 213 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+14 TL
+(Servo field manual - page three.) Tj T*
+(Warranty claims must cite the serial number and the fault code.) Tj T*
+(Codes F-01 through F-09 are covered; F-10 and above are not.) Tj T*
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000372 00000 n 
+0000000498 00000 n 
+0000000746 00000 n 
+0000000872 00000 n 
+0000001136 00000 n 
+0000001262 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1332
+%%EOF
