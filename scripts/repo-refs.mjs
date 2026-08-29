@@ -1545,7 +1545,15 @@ export function parseBaseline(text) {
     });
     return kept;
   };
-  return { files: rows("files", "path"), dependencies: rows("dependencies", "name"), problems };
+  // The package rows are keyed `packages` in the JSON, NOT `dependencies`, and
+  // that is not cosmetic. scripts/landing-tier.mjs tracks package.json's
+  // dependency blocks by header line across the WHOLE staged diff, not per
+  // file, so a JSON file carrying a `"dependencies":` key makes every commit
+  // that touches it read as a runtime dependency change and land Tier C. This
+  // item's only package.json change is one added npm script; with the old key
+  // it still classified C and sat waiting on a human merge. The field stays
+  // `dependencies` in memory, so every reader below is unchanged.
+  return { files: rows("files", "path"), dependencies: rows("packages", "name"), problems };
 }
 
 /** The dependency finding statuses the gate acts on, and what each one means. */

@@ -40,8 +40,11 @@ function report({
   return { files, dependencies } as never;
 }
 
-function baseline(files: unknown[] = [], dependencies: unknown[] = []) {
-  return parseBaseline(JSON.stringify({ files, dependencies }));
+function baseline(files: unknown[] = [], packages: unknown[] = []) {
+  // `packages`, not `dependencies`: landing-tier.mjs reads a "dependencies"
+  // key in any staged JSON as a package.json manifest block and classifies the
+  // whole diff Tier C. The parsed shape keeps the field name `dependencies`.
+  return parseBaseline(JSON.stringify({ files, packages }));
 }
 
 const ROW = { reason: "kept for a stated reason", owner: "hyg-09" };

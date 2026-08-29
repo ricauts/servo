@@ -62,7 +62,7 @@
       "owner": "question-31"
     }
   ],
-  "dependencies": [
+  "packages": [
     {
       "name": "gifenc",
       "finding": "unreferenced",
