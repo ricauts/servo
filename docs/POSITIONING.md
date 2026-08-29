@@ -338,41 +338,27 @@ paths-exempt:
       turns them from stale references into recorded history.
   # --- Written relative to a directory the surrounding prose names ---------
   - target:
-      - tokens/*.css
-      - guidelines/*.card.html
-      - components/*.jsx
-      - tickets/page.tsx
       - api/tickets/route.ts
-      - legacy/Badge.tsx
-      - tools/index.ts
-      - 0001_pgvector/migration.sql
     paths:
-      - README.md
-      - THIRD_PARTY.md
       - docs/design/*.md
-    reason: directory-relative fragments - each is written against a directory
-      the surrounding sentence names (servo_design_system/, src/app/,
-      src/lib/ai/, src/components/, prisma/migrations/) rather than against the
-      repository root, so resolving one would mean inferring its base from
-      prose. They are real paths; only their base is unwritten.
+    reason: a directory-relative fragment - written against a directory the
+      surrounding sentence names (src/app/) rather than against the repository
+      root, so resolving it would mean inferring its base from prose. The
+      two-segment fragments that used to sit here (tokens/*.css,
+      tickets/page.tsx, tools/index.ts and the rest) no longer reach the check
+      at all: the extension escape stopped firing on two-segment unanchored
+      paths, so they land in the printed unanchored counter instead of needing
+      an exemption, which is the more honest place for them.
   # --- Not this repository -------------------------------------------------
   - target:
-      - servoai-site/index.html
       - apps/**
-      - doc/MCP-ACCESS-GOVERNANCE.md
-      - .claude-plugin/plugin.json
-      - tools/*.tool.json
     paths:
       - THIRD_PARTY.md
-      - docs/design/*.md
-    reason: paths in someone else's tree, or in a format this repository does
-      not hold. The landing page lives in the separate servoai-site repository
-      the loop may never commit to; apps/v4/... is shadcn's own tree, cited so
-      the attribution register can say what was copied; MCP-ACCESS-GOVERNANCE
-      is another project's document; .claude-plugin/plugin.json is the bundle
-      layout cnp-06 reads from a plugin directory, never from this root; and
-      tools/*.tool.json is a NEGATIVE reference to a second bundle format the
-      spec refuses to have.
+    reason: shadcn's own tree, cited at depth so the attribution register can
+      say exactly what was copied. The shallower foreign paths that used to sit
+      here (servoai-site/index.html, doc/MCP-ACCESS-GOVERNANCE.md,
+      .claude-plugin/plugin.json, tools/*.tool.json) are two segments and no
+      longer reach the check, for the same reason a GitHub coordinate does not.
   # --- Untracked by design -------------------------------------------------
   - target:
       - prisma/*.db

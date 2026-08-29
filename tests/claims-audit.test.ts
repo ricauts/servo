@@ -1612,3 +1612,35 @@ describe("hyg-03 follow-up — defects an adjudicator found after the merge", ()
     expect(r.resolved + r.exemptedOccurrences + r.missing.length).toBe(r.checked);
   });
 });
+
+describe("hyg-03 follow-up — two false positives an adversarial pass reproduced", () => {
+  it("a ?query is stripped like a #fragment — a healthy link must not fail CI", () => {
+    // `docs/POSITIONING.md?plain=1` is GitHub-idiomatic and names a file that
+    // exists. A false positive is worse than a miss: it fails CI on good copy
+    // and the only escape is to record a healthy link as an exception.
+    expect(normalizePathRef("docs/POSITIONING.md?plain=1")).toBe("docs/POSITIONING.md");
+    expect(normalizePathRef("docs/POSITIONING.md#paths-scan")).toBe("docs/POSITIONING.md");
+    const tree = new Set(["docs", "docs/POSITIONING.md"]);
+    expect(
+      scanFilePaths("README.md", "[raw](docs/POSITIONING.md?plain=1)", tree, topLevelNames(tree)).findings,
+    ).toEqual([]);
+  });
+
+  it("the extension escape does NOT swallow a two-segment GitHub coordinate", () => {
+    // THIRD_PARTY.md exists to cite upstream projects, and `.js` repo names are
+    // everywhere. Resolving these would fail CI on a healthy citation.
+    for (const coord of ["vercel/next.js", "mrdoob/three.js", "lodash/merge.js", "expressjs/express.js"]) {
+      const r = classifyPathRef(coord, "code", FIXTURE_TOP);
+      expect(r.path).toBeNull();
+      expect(r.skip).toBe("unanchored"); // counted, never silent
+    }
+    // ...while a DEEPER unanchored file reference is still caught, which is the
+    // whole point of the extension escape.
+    expect(classifyPathRef("neverexisted/some/file.ts", "code", FIXTURE_TOP).path).toBe(
+      "neverexisted/some/file.ts",
+    );
+    // ...and an ANCHORED two-segment path is unaffected: the rule is about the
+    // extension escape, not about depth in general.
+    expect(classifyPathRef("src/missing.ts", "code", FIXTURE_TOP).path).toBe("src/missing.ts");
+  });
+});
