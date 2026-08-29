@@ -17,7 +17,12 @@ export type Action =
   | "approval.view"
   | "approval.decide"
   | "settings.manage"
-  | "kpi.view";
+  | "kpi.view"
+  // Knowledge base (kb-*): requesters meet the KB only as cited answers.
+  | "kb.view"
+  | "kb.upload"
+  | "kb.share"
+  | "kb.manage";
 
 const MATRIX: Record<Action, Role[]> = {
   "ticket.create": ["ADMIN", "AGENT", "REQUESTER"],
@@ -36,6 +41,12 @@ const MATRIX: Record<Action, Role[]> = {
   "approval.decide": ["ADMIN", "AGENT"],
   "settings.manage": ["ADMIN"],
   "kpi.view": ["ADMIN", "AGENT"],
+  // The KB actions are additive by design (rbac-01): never REQUESTER, never
+  // AI_AGENT. Agents act through grants, not through the permission matrix.
+  "kb.view": ["ADMIN", "AGENT"],
+  "kb.upload": ["ADMIN", "AGENT"],
+  "kb.share": ["ADMIN", "AGENT"],
+  "kb.manage": ["ADMIN"],
 };
 
 export function can(user: Pick<User, "role">, action: Action): boolean {
