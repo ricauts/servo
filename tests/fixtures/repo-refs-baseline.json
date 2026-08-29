@@ -1,0 +1,97 @@
+{
+  "$schema-note": "hyg-04. A KEEP-LIST, not a to-delete list. One row per finding the repository has decided to live with: an unreferenced-but-kept file, or a dependency finding (declared-and-unimported, imported-and-undeclared, or claimed-but-absent). Findings the scanner already reports as `keep` (the never-delete list) and dependencies it already reports as `referenced` or `tooling` are not findings and get no row. Every row carries a one-line `reason` and an `owner`: the backlog item id that will end it, or the numbered question under spec.md section 14 that decided to keep it. `node scripts/repo-refs.mjs --check` (npm run hygiene:check) fails on any finding with no row here. A row may only be REMOVED in the same commit that removes the thing it describes or adds a reference to it; tests/repo-refs-baseline.test.ts asserts every row still describes something real.",
+  "files": [
+    {
+      "path": "docs/design/connectors.md",
+      "reason": "design document for the cnp-* area; spec.md section 0.9 is its only pointer and spec.md is excluded as a referencing source, so it reads unreferenced",
+      "owner": "hyg-08"
+    },
+    {
+      "path": "docs/design/external-sources.md",
+      "reason": "design document for the xds-* area; same spec.md-only pointer as connectors.md",
+      "owner": "hyg-08"
+    },
+    {
+      "path": "scripts/make-before-after.mjs",
+      "reason": "media rig that regenerates docs/assets/before-after-fix.png; archived under scripts/media/ with a guide, never deleted",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "scripts/record-approval.mjs",
+      "reason": "media rig that records the approval-gate capture; archived under scripts/media/, never deleted",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "scripts/screenshot.mjs",
+      "reason": "media rig that captures the README stills; archived under scripts/media/, never deleted",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "scripts/shoot-og.mjs",
+      "reason": "media rig that shoots the OG card; archived under scripts/media/ and loses its cross-repo default, never deleted",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "scripts/run-relay.ts",
+      "reason": "undocumented tsx wrapper around scripts/imap-relay.mjs; wired up as npm run relay and documented rather than removed",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "src/components/ui/avatar.tsx",
+      "reason": "unused shadcn primitive; deletion is build-safe today but npx shadcn add can re-create it, so it is kept",
+      "owner": "question-31"
+    },
+    {
+      "path": "src/components/ui/badge.tsx",
+      "reason": "unused shadcn primitive; the live badge is src/components/legacy/Badge.tsx with 23 importers",
+      "owner": "question-31"
+    },
+    {
+      "path": "src/components/ui/scroll-area.tsx",
+      "reason": "unused shadcn primitive; kept for the same reason as avatar.tsx",
+      "owner": "question-31"
+    },
+    {
+      "path": "src/components/ui/skeleton.tsx",
+      "reason": "unused shadcn primitive; kept for the same reason as avatar.tsx",
+      "owner": "question-31"
+    },
+    {
+      "path": "src/components/ui/tooltip.tsx",
+      "reason": "unused shadcn primitive; kept for the same reason as avatar.tsx",
+      "owner": "question-31"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "gifenc",
+      "finding": "unreferenced",
+      "reason": "declared in devDependencies and imported by nothing; removed with committed evidence under the deletion rule, not here — hyg-04 removes nothing",
+      "owner": "hyg-05"
+    },
+    {
+      "name": "@modelcontextprotocol/sdk",
+      "finding": "unreferenced",
+      "reason": "the adopted MCP client (MIT, spec.md section 0.4), declared ahead of the item that imports it; not dead, unused-so-far",
+      "owner": "cnp-02"
+    },
+    {
+      "name": "react-is",
+      "finding": "unreferenced",
+      "reason": "satisfies recharts' react-is peerDependency (node_modules/recharts/package.json peerDependencies); never imported by app code, so removing it breaks the peer range",
+      "owner": "question-31"
+    },
+    {
+      "name": "sharp",
+      "finding": "undeclared",
+      "reason": "imported by the media rig only (scripts/make-before-after.mjs); made a guarded dynamic import with no dependency added, and this row is superseded by the media-tooling block in docs/MEDIA-GUIDE.md",
+      "owner": "hyg-09"
+    },
+    {
+      "name": "ffmpeg-static",
+      "finding": "claimed-absent",
+      "reason": "named as a node_modules path by scripts/record-hero.mjs and present in neither manifest, so npm ci never creates it; made a guarded dynamic import with an actionable message, and this row is superseded by the media-tooling block in docs/MEDIA-GUIDE.md",
+      "owner": "hyg-09"
+    }
+  ]
+}

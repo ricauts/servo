@@ -5,10 +5,13 @@
 //
 //   node scripts/repo-refs.mjs                       # human-readable summary
 //   node scripts/repo-refs.mjs --evidence docs/hygiene/<item-id>-evidence.md
+//   node scripts/repo-refs.mjs --check               # `npm run hygiene:check`
 //
-// It DELETES NOTHING and it never exits nonzero on findings: the deletion rule
-// (§13.1) is "evidence or no deletion", and this script is only the evidence.
-// hyg-04 adds the baseline check that can fail.
+// It DELETES NOTHING. Without --check it never exits nonzero on findings: the
+// deletion rule (§13.1) is "evidence or no deletion", and the plain report is
+// only the evidence. `--check` (hyg-04) is the gate on top of the same report —
+// it fails on a finding that has no row in the keep-list, and it still deletes
+// nothing.
 //
 // Node builtins only, pure functions plus a thin CLI, in the same shape as
 // loop-guard.mjs and spec-lint.mjs. Every trap below was hit by hand during
@@ -62,9 +65,17 @@ export const EXCLUDED_PATTERNS = [/^prisma\/[^/]*\.db.*$/];
 
 /**
  * Files that are scanned (they get a verdict) but never counted as a source of
- * references. spec.md is the whole list, and the comment above says why.
+ * references.
+ *
+ *  * spec.md names paths it PLANS to create — the comment above says why.
+ *  * The hyg-04 keep-list names a path precisely BECAUSE nothing points at it.
+ *    Counting it would make every baselined file read `referenced`, the gate
+ *    would cover nothing, and the first file to go dead would be recorded as
+ *    alive by the very row that recorded it as dead. Found the hard way: the
+ *    five `src/components/ui/*` rows flipped to `referenced` the moment the
+ *    baseline was first `git add`ed.
  */
-export const NON_REFERENCING_SOURCES = new Set(["spec.md"]);
+export const NON_REFERENCING_SOURCES = new Set(["spec.md", "tests/fixtures/repo-refs-baseline.json"]);
 
 /**
  * Never in scope for any hygiene deletion, at any time (§13.1). These are
@@ -1343,6 +1354,221 @@ export function renderEvidence(report, { command, date }) {
 }
 
 // ---------------------------------------------------------------------------
+// The baseline — spec item hyg-04.
+//
+// hyg-01's scanner reports; it never fails. This half is the gate, and it is a
+// KEEP-LIST, not a to-delete list: every finding the repository has decided to
+// live with carries a row saying why, and who owns undoing it. What fails is a
+// finding with NO row — a file that just became unreferenced, a dependency that
+// just stopped being imported, an import that appears in no manifest. The set
+// of things nobody points at can then only shrink by decision, never grow by
+// drift.
+//
+// Two rules keep the list honest and are enforced elsewhere on purpose:
+//  * A row may only be REMOVED in the commit that removes the thing it
+//    describes or adds a reference to it. --check cannot see that, so
+//    tests/repo-refs-baseline.test.ts asserts every row still describes
+//    something real. A stale row is reported here as a note and never fails
+//    --check, because "it never fails for a baseline row" is the contract.
+//  * A row's `owner` names the backlog item or the numbered §14 question that
+//    will end it. The SHAPE is checked here; that the id actually exists in
+//    spec.md is checked by the test, which is the file allowed to read spec.md.
+// ---------------------------------------------------------------------------
+
+/** Where the keep-list lives. */
+export const BASELINE_PATH = "tests/fixtures/repo-refs-baseline.json";
+
+/**
+ * The media rig imports `sharp` and `ffmpeg-static` without declaring them.
+ * hyg-09 archives those scripts and writes docs/MEDIA-GUIDE.md carrying a
+ * machine-readable list of the modules they may import undeclared. Until that
+ * file exists the same modules are ordinary baseline rows; its ABSENCE IS NOT
+ * A FAILURE, because hyg-09 is what writes it.
+ */
+export const MEDIA_GUIDE_PATH = "docs/MEDIA-GUIDE.md";
+
+/** The info string of the fenced block hyg-09 must write. */
+export const MEDIA_FENCE_NAME = "media-tooling";
+
+/**
+ * An owner is a backlog item id, or a numbered question under §14. The
+ * negative lookahead matters: without it `question-abc` parses as a plausible
+ * item id and only the tree test catches it, which is one layer too late for a
+ * typo in the field whose whole job is to name who ends the row.
+ */
+export const OWNER_RE = /^(?:question-\d+|(?!question-)[a-z][a-z0-9]*-[a-z0-9-]+)$/;
+
+/**
+ * The modules named in docs/MEDIA-GUIDE.md's fenced `media-tooling` block.
+ *
+ * The format is deliberately the smallest thing hyg-09 can write and this can
+ * read: one module per line, optionally dash-prefixed, `#` opens a comment.
+ * A missing file, a missing fence or an unterminated fence all yield [] —
+ * never an exception, because the caller's contract is that absence is normal.
+ *
+ * @param {string} text  docs/MEDIA-GUIDE.md, or "" when it does not exist
+ * @returns {string[]}
+ */
+export function parseMediaAllowlist(text) {
+  const lines = String(text ?? "").split(/\r?\n/);
+  const open = /^ {0,3}(`{3,}|~{3,})\s*(.*)$/;
+  let fence = null;
+  const out = [];
+  for (const line of lines) {
+    const m = open.exec(line);
+    if (!fence) {
+      if (m && m[2].trim() === MEDIA_FENCE_NAME) fence = { marker: m[1][0], len: m[1].length };
+      continue;
+    }
+    if (m && m[1][0] === fence.marker && m[1].length >= fence.len && m[2].trim() === "") return out;
+    const body = line.replace(/(^|\s)#.*$/, "").replace(/^\s*-\s*/, "").trim();
+    if (body) out.push(body);
+  }
+  // Unterminated: an open fence lists nothing, exactly as claims-audit.mjs
+  // treats one. Returning the partial list would let a typo widen the gate.
+  return fence ? [] : out;
+}
+
+/**
+ * Parse and validate the keep-list. Pure: JSON text in, rows plus problems out.
+ * A malformed row is a `problem`, not a row — a keep-list nobody can read is
+ * not a keep-list, and that is a different failure from "a finding has no row".
+ *
+ * @param {string} text
+ * @returns {{files: object[], dependencies: object[], problems: string[]}}
+ */
+export function parseBaseline(text) {
+  const problems = [];
+  let raw;
+  try {
+    raw = JSON.parse(String(text ?? ""));
+  } catch (err) {
+    return { files: [], dependencies: [], problems: [`${BASELINE_PATH}: not valid JSON — ${err?.message ?? err}`] };
+  }
+  const rows = (key, idField) => {
+    const list = raw?.[key];
+    if (list === undefined) return [];
+    if (!Array.isArray(list)) {
+      problems.push(`${BASELINE_PATH}: \`${key}\` must be an array`);
+      return [];
+    }
+    const seen = new Set();
+    const kept = [];
+    list.forEach((row, i) => {
+      const at = `${BASELINE_PATH}: ${key}[${i}]`;
+      const id = typeof row?.[idField] === "string" ? row[idField].trim() : "";
+      if (!id) {
+        problems.push(`${at}: missing \`${idField}\``);
+        return;
+      }
+      if (seen.has(id)) problems.push(`${at}: duplicate row for \`${id}\` — the later one would silently win`);
+      seen.add(id);
+      if (typeof row.reason !== "string" || row.reason.trim() === "") {
+        problems.push(`${at} (${id}): missing \`reason\` — a keep-list row with no reason is a to-delete list row`);
+      }
+      const owner = typeof row.owner === "string" ? row.owner.trim() : "";
+      if (!owner) {
+        problems.push(`${at} (${id}): missing \`owner\` — name the backlog item id or the question-<n> that ends this row`);
+      } else if (!OWNER_RE.test(owner)) {
+        problems.push(`${at} (${id}): \`owner\` must be a backlog item id or question-<n>, got \`${owner}\``);
+      }
+      kept.push({ ...row, [idField]: id });
+    });
+    return kept;
+  };
+  return { files: rows("files", "path"), dependencies: rows("dependencies", "name"), problems };
+}
+
+/** The dependency finding statuses the gate acts on, and what each one means. */
+const DEPENDENCY_VIOLATIONS = new Map([
+  ["unreferenced", "declared in package.json and imported by nothing"],
+  ["undeclared", "imported, but declared in no manifest"],
+  ["claimed-absent", "named as a node_modules path, but in neither package.json nor package-lock.json"],
+]);
+
+/**
+ * Compare a report against the keep-list.
+ *
+ * @param {RepoRefsReport} report
+ * @param {{files: object[], dependencies: object[], problems?: string[]}} baseline
+ * @param {{mediaAllowlist?: string[]}} [opts]
+ * @returns {{violations: {kind: string, id: string, message: string}[], stale: {kind: string, id: string, message: string}[], covered: number}}
+ */
+export function checkBaseline(report, baseline, { mediaAllowlist = [] } = {}) {
+  const violations = [];
+  const stale = [];
+  const fileRows = new Map((baseline?.files ?? []).map((r) => [r.path, r]));
+  const depRows = new Map((baseline?.dependencies ?? []).map((r) => [r.name, r]));
+  const media = new Set(mediaAllowlist ?? []);
+  let covered = 0;
+
+  for (const p of baseline?.problems ?? []) {
+    violations.push({ kind: "baseline", id: BASELINE_PATH, message: p });
+  }
+
+  const liveFiles = new Set();
+  for (const f of report?.files ?? []) {
+    if (f.status !== "unreferenced" || f.keep) continue;
+    liveFiles.add(f.path);
+    if (fileRows.has(f.path)) {
+      covered += 1;
+      continue;
+    }
+    violations.push({
+      kind: "unreferenced-file",
+      id: f.path,
+      message: `${f.path} is unreferenced and has no baseline row — add one with a reason and an owner, or add a reference`,
+    });
+  }
+
+  const liveDeps = new Set();
+  for (const d of report?.dependencies ?? []) {
+    const why = DEPENDENCY_VIOLATIONS.get(d.status);
+    if (!why) continue;
+    liveDeps.add(d.name);
+    // The media allowlist is a keep-list too, just one hyg-09 owns instead of
+    // the baseline file. A module in it is covered without a row.
+    if (media.has(d.name)) {
+      covered += 1;
+      continue;
+    }
+    if (depRows.has(d.name)) {
+      covered += 1;
+      continue;
+    }
+    const where = (d.usedBy ?? []).map((u) => `${u.file}:${u.line}`).join(", ");
+    violations.push({
+      kind: `${d.status}-dependency`,
+      id: d.name,
+      message: `${d.name} — ${why}${where ? ` (${where})` : ""} — and has no baseline row`,
+    });
+  }
+
+  // Rows describing nothing. Reported, never fatal: --check "never fails for a
+  // baseline row", and the removal rule is the test's to enforce.
+  for (const row of fileRows.values()) {
+    if (!liveFiles.has(row.path)) {
+      stale.push({
+        kind: "stale-file-row",
+        id: row.path,
+        message: `${row.path} is no longer an unreferenced-and-deletable file — the row may be removed in the commit that made that true`,
+      });
+    }
+  }
+  for (const row of depRows.values()) {
+    if (!liveDeps.has(row.name)) {
+      stale.push({
+        kind: "stale-dependency-row",
+        id: row.name,
+        message: `${row.name} is no longer a dependency finding — the row may be removed in the commit that made that true`,
+      });
+    }
+  }
+
+  return { violations, stale, covered };
+}
+
+// ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
@@ -1386,6 +1612,24 @@ export function analyzeRepo(root = REPO_ROOT) {
   });
 }
 
+/** The keep-list and the media allowlist, read off disk. */
+export function loadBaselineInputs(root = REPO_ROOT) {
+  const readAt = (rel) => {
+    try {
+      return readFileSync(path.join(root, rel), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const baselineText = readAt(BASELINE_PATH);
+  const baseline = baselineText
+    ? parseBaseline(baselineText)
+    : { files: [], dependencies: [], problems: [`${BASELINE_PATH}: missing — the keep-list is what makes --check meaningful`] };
+  // Absence is normal: hyg-09 writes the guide, and until it does the same
+  // modules are ordinary baseline rows.
+  return { baseline, mediaAllowlist: parseMediaAllowlist(readAt(MEDIA_GUIDE_PATH)) };
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const evidenceAt = argv.includes("--evidence") ? argv[argv.indexOf("--evidence") + 1] : null;
@@ -1394,6 +1638,7 @@ function main() {
     console.error("repo-refs: --evidence needs a path, e.g. --evidence docs/hygiene/hyg-05-evidence.md");
     process.exit(1);
   }
+  const checking = argv.includes("--check");
   const report = analyzeRepo();
 
   const dead = report.files.filter((f) => f.status === "unreferenced" && !f.keep);
@@ -1439,9 +1684,31 @@ function main() {
     console.log(`repo-refs: evidence written to ${evidenceAt}`);
   }
 
-  // Findings are never a failure: this script is evidence, not a gate (hyg-04
-  // adds the baseline check that can fail).
-  console.log("repo-refs: report complete — nothing is deleted by this script");
+  if (!checking) {
+    // Without --check this script is evidence, not a gate: findings are never a
+    // failure, because the deletion rule is "evidence or no deletion".
+    console.log("repo-refs: report complete — nothing is deleted by this script");
+    return;
+  }
+
+  // --check: the gate. A finding with a keep-list row passes; one without fails.
+  const { baseline, mediaAllowlist } = loadBaselineInputs();
+  const { violations, stale, covered } = checkBaseline(report, baseline, { mediaAllowlist });
+  for (const s of stale) console.log(`repo-refs: stale baseline row      ${s.message}`);
+  for (const v of violations) console.error(`repo-refs: ${v.kind}: ${v.message}`);
+  console.log(
+    `repo-refs: --check ${covered} finding(s) covered by ${BASELINE_PATH}` +
+      (mediaAllowlist.length ? ` plus ${mediaAllowlist.length} module(s) from ${MEDIA_GUIDE_PATH}` : "") +
+      `, ${violations.length} uncovered`,
+  );
+  if (violations.length > 0) {
+    console.error(
+      "repo-refs: --check failed. Add a reference, or add a baseline row carrying a one-line reason " +
+        "and the backlog item id or question-<n> that owns it. This check deletes nothing.",
+    );
+    process.exit(1);
+  }
+  console.log("repo-refs: --check passed — nothing is unreferenced without a reason");
 }
 
 // CLI only — not when the tests import the module.
