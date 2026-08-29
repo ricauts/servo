@@ -73,6 +73,7 @@ const NATIVE_TOOLS: Record<string, ToolDef> = {
           title: title.slice(0, 200),
           description,
           status: "OPEN",
+          channel: "MCP",
           priority: "MEDIUM",
           category: "OTHER",
           requesterId: requester.id,

@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       title: parsed.data.title,
       description: parsed.data.description,
       status: "OPEN",
+      channel: "WEB", // explicit: the form is the WEB entry (ux-03)
       priority: "MEDIUM",
       category: "OTHER",
       requesterId: user.id,
