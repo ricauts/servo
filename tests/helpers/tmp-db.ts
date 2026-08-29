@@ -155,7 +155,10 @@ export async function tmpDb(): Promise<TmpDb> {
   // to, and the name we are about to write to.
   assertThrowawayUrl(url);
   await admin().$executeRawUnsafe(`CREATE DATABASE ${dbName} TEMPLATE ${TEMPLATE_NAME}`);
-  const client = new PrismaClient({ datasourceUrl: url });
+  // 60 parallel test files × the default per-client pool exhausts the
+  // server's 100-connection limit; clones never need more than two.
+  const pooled = url.includes("connection_limit") ? url : url + (url.includes("?") ? "&" : "?") + "connection_limit=2";
+  const client = new PrismaClient({ datasourceUrl: pooled });
   live.set(dbName, client);
   return {
     client,
