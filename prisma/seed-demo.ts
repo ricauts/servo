@@ -15,13 +15,17 @@ import matter from "gray-matter";
 import { PrismaClient } from "@prisma/client";
 import { DEFAULT_TOOL_POLICIES } from "../src/lib/ai/tool-policies";
 import { DEFAULT_SLA_POLICIES } from "../src/lib/sla-rules";
+// The ops sandbox rides Node's built-in SQLite driver (db-01: one generated
+// Prisma client cannot speak two dialects, and the sandbox stays SQLite
+// until db-05) — same shape as src/lib/opsdb.ts.
+import { DatabaseSync } from "node:sqlite";
 
 const db = new PrismaClient();
 
-const opsUrl =
-  process.env.OPS_DATABASE_URL ??
-  "file:" + path.join(process.cwd(), "prisma", "ops.db").replace(/\\/g, "/");
-const ops = new PrismaClient({ datasourceUrl: opsUrl });
+const ops = new DatabaseSync(
+  (process.env.OPS_DATABASE_URL ??
+    "file:" + path.join(process.cwd(), "prisma", "ops.db")).replace(/^file:/, ""),
+);
 
 function daysAgo(days: number, hour = 10, minute = 0): Date {
   const d = new Date();
@@ -262,31 +266,31 @@ async function main() {
     "software_licenses",
     "campaign_tracking",
   ]) {
-    await ops.$executeRawUnsafe(`DROP TABLE IF EXISTS ${table};`);
+    ops.exec(`DROP TABLE IF EXISTS ${table};`);
   }
 
-  await ops.$executeRawUnsafe(`
+  ops.exec(`
     CREATE TABLE devices (
       asset_tag TEXT PRIMARY KEY, model TEXT NOT NULL, type TEXT NOT NULL,
       assigned_to TEXT, status TEXT NOT NULL, os TEXT,
       purchased_at TEXT, warranty_until TEXT
     );`);
-  await ops.$executeRawUnsafe(`
+  ops.exec(`
     CREATE TABLE employees (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
       department TEXT NOT NULL, title TEXT NOT NULL
     );`);
-  await ops.$executeRawUnsafe(`
+  ops.exec(`
     CREATE TABLE employees_backup (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
       department TEXT NOT NULL, title TEXT NOT NULL
     );`);
-  await ops.$executeRawUnsafe(`
+  ops.exec(`
     CREATE TABLE software_licenses (
       id INTEGER PRIMARY KEY, product TEXT NOT NULL, seats INTEGER NOT NULL,
       seats_used INTEGER NOT NULL, renewal_date TEXT NOT NULL, owner_email TEXT
     );`);
-  await ops.$executeRawUnsafe(`
+  ops.exec(`
     CREATE TABLE campaign_tracking (
       id INTEGER PRIMARY KEY AUTOINCREMENT, campaign TEXT NOT NULL,
       channel TEXT NOT NULL, spend_usd REAL NOT NULL DEFAULT 0,
@@ -308,11 +312,8 @@ async function main() {
     ["SV-0010", "PowerEdge R760 (prod)", "server", null, "active", "Ubuntu 24.04 LTS", "2023-07-19", "2028-07-19"],
   ];
   for (const d of devices) {
-    await ops.$executeRawUnsafe(
-      `INSERT INTO devices (asset_tag, model, type, assigned_to, status, os, purchased_at, warranty_until)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ...d,
-    );
+    ops.prepare(`INSERT INTO devices (asset_tag, model, type, assigned_to, status, os, purchased_at, warranty_until)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(...d);
   }
 
   const employees = [
@@ -328,14 +329,8 @@ async function main() {
     [10, "Jonas Weber", "jonas@acme.dev", "Finance", "Controller"],
   ];
   for (const e of employees) {
-    await ops.$executeRawUnsafe(
-      `INSERT INTO employees (id, name, email, department, title) VALUES (?, ?, ?, ?, ?)`,
-      ...e,
-    );
-    await ops.$executeRawUnsafe(
-      `INSERT INTO employees_backup (id, name, email, department, title) VALUES (?, ?, ?, ?, ?)`,
-      ...e,
-    );
+    ops.prepare(`INSERT INTO employees (id, name, email, department, title) VALUES (?, ?, ?, ?, ?)`).run(...e);
+    ops.prepare(`INSERT INTO employees_backup (id, name, email, department, title) VALUES (?, ?, ?, ?, ?)`).run(...e);
   }
 
   const licenses = [
@@ -349,17 +344,12 @@ async function main() {
     [8, "1Password Business", 60, 58, "2027-02-28", "ana@acme.dev"],
   ];
   for (const l of licenses) {
-    await ops.$executeRawUnsafe(
-      `INSERT INTO software_licenses (id, product, seats, seats_used, renewal_date, owner_email)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      ...l,
-    );
+    ops.prepare(`INSERT INTO software_licenses (id, product, seats, seats_used, renewal_date, owner_email)
+       VALUES (?, ?, ?, ?, ?, ?)`).run(...l);
   }
 
-  await ops.$executeRawUnsafe(
-    `INSERT INTO campaign_tracking (campaign, channel, spend_usd, leads, created_at)
-     VALUES ('Q3 Launch', 'linkedin', 4200, 137, '2026-07-18'), ('Q3 Launch', 'search', 2650, 96, '2026-07-18')`,
-  );
+  ops.exec(`INSERT INTO campaign_tracking (campaign, channel, spend_usd, leads, created_at)
+     VALUES ('Q3 Launch', 'linkedin', 4200, 137, '2026-07-18'), ('Q3 Launch', 'search', 2650, 96, '2026-07-18')`);
 
   // -- tickets ---------------------------------------------------------------
   let nextNumber = 1001;
@@ -891,5 +881,5 @@ main()
   })
   .finally(async () => {
     await db.$disconnect();
-    await ops.$disconnect();
+    ops.close();
   });
