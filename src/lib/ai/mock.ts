@@ -18,6 +18,10 @@ interface ScriptStep {
   name: string;
   input: Record<string, unknown>;
   plan: string;
+  /** Per-step identity (fed-04): defaults to the name, so historical
+   *  one-shot-per-tool behaviour is unchanged; two open_dataset steps
+   *  carry different keys and BOTH fire. */
+  key?: string;
 }
 
 function slug(text: string): string {
@@ -30,11 +34,20 @@ function slug(text: string): string {
 }
 
 function usedToolNames(messages: ConversationMessage[]): Set<string> {
+  // Identity is the per-step KEY (fed-04): a call records the step key it
+  // fired, so a second open_dataset (a different key) still can. Keys are
+  // carried on the assistant turn's tool_use blocks by the scripting
+  // below; blocks without a key degrade to the tool name.
   const used = new Set<string>();
   for (const message of messages) {
     if (message.role !== "assistant") continue;
     for (const block of message.content) {
-      if (block.type === "tool_use") used.add(block.name);
+      if (block.type === "tool_use") {
+        used.add(
+          (block as unknown as { stepKey?: string }).stepKey ??
+            block.name,
+        );
+      }
     }
   }
   return used;
@@ -89,16 +102,30 @@ export class MockProvider implements ChatProvider {
       ? this.rejectionScript()
       : [...this.skillStep(p.system, p.tools), ...this.script(available)];
     const used = usedToolNames(p.messages);
-    const next = script.find((step) => !used.has(step.name));
+    const next = script.find((step) => !used.has(step.key ?? step.name));
     if (!next) {
       return {
         text: "Worked the ticket end to end: executed the planned actions, updated the requester and marked the ticket resolved.",
         toolCalls: [],
       };
     }
+    // Multi-call scripting (fed-04): a step may carry `also` — further
+    // calls fired in the SAME turn — and the (single) canonical arc uses
+    // it nowhere today; the capability exists so the federation arc can
+    // open_dataset twice with different keys without model turns between.
+    const extra = (next as ScriptStep & { also?: Array<{ name: string; input: Record<string, unknown>; key?: string }> }).also ?? [];
+    const key = next.key ?? next.name;
     return {
       text: next.plan,
-      toolCalls: [{ id: `mock_${randomUUID()}`, name: next.name, input: next.input }],
+      toolCalls: [
+        { id: `mock_${randomUUID()}`, name: next.name, input: next.input, stepKey: key },
+        ...extra.map((c) => ({
+          id: `mock_${randomUUID()}`,
+          name: c.name,
+          input: c.input,
+          stepKey: c.key ?? c.name,
+        })),
+      ],
     };
   }
 

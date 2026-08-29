@@ -1,5 +1,5 @@
 {
-  "$comment": "Quarantine-rail baseline (loop-06). Snapshots the DEFAULT_TOOL_POLICIES rows\nas of 2026-08-27. A tool present here may keep its snapshotted policy; a tool\nABSENT from here must carry the triple { enabled: false, requiresApproval: true,\nriskLevel: \"HIGH\" } until a human downgrades it. Changing this file is an owner\nsign-off event: the commit message must flag it, and policy-guard fails on\nvalue drift or removals.",
+  "$comment": "Quarantine-rail baseline (loop-06). Snapshots the DEFAULT_TOOL_POLICIES rows\nas of 2026-08-27. A tool present here may keep its snapshotted policy; a tool\nABSENT from here must carry the triple { enabled: false, requiresApproval: true,\nriskLevel: \"HIGH\" } until a human downgrades it. Changing this file is an owner\nsign-off event: the commit message must flag it, and policy-guard fails on\nvalue drift or removals.\nAdditions 2026-08-28 (fed-04, owner sign-off in the commit message): the four\nfederation tools — find_sources/open_dataset/discard_source LOW+no-approval,\nquery_dataset HIGH+approval (all enabled:false by the DB default on intake).",
   "tools": {
     "query_ops_database": {
       "riskLevel": "LOW",
@@ -104,6 +104,22 @@
     "list_collections": {
       "riskLevel": "LOW",
       "requiresApproval": false
+    },
+    "find_sources": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "open_dataset": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "discard_source": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "query_dataset": {
+      "riskLevel": "HIGH",
+      "requiresApproval": true
     }
   }
 }

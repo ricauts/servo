@@ -387,15 +387,8 @@ paths-exempt:
       kb-* and ext-* items create, and the data-fabric and Docling documents
       compose the same entitlement module. Nothing in the KB area has been
       built.
-  - target:
-      - src/lib/ai/tools/federation.ts
-    paths:
-      - docs/design/data-fabric.md
-    until: fed-06
-    reason: the data-fabric document names the router, the federation tools and
-      the two-silo fixtures that cat-* and fed-* create. cat-03 delivered
-      tests/fixtures/catalog, so that target left this list; the federation
-      tools wait for Phase 8.
+  # fed-04 delivered src/lib/ai/tools/federation.ts, so that target left
+  # this list; the two-silo fixtures wait for fed-06.
   - target:
       - tests/fixtures/kb/docling/*
       - scripts/record-docling-fixture.mjs
