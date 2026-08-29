@@ -199,6 +199,20 @@ export class MockProvider implements ChatProvider {
     const text = `${ticket.title} ${ticket.description}`;
     const steps: ScriptStep[] = [];
 
+    // KB-shaped tickets exercise the knowledge base (kb-11): a ticket that
+    // names the knowledge base, a manual or a document gets a search_knowledge
+    // call before anything else, so the offline loop exercises the tool.
+    if (
+      available.has("search_knowledge") &&
+      /knowledge base|manual|documentation|document|pricing\.md/i.test(text)
+    ) {
+      steps.push({
+        name: "search_knowledge",
+        input: { query: ticket.title },
+        plan: "This looks like a documentation question — I'll search the knowledge base for an authoritative source before answering.",
+      });
+    }
+
     // Desk memory first, mirroring the rule the real resolver is given: check
     // whether this desk has solved the request before. Only when the running
     // profile actually has the tool — an admin can disable it.

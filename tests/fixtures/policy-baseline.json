@@ -92,6 +92,18 @@
     "escalate_to_human": {
       "riskLevel": "LOW",
       "requiresApproval": false
+    },
+    "search_knowledge": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "read_document": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "list_collections": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
     }
   }
 }

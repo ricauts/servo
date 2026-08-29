@@ -394,7 +394,6 @@ paths-exempt:
   - target:
       - src/lib/kb/*
       - src/lib/kb/*/*
-      - src/lib/ai/tools/kb.ts
     paths:
       - docs/design/knowledge-base.md
       - docs/design/extraction.md

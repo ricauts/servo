@@ -35,6 +35,7 @@ import { getProvider, type ChatProvider, type ToolSpec } from "./provider";
 import { getAiSettings, type AiSettings } from "./settings";
 import { ensureToolPolicies, getToolRegistry } from "./custom-tools";
 import type { ToolDef } from "./tools";
+import { agentPrincipalId } from "@/lib/kb/principals";
 
 const MAX_ITERATIONS = 12;
 
@@ -44,6 +45,8 @@ interface LoopContext {
   runId: string;
   ticket: TicketWithRequester;
   agentUser: User;
+  /** KB principal chain (kb-11): agentPrincipalId(run) ∩ ticket requester. */
+  principals: { agentId: string; humanId: string | null };
   settings: AiSettings;
   /** Pool credential the run bills to ("default"/"mock" otherwise). */
   credentialName: string;
@@ -217,6 +220,10 @@ async function buildLoopContext(
     runId,
     ticket,
     agentUser,
+    principals: {
+      agentId: agentPrincipalId({ profileId: profile?.id ?? null }),
+      humanId: ticket.requesterId,
+    },
     settings,
     credentialName: settings.provider === "mock" ? "mock" : credentialName,
     provider: withUsage(getProvider(settings, { ticket, kind: "RESOLVE" }), {
@@ -585,6 +592,7 @@ async function driveResolverLoop(ctx: LoopContext): Promise<"completed" | "pause
           ticketId: ctx.ticket.id,
           runId: ctx.runId,
           agentUser: ctx.agentUser,
+          principals: ctx.principals,
         });
       } catch (err) {
         result = errorMessage(err);
