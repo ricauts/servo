@@ -19,6 +19,7 @@
 
 import { fork } from "node:child_process";
 import path from "node:path";
+import { chunkSpreadsheetSheets, type SheetRows } from "@/lib/kb/extract-xlsx";
 
 /** Resource caps — measured BEFORE parsing, on the bytes themselves. */
 export const EXTRACT_LIMITS = {
@@ -39,6 +40,10 @@ export interface ExtractOutcome {
   error?: string;
   /** Which cap fired, for tests and the audit trail. */
   breach?: "entries" | "decompressed" | "wall-clock" | "heap" | "xxe" | "crash";
+  /** Structured chunks from format-aware extractors (kb-06 xlsx, kb-07
+   *  PDF): text plus the format's own locator ({sheet, range} / {page}).
+   *  Absent for plain text, which the caller chunks by lines. */
+  chunks?: { text: string; locator: Record<string, unknown> }[];
 }
 
 /** The pre-parse zip inspection: entry count and decompressed sizes from the
@@ -143,19 +148,41 @@ export function extractHardened(
       EXTRACT_LIMITS.wallClockMs,
     );
 
-    child.on("message", (msg: { ok: boolean; text?: string; status?: string; error?: string }) => {
+    child.on("message", (msg: {
+      ok: boolean;
+      kind?: "text" | "sheets";
+      text?: string;
+      status?: string;
+      error?: string;
+      sheets?: SheetRows[];
+    }) => {
       clearTimeout(wallClock);
-      if (msg.ok) {
-        const status = (msg.status ?? "EXTRACTED") as ExtractOutcome["status"];
-        finish({
-          status,
-          text: msg.text ?? "",
-          // UNSUPPORTED carries its reason as the error for the caller.
-          ...(status === "UNSUPPORTED" ? { error: msg.error } : {}),
-        });
-      } else {
+      if (!msg.ok) {
         finish({ status: "FAILED", text: "", error: msg.error ?? "Extraction failed." });
+        return;
       }
+      if (msg.kind === "sheets") {
+        // The worker parsed and normalized; the typed module owns the
+        // windowing and the A1 locator math (kb-06).
+        const verdict = chunkSpreadsheetSheets(msg.sheets ?? []);
+        if (verdict.status === "UNSUPPORTED") {
+          finish({ status: "UNSUPPORTED", text: "", error: verdict.error });
+          return;
+        }
+        finish({
+          status: "EXTRACTED",
+          text: verdict.chunks.map((c) => c.text).join("\n\n"),
+          chunks: verdict.chunks,
+        });
+        return;
+      }
+      const status = (msg.status ?? "EXTRACTED") as ExtractOutcome["status"];
+      finish({
+        status,
+        text: msg.text ?? "",
+        // UNSUPPORTED carries its reason as the error for the caller.
+        ...(status === "UNSUPPORTED" ? { error: msg.error } : {}),
+      });
     });
     child.on("error", (err) => {
       clearTimeout(wallClock);

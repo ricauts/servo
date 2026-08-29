@@ -4,11 +4,10 @@
 // deterministic first-chunk excerpt (an AI abstract is Roadmap, and when it
 // ships it must route through withUsage like every other call).
 //
-// kb-04 covers text/markdown and text/plain. Other content types land
-// UNSUPPORTED with a message naming the item that brings them (kb-06 xlsx,
-// kb-07 PDF); the hardened worker (kb-05) wraps extraction in a forked child
-// with resource caps — plain-text extraction needs no parser and is safe
-// inline.
+// Text formats chunk by lines (kb-04); xlsx workbooks carry their own
+// {sheet, range} chunk locators (kb-06), PDF pages their {page} locators
+// (kb-07); the hardened worker (kb-05) wraps every extraction in a forked
+// child with resource caps.
 
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
@@ -31,6 +30,13 @@ export const TEXT_CONTENT_TYPES = new Set([
   "text/plain",
   "application/markdown",
 ]);
+
+/** The xlsx family the worker's exceljs path covers (kb-06). Legacy binary
+ *  .xls is deliberately absent — the worker says so specifically. */
+function isSpreadsheetContentType(contentType: string): boolean {
+  const ct = contentType.toLowerCase();
+  return ct.includes("spreadsheetml") || ct.includes("xlsx");
+}
 
 export interface IngestInput {
   name: string;
@@ -106,17 +112,21 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       documentId = created.id;
     }
 
-    if (!TEXT_CONTENT_TYPES.has(input.contentType) && !isZipShaped(input.bytes)) {
+    if (
+      !TEXT_CONTENT_TYPES.has(input.contentType) &&
+      !isSpreadsheetContentType(input.contentType) &&
+      !isZipShaped(input.bytes)
+    ) {
       await tx.document.update({
         where: { id: documentId },
         data: {
           textStatus: "UNSUPPORTED",
+          // PDF keeps its named-arriving-item message until kb-07's
+          // extractor lands (kb-04's promise); xlsx now extracts for real.
           textError:
             input.contentType === "application/pdf"
               ? "PDF extraction arrives with kb-07."
-              : input.contentType.includes("sheet") || input.contentType.includes("excel")
-                ? "Spreadsheet extraction arrives with kb-06."
-                : `No extractor for ${input.contentType} yet.`,
+              : `No extractor for ${input.contentType} yet.`,
         },
       });
       return { documentId, textStatus: "UNSUPPORTED", chunkCount: 0 };
@@ -138,8 +148,12 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       return { documentId, textStatus: outcome.status, chunkCount: 0 };
     }
 
-    const text = outcome.text;
-    const chunks = chunkMarkdown(text);
+    // Structured formats ship their own locators ({sheet, range} for xlsx,
+    // {page} for PDF); text falls back to line-based chunking (kb-04).
+    const chunked =
+      outcome.chunks?.map((c, index) => ({ index, text: c.text, locator: c.locator })) ??
+      chunkMarkdown(outcome.text);
+    const chunks = chunked;
     if (chunks.length > 0) {
       // The deterministic keyword/entity pass rides along per chunk (kb-08);
       // graph edges are built after the transaction, corpus-wide.
@@ -148,7 +162,7 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
           documentId,
           index: c.index,
           text: c.text,
-          locator: c.locator,
+          locator: c.locator as object,
           keywords: keywordPass(c.text).keywords,
         })),
       });
