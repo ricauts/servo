@@ -46,7 +46,7 @@ Bring your own model — Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint 
 - **Role-based permissions** — ADMIN, AGENT, and REQUESTER roles with an enforced permission matrix (`src/lib/permissions.ts`); HIGH-risk approvals and group management are admin-only.
 - **Offline evaluation mode** — without an OIDC tenant Servo runs a demo user switcher, so you can experience every role (and the whole agent loop, on the mock provider) with no auth provider, no API key and no network.
 - **shadcn/ui frontend** — Tailwind v4 + [shadcn/ui](https://ui.shadcn.com) components and charts (Recharts), themed with Servo's own design system — a cool graphite ramp with the servo-blue brand accent, WCAG-audited for light and dark (`servo_design_system/`); light mode by default with a dark-mode toggle.
-- **Docker-ready** — one `docker compose up --build` gives you the app and its Postgres (pgvector) container, both on persistent volumes.
+- **Docker-ready** — one `docker compose up --build` gives you the app and its Postgres (pgvector) container, both on persistent volumes. Back up with `pg_dump` against the `db` service — both databases, `servo` and `servo_ops` — and remember a dump holds sealed secrets and is only as safe as your `SERVO_ENCRYPTION_KEY` ([SECURITY.md](SECURITY.md)). Upgrading an install from the pre-Postgres era is a one-command import: [docs/migrating-to-postgres.md](docs/migrating-to-postgres.md).
 
 ## A real ticket, end to end
 

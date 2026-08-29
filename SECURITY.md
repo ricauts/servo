@@ -92,8 +92,16 @@ Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
 - Run behind HTTPS (reverse proxy); set `APP_URL` so links are correct.
 - The PostgreSQL volume (`servo-db` in Docker) holds your tickets and sealed
   secrets — restrict access to it, and back it up with `pg_dump` against the
-  `db` service. A dump contains sealed secrets and is only as safe as your
-  `SERVO_ENCRYPTION_KEY`.
+  `db` service, covering **both** databases the app uses: `servo` (everything)
+  and `servo_ops` (the sandbox the agent's SQL tools operate on, once db-05
+  moves it to Postgres). Restore with `pg_restore`/`psql` into a fresh
+  database — the procedure is proven by `tests/backup-restore.test.ts`. A
+  dump contains sealed secrets and is only as safe as your
+  `SERVO_ENCRYPTION_KEY`: the dump is ciphertext for those values, so treat
+  the dump file with the same care as the key itself.
+- Coming from a pre-Postgres install? [docs/migrating-to-postgres.md](docs/migrating-to-postgres.md)
+  is the one-command import — and until it has run, the `servo-data` volume
+  holds the only copy of your data.
 - Webhook payloads are HMAC-SHA256 signed (`x-servo-signature`); verify on
   the receiving end.
 
