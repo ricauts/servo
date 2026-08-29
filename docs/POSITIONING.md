@@ -369,16 +369,10 @@ paths-exempt:
     reason: gitignored runtime artefacts. They exist on an operator's machine
       and in no checkout; db-10 removes both the ignore rules and the files.
   # --- Forward references, by the item that creates the target -------------
+  # db-07 delivered docs/migrating-to-postgres.md, scripts/migrate-sqlite-
+  # to-postgres.mjs and the pg_dump backup procedure; its targets left this
+  # list, the same way db-01/02/03/08's did.
   - target:
-      - docs/migrating-to-postgres.md
-    paths:
-      - docs/POSITIONING.md
-      - docs/design/postgres.md
-    until: db-07
-    reason: db-07 writes the migration guide. Until then the path matches
-      nothing, which this canon already says in prose two screens above.
-  - target:
-      - scripts/migrate-sqlite-to-postgres.mjs
       - tests/ops-isolation.test.ts
     paths:
       - docs/design/postgres.md
