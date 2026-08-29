@@ -60,6 +60,11 @@ model Ticket {
   title           String
   description     String
   status          String    @default("OPEN") // OPEN | TRIAGED | IN_PROGRESS | WAITING_APPROVAL | RESOLVED | CLOSED
+  // Where the ticket entered the desk (ux-03): WEB form, inbound EMAIL, or
+  // the MCP create_ticket tool. CHAT exists in the TicketChannel union but
+  // is deliberately unused until the chat surface ships (ux-07) — nobody
+  // deletes it, nobody claims it ships.
+  channel         String    @default("WEB") // TicketChannel: WEB | EMAIL | MCP | CHAT
   priority        String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
   category        String    @default("OTHER") // ACCESS | HARDWARE | SOFTWARE | DATABASE | DEVOPS | NETWORK | OTHER
   requesterId     String
@@ -150,6 +155,10 @@ model AgentRun {
   qaNotes      String?
   createdAt    DateTime  @default(now())
   completedAt  DateTime?
+  // The retrieval ledger (cat-01, canonized in docs/design/data-fabric.md):
+  // {probed, opened, discarded, perDataset, chars, hops, finds, compacted} —
+  // every charge is a read-modify-write inside a transaction on this row.
+  retrieval    Json      @default("{}")
 
   steps     AgentStep[]
   approvals Approval[]
@@ -204,6 +213,10 @@ model Skill {
   body        String // the procedure, loaded by read_skill
   markdown    String // raw SKILL.md source (frontmatter + body)
   enabled     Boolean  @default(true)
+  // The ticket this skill was distilled from (reb-05), when it was: the
+  // KPIs count the COLUMN (reb-06), never the frontmatter. Bare FK by
+  // design, like AgentRun.agentUserId — nothing navigates the reverse edge.
+  sourceTicketId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -353,7 +366,10 @@ model Document {
   contentType String // application/pdf | xlsx mime | text/markdown | text/plain
   byteSize    Int
   sha256      String // dedupe + "this file changed" detection
-  data        Bytes // bytea; never selected outside the download route
+  // Nullable since cat-01: a catalog card's canonical profile lives in
+  // CatalogEntry.profile and its data is NULL by the migration's CHECK —
+  // every redaction made in the renderer would be bypassed by one download.
+  data        Bytes? // bytea; never selected outside the download route
   textStatus  String   @default("PENDING") // PENDING | EXTRACTING | EXTRACTED | FAILED | UNSUPPORTED
   textError   String?
   summary     String   @default("") // deterministic extract — no model call at ingest
@@ -370,6 +386,11 @@ model Document {
   edgesOut KnowledgeEdge[] @relation("edgeFrom")
   edgesIn  KnowledgeEdge[] @relation("edgeTo")
   grants   KbGrant[]
+  // The catalog split (cat-01): a rendered catalog card is a Document whose
+  // data is NULL — the canonical profile lives in CatalogEntry.profile —
+  // back-linked by catalogEntryId. FILE is every ordinary upload.
+  kind           String   @default("FILE") // FILE | CATALOG
+  catalogEntryId String?  @unique
 }
 
 model DocumentChunk {
@@ -378,7 +399,7 @@ model DocumentChunk {
   document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   index     Int
   text      String
-  locator   Json // {"sheet":"2026","range":"B4:D9"} | {"page":12} | {"lines":"120-180"}
+  locator   Json // {"sheet":"2026","range":"B4:D9"} | {"page":12} | {"lines":"120-180"} | {"entry":"...","section":"columns","from":"net_pay"} (cat-01)
   keywords  Json     @default("[]")
   // pgvector. Nullable so keyword-only installs are a normal state rather
   // than a failure; the tsvector/generated + GIN + HNSW objects live in the
@@ -432,4 +453,64 @@ model KbGrant {
   grantedById  String
   grantedBy    User        @relation("kbGranter", fields: [grantedById], references: [id])
   createdAt    DateTime    @default(now())
+}
+
+// The catalog (cat-01, canonized verbatim in docs/design/data-fabric.md):
+// CatalogEntry is the structured fact, Document its rendered description,
+// written in one transaction. String unions, no Prisma enums; Json for
+// locator/profile/exemplars/signature/provenance/cursor/stats. dataSourceId
+// is a PLAIN STRING with no FK until the connection-layer merge — see
+// src/lib/catalog/datasource-contract.ts, the only shared surface.
+model CatalogEntry {
+  id              String    @id @default(cuid())
+  dataSourceId    String // the connection layer's row; contract fragment until the merge
+  level           String // SOURCE | DATASET | FIELD
+  parentId        String? // FIELD -> DATASET -> SOURCE; null at SOURCE
+  fqn             String // "pg://warehouse/public.payroll#net_pay" | "s3://exports/finance/2026/"
+  displayName     String
+  locator         Json      @default("{}") // {schema,table} | {schema,table,column} | {prefix} | {prefix,field}
+  physicalType    String    @default("") // "numeric(12,2)" | "text" | "text/csv" | ""
+  semanticType    String    @default("UNKNOWN") // deterministic classifier (cat-02)
+  semanticScore   Float     @default(0)
+  sensitivity     String    @default("UNKNOWN") // SHAPE_ONLY | INTERNAL | UNKNOWN — gates exemplars
+  profile         Json      @default("{}") // shape signals only; never a row, never a rare value
+  exemplars       Json      @default("[]") // [] unless the k-anonymity + INTERNAL gate passed
+  signature       Json      @default("{}") // salted MinHash + LSH bands; read by the edge builder ONLY
+  provenance      Json      @default("{}") // {runId, tier, method, exact, sampledRows, sampleKind, at}
+  fingerprint     String    @default("") // sha256 over the STRUCTURAL part — drift detection
+  valuesStatus    String    @default("ABSENT") // ABSENT | PARTIAL | COMPLETE — did tier 2 reach this entry
+  note            String    @default("") // human-authored; a profile run NEVER overwrites this
+  noteById        String?
+  inferredPurpose String    @default("") // optional model call; a profile run NEVER overwrites this
+  inferredBy      String    @default("") // "" | "mock" | model id
+  profileStatus   String    @default("PENDING") // PENDING | PROFILING | PROFILED | PARTIAL | FAILED | DROPPED | UNREADABLE
+  profileError    String?
+  documentId      String? // the rendered card — SOURCE and DATASET only
+  firstSeenAt     DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  droppedAt       DateTime?
+
+  @@unique([dataSourceId, fqn])
+  @@index([dataSourceId, level])
+  @@index([parentId])
+  @@index([documentId])
+}
+
+// One profiling pass over one DataSource (cat-01). A budget breach is
+// PARTIAL with budgetHit naming the cap and cursor naming where to resume —
+// never a FAILED run that leaves an operator with nothing.
+model CatalogRun {
+  id           String    @id @default(cuid())
+  dataSourceId String
+  trigger      String // CONNECT | SCHEDULED | MANUAL
+  tier         String // TIER1 | TIER2 | EDGES
+  status       String    @default("RUNNING") // RUNNING | COMPLETE | PARTIAL | FAILED
+  cursor       Json      @default("{}") // resume point: {lastFqn, pass}
+  stats        Json      @default("{}") // {datasets, fields, added[], removed[], retyped[], bytesRead, objectsOpened, rowsSampled, pairsCompared, elapsedMs}
+  budgetHit    String? // WALL_CLOCK | BYTES | OBJECTS | ROWS | PAIRS | STATEMENT_TIMEOUT
+  error        String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+
+  @@index([dataSourceId, startedAt])
 }

@@ -389,13 +389,13 @@ paths-exempt:
       built.
   - target:
       - src/lib/ai/tools/federation.ts
-      - tests/fixtures/catalog
     paths:
       - docs/design/data-fabric.md
     until: fed-06
     reason: the data-fabric document names the router, the federation tools and
-      the two-silo fixtures that cat-* and fed-* create. Phase 8 has not
-      started.
+      the two-silo fixtures that cat-* and fed-* create. cat-03 delivered
+      tests/fixtures/catalog, so that target left this list; the federation
+      tools wait for Phase 8.
   - target:
       - tests/fixtures/kb/docling/*
       - scripts/record-docling-fixture.mjs
@@ -408,12 +408,8 @@ paths-exempt:
     reason: the Docling document names the fixtures, the recorder and the
       opt-in live lane that dcl-03 and dcl-07 create. The sidecar area has not
       started, and it is optional even when it does.
-  - target:
-      - tests/fixtures/facts/*.txt
-    paths:
-      - docs/design/extraction.md
-    until: ext-02
-    reason: ext-02 writes the golden fact corpora.
+  # ext-02 delivered the golden fact corpora (tests/fixtures/facts/), so
+  # that target left this list.
   - target:
       - scripts/migrate-roles.ts
       - src/lib/ai/tools/delegate.ts
@@ -440,13 +436,8 @@ paths-exempt:
     until: hyg-09
     reason: the hygiene design document names the evidence directory (hyg-05),
       the archived media rig (hyg-09) and the dockerignore test (hyg-07).
-  - target:
-      - docs/integrations
-      - docs/integrations/*
-    paths:
-      - docs/design/ecosystem.md
-    until: loop-07
-    reason: loop-07 creates the one mining procedure at docs/integrations/.
+  # loop-07 delivered docs/integrations/ (the one mining procedure), so
+  # that target left this list.
   - target:
       - docs/KB-DOCLING.md
     paths:

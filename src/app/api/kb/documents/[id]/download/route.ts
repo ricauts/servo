@@ -20,8 +20,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
   const doc = await db.document.findUnique({ where: { id } });
   if (!doc) return Response.json({ error: "Unknown document." }, { status: 404 });
+  // A catalog card has no bytes to download — its canonical profile lives
+  // in CatalogEntry.profile and every redaction the renderer makes would be
+  // bypassed by one download of Document.data (cat-01's CHECK keeps data
+  // NULL for exactly this reason).
+  if (doc.kind === "CATALOG") {
+    return Response.json({ error: "Catalog cards have no downloadable file." }, { status: 403 });
+  }
 
-  return new Response(new Uint8Array(doc.data), {
+  return new Response(new Uint8Array(doc.data ?? new Uint8Array()), {
     headers: {
       "content-type": doc.contentType || "application/octet-stream",
       "content-disposition": `attachment; filename="${encodeURIComponent(doc.name)}"`,

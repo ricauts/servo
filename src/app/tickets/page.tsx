@@ -82,6 +82,7 @@ export default async function TicketsPage({
     title: ticket.title,
     requesterName: ticket.requester.name,
     status: ticket.status,
+    channel: ticket.channel,
     priority: ticket.priority,
     category: ticket.category,
     assigneeName: ticket.assignee?.name ?? null,

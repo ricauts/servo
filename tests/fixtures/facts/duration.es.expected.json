@@ -1,0 +1,38 @@
+[
+  [
+    {
+      "kind": "DURATION",
+      "text": "30 días",
+      "num": 2592000,
+      "unit": "s",
+      "norm": "P30D",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DURATION",
+      "text": "2 horas",
+      "num": 7200,
+      "unit": "s",
+      "norm": "PT2H",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DURATION",
+      "text": "45 minutos",
+      "num": 2700,
+      "unit": "s",
+      "norm": "PT45M",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DURATION",
+      "text": "90 segundos",
+      "num": 90,
+      "unit": "s",
+      "norm": "PT90S",
+      "confidence": "EXACT"
+    }
+  ]
+]

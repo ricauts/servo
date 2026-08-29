@@ -59,6 +59,71 @@ a permissive code licence says nothing about what ships beside it.
 
 ## Entries
 
+### exceljs (kb-06)
+
+- **Upstream:** <https://github.com/exceljs/exceljs>
+- **Licence:** MIT, verified from the `LICENSE` file shipped in the installed
+  package (`node_modules/exceljs/LICENSE`, identical to
+  <https://github.com/exceljs/exceljs/blob/master/LICENSE>) on 2026-08-28.
+- **Copyright:** `Copyright (c) 2014-2019 Guyon Roche`
+- **What we use:** an ordinary npm dependency (4.4.0), not vendored code —
+  no file from it lives in this tree. It parses uploaded .xlsx workbooks
+  inside the forked extraction worker (`src/lib/kb/extract-worker.cjs`,
+  spec kb-06). The entry exists to record the adopt-first verdict, because
+  this was a new RUNTIME dependency choice rather than a default:
+  **SheetJS (`xlsx`) was considered and REJECTED** — its npm package has
+  been frozen at 0.18.5 since 2022-03 with two unfixed high-severity CVEs
+  (prototype pollution and ReDoS), and upstream distributes fixes only
+  through its own CDN rather than the registry, which would make Docker
+  builds non-reproducible. exceljs is registry-maintained and MIT.
+- **Obligations:** attribution only, and discharged by `package.json`
+  shipping the dependency: its licence travels inside `node_modules` to
+  every install. Nothing of it is copied into this tree.
+
+### validator + libphonenumber-js (cat-02)
+
+- **Upstream:** <https://github.com/validatorjs/validator.js> and
+  <https://github.com/catamphetamine/libphonenumber-js>
+- **Licence:** both MIT — validator verified from `node_modules/validator/LICENSE`
+  (`Copyright (c) 2018 Chris O'Hara <cohara87@gmail.com>`) and
+  libphonenumber-js from `node_modules/libphonenumber-js/LICENSE`
+  (`Copyright (c) 2016 @catamphetamine`), on 2026-08-28. libphonenumber-js's
+  phone metadata derives from Google's libphonenumber (Apache-2.0); the
+  project ships a copy of that licence as `LICENSE.Apache`, recorded here so
+  the data's provenance travels with the code's.
+- **What we use:** ordinary npm dependencies supplying four PREDICATES for
+  the catalog's deterministic recogniser registry
+  (`src/lib/catalog/classify.ts`): isEmail, isCreditCard, isIBAN, isDate
+  from validator; isValidPhoneNumber from libphonenumber-js. They run over
+  the k-floored top-K list only — never a raw row.
+- **Adopt-first verdict:** both ADOPTED. Worth recording because the
+  alternative this item REJECTS is the whole idea they might stand in for:
+  **no credible off-the-shelf semantic-type inference library exists for
+  Node**, and the classifier's module header says so plainly rather than
+  pretending one was adopted. These two packages are predicates, not
+  inference.
+- **Obligations:** attribution only, discharged by `package.json`; their
+  licences travel inside `node_modules` to every install.
+### unpdf (kb-07)
+
+- **Upstream:** <https://github.com/unjs/unpdf>
+- **Licence:** MIT, verified from the `LICENSE` file shipped in the installed
+  package (`node_modules/unpdf/LICENSE`, identical to
+  <https://github.com/unjs/unpdf/blob/main/LICENSE>) on 2026-08-28.
+- **Copyright:** `Copyright (c) 2023-PRESENT Johann Schopplich`
+- **What we use:** an ordinary npm dependency (1.8.1), not vendored code. It
+  wraps Mozilla's pdf.js (Apache-2.0, unbundled by upstream) as pure ESM
+  with **zero runtime dependencies**, and extracts a PDF's text layer per
+  page inside the forked extraction worker (`src/lib/kb/extract-worker.cjs`,
+  spec kb-07) — dynamically imported, since the worker is CommonJS and the
+  package is ESM-only. The entry records the adopt-first verdict for the
+  new RUNTIME dependency: **pdf-parse v2 was considered and REJECTED** —
+  it drags `@napi-rs/canvas` (a native module) into the image for no
+  benefit here, where only text is read.
+- **Obligations:** attribution only, discharged by `package.json` shipping
+  the dependency: its licence travels inside `node_modules` to every
+  install. Nothing of it is copied into this tree.
+
 ### shadcn/ui
 
 - **Upstream:** <https://github.com/shadcn-ui/ui> — two layers of its component

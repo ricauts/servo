@@ -21,6 +21,10 @@ export async function ensureAiAgents(): Promise<void> {
     // The timeline-comment author for auto-delivered replies (kb-14),
     // matching the agentName the drafter already uses.
     { name: "Servo Drafter", email: "drafter@servo.ai", aiKind: "DRAFT", color: "#4A3AA7" },
+    // The catalog's system agent (cat-01): profiling runs and the eventual
+    // router act under this identity. No human is ever the ownerId of a
+    // kind='CATALOG' Document — asserted by tests/catalog-schema.test.ts.
+    { name: "Servo Catalog", email: "catalog@servo.ai", aiKind: "CATALOG", color: "#2F44C9" },
   ];
   for (const agent of agents) {
     await db.user.upsert({

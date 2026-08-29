@@ -1,0 +1,30 @@
+[
+  [
+    {
+      "kind": "MONEY",
+      "text": "1234,56 USD",
+      "num": 123456,
+      "unit": "USD",
+      "norm": "USD:123456",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "MONEY",
+      "text": "€1.234,56",
+      "num": 123456,
+      "unit": "EUR",
+      "norm": "EUR:123456",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "MONEY",
+      "text": "CLP$7.500",
+      "num": 7500,
+      "unit": "CLP",
+      "norm": "CLP:7500",
+      "confidence": "EXACT"
+    }
+  ]
+]
