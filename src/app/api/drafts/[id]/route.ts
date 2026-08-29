@@ -34,7 +34,7 @@ export async function PATCH(
     return Response.json({ draft });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Draft decision failed.";
-    const status = message.includes("not found") ? 404 : 409;
+    const status = message.includes("not found") ? 404 : message.includes("no longer readable") ? 409 : 409;
     return Response.json({ error: message }, { status });
   }
 }

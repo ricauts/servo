@@ -16,6 +16,7 @@ import { isEditedReply, replySubject } from "@/lib/reply-format";
 import { emitEvent } from "@/lib/webhooks";
 import { pickAgentProfile } from "@/lib/agent-profiles";
 import { draftPrincipalId } from "@/lib/kb/principals";
+import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import { kbSearch } from "@/lib/kb/search";
 import { getEmbedSettings, embedWithEndpoint } from "@/lib/kb/embed";
 import { mockEmbed, MOCK_EMBEDDER_MODEL } from "@/lib/kb/mock-embedder";
@@ -210,6 +211,38 @@ async function draftReplyInner(ticketId: string): Promise<ReplyDraft> {
 }
 
 /**
+ * Send-time re-verification (kb-13): every citation in ReplyDraft.sources
+ * re-checks the full chain BEFORE the atomic claim — a grant revoked between
+ * drafting and approval blocks the send regardless of who pressed the
+ * button, and the human and (kb-14) automatic paths inherit the same guard.
+ */
+async function reverifyCitations(
+  draft: ReplyDraft & { ticket: { requesterId: string; category: string } },
+): Promise<string | null> {
+  const sources = Array.isArray(draft.sources)
+    ? (draft.sources as { docId: string; docName: string }[])
+    : [];
+  if (sources.length === 0) return null; // nothing cited, nothing to verify
+
+  // The chain the draft was built on: the drafter principal ∩ requester.
+  const profile = await pickAgentProfile(draft.ticket.category);
+  const chain = {
+    agentId: draftPrincipalId(profile ?? null),
+    humanId: draft.ticket.requesterId,
+  };
+  const readable = new Set(await entitledDocumentIds(db, chain));
+  const dark = sources.filter((s) => !readable.has(s.docId));
+  if (dark.length > 0) {
+    return (
+      `Cannot send: a cited source is no longer readable by the requester — ` +
+      `${dark.map((s) => s.docName).join(", ")} went dark (access was revoked ` +
+      `after the draft was written). Regenerate the draft.`
+    );
+  }
+  return null;
+}
+
+/**
  * Approve a pending draft (optionally with an edited body): claims the draft
  * atomically, posts the reply as a public comment by the approving human,
  * emails it to the requester, and starts the first-response SLA clock. Email
@@ -230,6 +263,12 @@ export async function approveDraft(
   if (draft.ticket.status === "CLOSED") {
     throw new Error("The ticket is closed — replies cannot be sent on it.");
   }
+
+  // Before ANY state change: a revoked citation blocks the send, whoever
+  // pressed the button. On refusal the atomic claim is never attempted —
+  // the draft stays PENDING, nothing is posted, mailed or recorded.
+  const citationError = await reverifyCitations(draft);
+  if (citationError) throw new Error(citationError);
 
   const body = (finalBody ?? "").trim() || draft.body;
   // Feeds the dashboard's AI acceptance metric: sent as-is vs edited first.
