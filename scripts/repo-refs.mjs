@@ -74,8 +74,32 @@ export const EXCLUDED_PATTERNS = [/^prisma\/[^/]*\.db.*$/];
  *    alive by the very row that recorded it as dead. Found the hard way: the
  *    five `src/components/ui/*` rows flipped to `referenced` the moment the
  *    baseline was first `git add`ed.
+ *
+ * `NON_REFERENCING_PREFIXES` is the same rule for a whole directory.
  */
 export const NON_REFERENCING_SOURCES = new Set(["spec.md", "tests/fixtures/repo-refs-baseline.json"]);
+
+/**
+ * Directories whose files are scanned but never counted as a source of
+ * references.
+ *
+ * `docs/hygiene/` holds THIS SCRIPT'S OWN `--evidence` reports, and §13.1
+ * requires a deletion item to COMMIT one before removing anything. An evidence
+ * report names every dead path in the tree, so the moment one is committed
+ * every one of those paths reads `referenced, prose only` and the gate passes
+ * on files it had just proven dead — the tool laundering its own findings, one
+ * commit after making them. Exactly the trap the keep-list line above closes,
+ * one directory over.
+ */
+export const NON_REFERENCING_PREFIXES = ["docs/hygiene/"];
+
+/** True when `relPath`'s mentions must not count as references. */
+export function isNonReferencingSource(relPath) {
+  return (
+    NON_REFERENCING_SOURCES.has(relPath) ||
+    NON_REFERENCING_PREFIXES.some((p) => relPath.startsWith(p))
+  );
+}
 
 /**
  * Never in scope for any hygiene deletion, at any time (§13.1). These are
@@ -951,7 +975,7 @@ export function analyze({
   }
 
   for (const from of files) {
-    if (NON_REFERENCING_SOURCES.has(from)) continue;
+    if (isNonReferencingSource(from)) continue;
     const text = texts.get(from) ?? "";
     const ext = path.posix.extname(from);
 
@@ -1071,7 +1095,7 @@ export function analyze({
   const namedUses = new Map(files.map((f) => [f, new Map()]));
   const wholeModuleUses = new Map(files.map((f) => [f, []]));
   for (const from of files) {
-    if (NON_REFERENCING_SOURCES.has(from)) continue;
+    if (isNonReferencingSource(from)) continue;
     if (!MODULE_EXT.has(path.posix.extname(from))) continue;
     for (const binding of extractImportBindings(texts.get(from) ?? "")) {
       const resolved = resolveSpecifier(binding.spec, from, fileSet, aliases);
@@ -1412,17 +1436,31 @@ export const OWNER_RE = /^(?:question-\d+|(?!question-)[a-z][a-z0-9]*-[a-z0-9-]+
 export function parseMediaAllowlist(text) {
   const lines = String(text ?? "").split(/\r?\n/);
   const open = /^ {0,3}(`{3,}|~{3,})\s*(.*)$/;
+  /** The fence currently open, at ANY nesting depth. */
+  let outer = null;
   let fence = null;
   const out = [];
   for (const line of lines) {
     const m = open.exec(line);
-    if (!fence) {
-      if (m && m[2].trim() === MEDIA_FENCE_NAME) fence = { marker: m[1][0], len: m[1].length };
+    if (fence) {
+      // ANY fence marker inside the block ends it. A `media-tooling` block is a
+      // flat list of module names, so a nested opener is never data — treating
+      // it as data let ```js and the lines under it become "modules".
+      if (m) return out;
+      const body = line.replace(/(^|\s)#.*$/, "").replace(/^\s*-\s*/, "").trim();
+      if (body) out.push(body);
       continue;
     }
-    if (m && m[1][0] === fence.marker && m[1].length >= fence.len && m[2].trim() === "") return out;
-    const body = line.replace(/(^|\s)#.*$/, "").replace(/^\s*-\s*/, "").trim();
-    if (body) out.push(body);
+    if (!m) continue;
+    if (outer) {
+      // Closing the enclosing block, or a fence nested inside it. A
+      // `media-tooling` block shown as an EXAMPLE inside an outer ````-fence is
+      // documentation, not configuration, and must not widen the gate.
+      if (m[1][0] === outer.marker && m[1].length >= outer.len && m[2].trim() === "") outer = null;
+      continue;
+    }
+    if (m[2].trim() === MEDIA_FENCE_NAME) fence = { marker: m[1][0], len: m[1].length };
+    else outer = { marker: m[1][0], len: m[1].length };
   }
   // Unterminated: an open fence lists nothing, exactly as claims-audit.mjs
   // treats one. Returning the partial list would let a typo widen the gate.
@@ -1472,6 +1510,14 @@ export function parseBaseline(text) {
       } else if (!OWNER_RE.test(owner)) {
         problems.push(`${at} (${id}): \`owner\` must be a backlog item id or question-<n>, got \`${owner}\``);
       }
+      if (row.finding !== undefined) {
+        const f = typeof row.finding === "string" ? row.finding.trim() : "";
+        if (!DEPENDENCY_VIOLATIONS.has(f)) {
+          problems.push(
+            `${at} (${id}): \`finding\` must be one of ${[...DEPENDENCY_VIOLATIONS.keys()].join(", ")}, got \`${row.finding}\``,
+          );
+        }
+      }
       kept.push({ ...row, [idField]: id });
     });
     return kept;
@@ -1487,18 +1533,37 @@ const DEPENDENCY_VIOLATIONS = new Map([
 ]);
 
 /**
+ * The statuses the media allowlist may cover. It exists for modules the media
+ * rig IMPORTS without declaring, so it stops there: a name in the guide must
+ * not also excuse `unreferenced` — declared in package.json and imported by
+ * nothing — which is the one class the keep-list format exists to make someone
+ * write a reason and an owner for.
+ */
+const MEDIA_ALLOWLIST_STATUSES = new Set(["undeclared", "claimed-absent"]);
+
+/**
  * Compare a report against the keep-list.
  *
  * @param {RepoRefsReport} report
  * @param {{files: object[], dependencies: object[], problems?: string[]}} baseline
  * @param {{mediaAllowlist?: string[]}} [opts]
- * @returns {{violations: {kind: string, id: string, message: string}[], stale: {kind: string, id: string, message: string}[], covered: number}}
+ * @returns {{violations: {kind: string, id: string, message: string}[], stale: {kind: string, id: string, message: string}[], covered: number, unjudgeable: string[]}}
  */
 export function checkBaseline(report, baseline, { mediaAllowlist = [] } = {}) {
   const violations = [];
   const stale = [];
-  const fileRows = new Map((baseline?.files ?? []).map((r) => [r.path, r]));
-  const depRows = new Map((baseline?.dependencies ?? []).map((r) => [r.name, r]));
+  // Defensive: the CLI always arrives through parseBaseline, which rejects a
+  // null or non-object row, but a caller driving this directly must get a
+  // report rather than a TypeError — a gate that crashes is a gate that gets
+  // switched off.
+  const rowsOf = (v, key) =>
+    new Map(
+      (Array.isArray(v) ? v : [])
+        .filter((r) => r && typeof r === "object" && typeof r[key] === "string")
+        .map((r) => [r[key], r]),
+    );
+  const fileRows = rowsOf(baseline?.files, "path");
+  const depRows = rowsOf(baseline?.dependencies, "name");
   const media = new Set(mediaAllowlist ?? []);
   let covered = 0;
 
@@ -1507,7 +1572,15 @@ export function checkBaseline(report, baseline, { mediaAllowlist = [] } = {}) {
   }
 
   const liveFiles = new Set();
-  for (const f of report?.files ?? []) {
+  const unjudgeable = [];
+  for (const f of Array.isArray(report?.files) ? report.files : []) {
+    if (!f || typeof f.path !== "string") continue;
+    // An INDETERMINATE file is not "unreferenced", so it is correctly not a
+    // violation — but it is not judged either, and one non-literal import()
+    // can move a whole directory into this class. Silence there would let the
+    // gate read green while it had stopped looking, so it is COUNTED and said
+    // out loud, without changing the exit code.
+    if (f.status === "INDETERMINATE" && !f.keep) unjudgeable.push(f.path);
     if (f.status !== "unreferenced" || f.keep) continue;
     liveFiles.add(f.path);
     if (fileRows.has(f.path)) {
@@ -1522,17 +1595,33 @@ export function checkBaseline(report, baseline, { mediaAllowlist = [] } = {}) {
   }
 
   const liveDeps = new Set();
-  for (const d of report?.dependencies ?? []) {
+  for (const d of Array.isArray(report?.dependencies) ? report.dependencies : []) {
+    if (!d || typeof d.name !== "string") continue;
     const why = DEPENDENCY_VIOLATIONS.get(d.status);
     if (!why) continue;
     liveDeps.add(d.name);
     // The media allowlist is a keep-list too, just one hyg-09 owns instead of
-    // the baseline file. A module in it is covered without a row.
-    if (media.has(d.name)) {
+    // the baseline file. A module in it is covered without a row — but only
+    // for the import-shaped statuses it exists for.
+    if (media.has(d.name) && MEDIA_ALLOWLIST_STATUSES.has(d.status)) {
       covered += 1;
       continue;
     }
-    if (depRows.has(d.name)) {
+    const row = depRows.get(d.name);
+    if (row) {
+      // The row's `finding` is a claim about WHICH violation was accepted. A
+      // row written for one kind must not silently cover a different kind that
+      // later appears under the same name.
+      if (typeof row.finding === "string" && row.finding.trim() && row.finding.trim() !== d.status) {
+        violations.push({
+          kind: "baseline",
+          id: d.name,
+          message:
+            `${BASELINE_PATH}: the row for \`${d.name}\` accepts finding \`${row.finding}\`, ` +
+            `but the live finding is \`${d.status}\` — re-read it and update the reason, or add a reference`,
+        });
+        continue;
+      }
       covered += 1;
       continue;
     }
@@ -1565,7 +1654,7 @@ export function checkBaseline(report, baseline, { mediaAllowlist = [] } = {}) {
     }
   }
 
-  return { violations, stale, covered };
+  return { violations, stale, covered, unjudgeable };
 }
 
 // ---------------------------------------------------------------------------
@@ -1638,6 +1727,14 @@ function main() {
     console.error("repo-refs: --evidence needs a path, e.g. --evidence docs/hygiene/hyg-05-evidence.md");
     process.exit(1);
   }
+  // An unrecognised flag must not silently degrade the gate to a report that
+  // exits 0: `--checked` or `--check=1` would otherwise look like it passed.
+  const KNOWN_FLAGS = new Set(["--check", "--evidence"]);
+  const unknown = argv.filter((a) => a.startsWith("--") && !KNOWN_FLAGS.has(a));
+  if (unknown.length > 0) {
+    console.error(`repo-refs: unknown flag(s): ${unknown.join(", ")}. Known flags: --check, --evidence <path>`);
+    process.exit(1);
+  }
   const checking = argv.includes("--check");
   const report = analyzeRepo();
 
@@ -1693,8 +1790,15 @@ function main() {
 
   // --check: the gate. A finding with a keep-list row passes; one without fails.
   const { baseline, mediaAllowlist } = loadBaselineInputs();
-  const { violations, stale, covered } = checkBaseline(report, baseline, { mediaAllowlist });
+  const { violations, stale, covered, unjudgeable } = checkBaseline(report, baseline, { mediaAllowlist });
   for (const s of stale) console.log(`repo-refs: stale baseline row      ${s.message}`);
+  if (unjudgeable.length > 0) {
+    console.log(
+      `repo-refs: ${unjudgeable.length} file(s) are INDETERMINATE and were NOT judged — ` +
+        "a non-literal import() reaches them, so the gate cannot see whether they are dead: " +
+        unjudgeable.slice(0, 10).join(", "),
+    );
+  }
   for (const v of violations) console.error(`repo-refs: ${v.kind}: ${v.message}`);
   console.log(
     `repo-refs: --check ${covered} finding(s) covered by ${BASELINE_PATH}` +

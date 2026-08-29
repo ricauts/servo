@@ -78,7 +78,7 @@
     {
       "name": "react-is",
       "finding": "unreferenced",
-      "reason": "satisfies recharts' react-is peerDependency (node_modules/recharts/package.json peerDependencies); never imported by app code, so removing it breaks the peer range",
+      "reason": "satisfies recharts' react-is peerDependency (node_modules/recharts/package.json peerDependencies); never imported by app code, so removing it breaks the peer range. NOT enumerated in question 31, which names only _ds_bundle.js, the five shadcn primitives and run-relay.ts — it is filed there as the question that owns the unreferenced-but-kept CLASS, and the owner should move if you open a narrower one",
       "owner": "question-31"
     },
     {

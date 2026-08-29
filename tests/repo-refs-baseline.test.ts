@@ -11,8 +11,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  analyze,
   analyzeRepo,
   BASELINE_PATH,
+  isNonReferencingSource,
+  NON_REFERENCING_PREFIXES,
+  NON_REFERENCING_SOURCES,
   checkBaseline,
   loadBaselineInputs,
   MEDIA_FENCE_NAME,
@@ -145,6 +149,44 @@ describe("hyg-04 · the gate rules", () => {
     ).toEqual([]);
   });
 
+  it("does not let the media allowlist excuse a declared-and-unimported dependency", () => {
+    // The allowlist exists for modules the media rig IMPORTS without declaring.
+    // Letting it also cover `unreferenced` would excuse the one class the
+    // keep-list format exists to make someone write a reason for.
+    const { violations } = checkBaseline(
+      report({ dependencies: [{ name: "sharp", status: "unreferenced" }] }),
+      baseline(),
+      { mediaAllowlist: ["sharp"] },
+    );
+    expect(violations.map((v) => v.kind)).toEqual(["unreferenced-dependency"]);
+  });
+
+  it("refuses a row whose `finding` is not the live finding", () => {
+    // A row accepted for one violation kind must not silently cover another.
+    const { violations } = checkBaseline(
+      report({ dependencies: [{ name: "gifenc", status: "undeclared" }] }),
+      baseline([], [{ name: "gifenc", finding: "unreferenced", ...ROW }]),
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0].message).toContain("accepts finding `unreferenced`");
+    expect(violations[0].message).toContain("live finding is `undeclared`");
+  });
+
+  it("counts INDETERMINATE files out loud without failing on them", () => {
+    const { violations, unjudgeable } = checkBaseline(
+      report({ files: [{ path: "src/lib/maybe.ts", status: "INDETERMINATE" }] }),
+      baseline(),
+    );
+    expect(violations).toEqual([]);
+    expect(unjudgeable).toEqual(["src/lib/maybe.ts"]);
+  });
+
+  it("reports instead of throwing on malformed input that never saw parseBaseline", () => {
+    expect(() => checkBaseline(report(), { files: [null], dependencies: [] } as never)).not.toThrow();
+    expect(() => checkBaseline({ files: [null] } as never, baseline())).not.toThrow();
+    expect(() => checkBaseline(report(), { files: "x" } as never)).not.toThrow();
+  });
+
   it("reports a stale row but never fails for it", () => {
     const { violations, stale } = checkBaseline(
       report(),
@@ -180,6 +222,11 @@ describe("hyg-04 · the keep-list must stay a keep-list", () => {
     expect(OWNER_RE.test("-x")).toBe(false);
   });
 
+  it("rejects a row whose `finding` is not a real violation status", () => {
+    const parsed = baseline([], [{ name: "x", finding: "unused", ...ROW }]);
+    expect(parsed.problems.some((p) => p.includes("`finding` must be one of"))).toBe(true);
+  });
+
   it("names a duplicate row rather than letting the later one silently win", () => {
     const parsed = baseline([
       { path: "a.ts", ...ROW },
@@ -213,6 +260,18 @@ describe("hyg-04 · the media-tooling allowlist", () => {
     expect(parseMediaAllowlist(md)).toEqual(["sharp", "ffmpeg-static"]);
   });
 
+  it("does not read a media-tooling block shown as an EXAMPLE inside an outer fence", () => {
+    // The guide hyg-09 writes will document the format. A documentation
+    // example must never become live configuration.
+    const md = "````markdown\n```" + MEDIA_FENCE_NAME + "\nsharp\n```\n````\n";
+    expect(parseMediaAllowlist(md)).toEqual([]);
+  });
+
+  it("stops at a nested fence rather than swallowing its lines as module names", () => {
+    const md = "```" + MEDIA_FENCE_NAME + "\nsharp\n```js\nrequire(\"left-pad\")\n```\n";
+    expect(parseMediaAllowlist(md)).toEqual(["sharp"]);
+  });
+
   it("treats an absent file, an absent fence and an unterminated fence as an empty list", () => {
     expect(parseMediaAllowlist("")).toEqual([]);
     expect(parseMediaAllowlist("# guide\n\nno fence here\n")).toEqual([]);
@@ -228,6 +287,62 @@ describe("hyg-04 · the media-tooling allowlist", () => {
     } else {
       expect(mediaAllowlist).toEqual([]);
     }
+  });
+});
+
+describe("hyg-04 · the gate may not launder its own findings", () => {
+  // §13.1 requires a deletion item to COMMIT a docs/hygiene/*.md evidence
+  // report before removing anything, and that report NAMES every dead path.
+  // If it counted as a referencing source, committing it would flip every one
+  // of those paths to `referenced, prose only` and the gate would pass on
+  // files it had just proven dead — one commit after proving it.
+  const virtual = {
+    "src/lib/orphan.ts": "export const orphan = 1;\n",
+    "src/lib/live.ts": "export const live = 2;\n",
+    "src/app/page.tsx": "import { live } from '@/lib/live';\nexport default function P() { return live; }\n",
+  };
+  const tsconfig = JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } });
+
+  function statusOf(files: Record<string, string>) {
+    const r = analyze({
+      trackedFiles: Object.keys(files),
+      read: files,
+      tsconfigText: tsconfig,
+    }) as { files: { path: string; status: string }[] };
+    return Object.fromEntries(r.files.map((f) => [f.path, f.status]));
+  }
+
+  it("an evidence report naming a dead file does not make it referenced", () => {
+    expect(statusOf(virtual)["src/lib/orphan.ts"]).toBe("unreferenced");
+    const withEvidence = {
+      ...virtual,
+      "docs/hygiene/hyg-05-evidence.md": "| `src/lib/orphan.ts` | unreferenced | delete |\n",
+    };
+    expect(statusOf(withEvidence)["src/lib/orphan.ts"]).toBe("unreferenced");
+  });
+
+  it("the keep-list naming a dead file does not make it referenced", () => {
+    const withBaseline = {
+      ...virtual,
+      "tests/fixtures/repo-refs-baseline.json": JSON.stringify({
+        files: [{ path: "src/lib/orphan.ts", reason: "r", owner: "hyg-05" }],
+      }),
+    };
+    expect(statusOf(withBaseline)["src/lib/orphan.ts"]).toBe("unreferenced");
+  });
+
+  it("an ordinary document naming a file still counts as a reference", () => {
+    // The exclusion is narrow on purpose: only this tool's own artifacts.
+    const withDoc = { ...virtual, "docs/USER-GUIDE.md": "see `src/lib/orphan.ts`\n" };
+    expect(statusOf(withDoc)["src/lib/orphan.ts"]).toBe("referenced");
+  });
+
+  it("names both non-referencing sources as data, not as a convention", () => {
+    expect(NON_REFERENCING_SOURCES.has("spec.md")).toBe(true);
+    expect(NON_REFERENCING_SOURCES.has("tests/fixtures/repo-refs-baseline.json")).toBe(true);
+    expect(NON_REFERENCING_PREFIXES).toContain("docs/hygiene/");
+    expect(isNonReferencingSource("docs/hygiene/audit-2026-08-29.md")).toBe(true);
+    expect(isNonReferencingSource("docs/USER-GUIDE.md")).toBe(false);
   });
 });
 
