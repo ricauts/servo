@@ -156,6 +156,24 @@ export const DEFAULT_TOOL_POLICIES: DefaultToolPolicy[] = [
     requiresApproval: false,
   },
   {
+    toolName: "search_knowledge",
+    description: "Search the company knowledge base for cited passages (entitlement-filtered).",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "read_document",
+    description: "Read one knowledge-base document, paginated by locator cursor.",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "list_collections",
+    description: "List knowledge-base collections with readable-document counts.",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
     toolName: "escalate_to_human",
     description:
       "Hand the ticket to a human teammate when the main objective could not be completed.",

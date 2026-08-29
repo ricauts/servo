@@ -103,6 +103,11 @@ const NATIVE_TOOLS: Record<string, ToolDef> = {
  * an approval-gated tool must never be reachable here. Deny-by-default on a
  * missing policy row mirrors the agent loop, which treats it as unavailable.
  */
+/** KB tools are never served over MCP in v1 (kb-11): the shared bearer
+ *  token carries no user identity, so there is no human principal — deny or
+ *  invent a fallback are the only options, and inventing is the leak. */
+export const KB_TOOLS = ["search_knowledge", "read_document", "list_collections"] as const;
+
 export async function getMcpTools(): Promise<Record<string, ToolDef>> {
   await ensureToolPolicies(); // backfill built-ins added by an upgrade
   const [registry, policies] = await Promise.all([
@@ -115,6 +120,7 @@ export async function getMcpTools(): Promise<Record<string, ToolDef>> {
   const served: Record<string, ToolDef> = {};
   for (const [name, tool] of Object.entries(registry)) {
     if (CORE_TOOLS.includes(name)) continue;
+    if ((KB_TOOLS as readonly string[]).includes(name)) continue;
     const policy = byName.get(name);
     if (!policy || !policy.enabled || policy.requiresApproval) continue;
     served[name] = tool;
@@ -138,6 +144,9 @@ export async function mcpToolWithholdReason(name: string): Promise<string | null
   if (!policy.enabled) return `Error: "${name}" is disabled by policy.`;
   if (policy.requiresApproval) {
     return `Error: "${name}" requires human approval, which an MCP caller cannot obtain. File a ticket with create_ticket and let a Servo agent run it under the approval gate.`;
+  }
+  if ((KB_TOOLS as readonly string[]).includes(name)) {
+    return `Error: knowledge tools require a per-user token; the MCP session has no human principal.`;
   }
   return null;
 }

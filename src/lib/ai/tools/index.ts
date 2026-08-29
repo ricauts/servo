@@ -7,6 +7,7 @@
 import { cloudTools } from "./cloud";
 import { githubTools } from "./github";
 import { historyTools } from "./history";
+import { kbTools } from "./kb";
 import { identityTools } from "./identity";
 import { opsDbTools } from "./ops-db";
 import { skillTools } from "./skills";
@@ -18,6 +19,7 @@ export type { ToolContext, ToolDef } from "./types";
 export const TOOLS = {
   ...opsDbTools,
   ...historyTools,
+  ...kbTools,
   ...identityTools,
   ...githubTools,
   ...cloudTools,
