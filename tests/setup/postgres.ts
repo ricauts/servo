@@ -41,9 +41,9 @@ async function main() {
   const existing = await admin.$queryRawUnsafe<{ datname: string }[]>(
     `SELECT datname FROM pg_database WHERE datname = '${TEMPLATE_NAME}'`,
   );
-  // A run interrupted between CREATE DATABASE and db push leaves a hollow
-  // template that later runs would clone forever — completeness is checked,
-  // not just existence.
+  // A run interrupted between CREATE DATABASE and the schema step leaves a
+  // hollow template that later runs would clone forever — completeness is
+  // checked, not just existence.
   let complete = false;
   if (existing.length > 0) {
     const probe = new PrismaClient({ datasourceUrl: TEMPLATE_URL });
@@ -68,20 +68,19 @@ async function main() {
       await admin.$executeRawUnsafe(`DROP DATABASE ${TEMPLATE_NAME} WITH (FORCE)`);
     }
     await admin.$executeRawUnsafe(`CREATE DATABASE ${TEMPLATE_NAME}`);
-    // Apply the schema to the template. `db push` is allowed ONLY here —
-    // against a servo_test_* throwaway (loop-guard rail 1b). The CLI is
-    // invoked through the node binary because `npx` is npx.cmd on Windows.
+    // Apply the migrations to the template — `migrate deploy`, never
+    // `db push`, since kb-01: tests must run against production's exact
+    // indexes, generated columns and CHECK constraints. The CLI is invoked
+    // through the node binary because `npx` is npx.cmd on Windows.
     const prismaCli = path.join("node_modules", "prisma", "build", "index.js");
-    execFileSync(process.execPath, [prismaCli, "db", "push", "--skip-generate"], {
-      env: { ...process.env, DATABASE_URL: TEMPLATE_URL },
-      stdio: "inherit",
-    });
-    // pgvector lives INSIDE the template so every clone has it (§4: an
-    // extension exists once per database — the reason this harness clones
-    // databases rather than schemas).
-    const template = new PrismaClient({ datasourceUrl: TEMPLATE_URL });
-    await template.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS vector");
-    await template.$disconnect();
+    execFileSync(
+      process.execPath,
+      [prismaCli, "migrate", "deploy"],
+      {
+        env: { ...process.env, DATABASE_URL: TEMPLATE_URL },
+        stdio: "inherit",
+      },
+    );
   }
   await admin.$disconnect();
 }

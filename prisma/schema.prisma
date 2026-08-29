@@ -28,6 +28,8 @@ model User {
   decisions        Approval[]    @relation("decider")
   draftDecisions   ReplyDraft[]  @relation("draftDecider")
   memberships      GroupMember[]
+  ownedDocuments   Document[]
+  grantedKb        KbGrant[]     @relation("kbGranter")
 }
 
 model Group {
@@ -100,6 +102,10 @@ model ReplyDraft {
   decidedAt DateTime?
   deciderId String?
   decider   User?     @relation("draftDecider", fields: [deciderId], references: [id])
+  // Provenance by construction (kb-12): exactly the chunks injected into the
+  // drafter's prompt — {docId, docName, locator, chunkId}[].
+  sources      Json    @default("[]")
+  autoDelivered Boolean @default(false) // sent by policy with deciderId null (kb-14)
 }
 
 // A file produced while working a ticket — today, screenshots captured by the
@@ -335,4 +341,95 @@ model SlaPolicy {
   resolutionMinutes Int
   // Raise the ticket one escalation tier when a target is missed.
   escalateOnBreach  Boolean @default(true)
+}
+
+
+// The company knowledge base (spec §5). Access control is not a feature of
+// this area — it IS the area: retrieval is entitlement-filtered in SQL before
+// candidate selection, before scoring, before anything reaches model context.
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  contentType String // application/pdf | xlsx mime | text/markdown | text/plain
+  byteSize    Int
+  sha256      String // dedupe + "this file changed" detection
+  data        Bytes // bytea; never selected outside the download route
+  textStatus  String   @default("PENDING") // PENDING | EXTRACTING | EXTRACTED | FAILED | UNSUPPORTED
+  textError   String?
+  summary     String   @default("") // deterministic extract — no model call at ingest
+  keywords    Json     @default("[]") // string[]
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  collectionId String?
+  collection  Collection? @relation(fields: [collectionId], references: [id])
+  visibility  String   @default("PRIVATE") // PRIVATE | STAFF | PUBLIC
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chunks   DocumentChunk[]
+  edgesOut KnowledgeEdge[] @relation("edgeFrom")
+  edgesIn  KnowledgeEdge[] @relation("edgeTo")
+  grants   KbGrant[]
+}
+
+model DocumentChunk {
+  id        String   @id @default(cuid())
+  documentId String
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  index     Int
+  text      String
+  locator   Json // {"sheet":"2026","range":"B4:D9"} | {"page":12} | {"lines":"120-180"}
+  keywords  Json     @default("[]")
+  // pgvector. Nullable so keyword-only installs are a normal state rather
+  // than a failure; the tsvector/generated + GIN + HNSW objects live in the
+  // hand-written migration (Prisma cannot express them).
+  embedding      Unsupported("vector(1536)")?
+  embeddingModel String @default("") // "" = none, "mock" = deterministic mock embedder
+  embeddingDims  Int     @default(0) // native dimension before zero-padding
+  createdAt      DateTime @default(now())
+
+  @@unique([documentId, index])
+  @@index([documentId])
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @default("")
+  createdAt   DateTime @default(now())
+
+  documents Document[]
+  grants    KbGrant[]
+}
+
+model KnowledgeEdge {
+  id        String   @id @default(cuid())
+  fromId    String
+  from      Document @relation("edgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId      String
+  to        Document @relation("edgeTo", fields: [toId], references: [id], onDelete: Cascade)
+  kind      String // SHARED_ENTITY | SHARED_KEYWORD | SAME_COLLECTION
+  weight    Float    @default(0)
+  evidence  Json     @default("[]") // the shared entities/keywords — withheld unless both nodes entitled
+  createdAt DateTime @default(now())
+
+  @@unique([fromId, toId, kind])
+}
+
+// One grant of `access` on one target to one subject. Nullable FKs keep
+// referential integrity; the real uniqueness and the exactly-one rule are
+// the partial indexes and the CHECK in the migration — Prisma cannot
+// express either.
+model KbGrant {
+  id           String      @id @default(cuid())
+  documentId   String?
+  document     Document?   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  collectionId String?
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  subjectType  String // USER | GROUP | AGENT
+  subjectId    String // User.id | Group.id | AgentProfile.id | "builtin:*"
+  access       String      @default("READ") // READ | MANAGE
+  grantedById  String
+  grantedBy    User        @relation("kbGranter", fields: [grantedById], references: [id])
+  createdAt    DateTime    @default(now())
 }
