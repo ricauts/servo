@@ -179,6 +179,9 @@ describe("landing-tier classifier", () => {
       "src/lib/ai/engine.ts",
       "Dockerfile",
       "docker-compose.yml",
+      // docker-compose.test.yml is deliberately NOT a Tier-C surface: it
+      // starts a throwaway test container; §0.6 rule 6 names the app's
+      // production compose file.
     ]) {
       const verdict = await classifyLanding({ files: [changed(file)], diffText: "" });
       expect(verdict.tier).toBe("C");

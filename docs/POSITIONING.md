@@ -379,9 +379,6 @@ paths-exempt:
       nothing, which this canon already says in prose two screens above.
   - target:
       - scripts/migrate-sqlite-to-postgres.mjs
-      - tests/setup/postgres.ts
-      - tests/helpers/tmp-db.ts
-      - tests/tmp-db.test.ts
       - tests/search-case.test.ts
       - tests/ticket-number.test.ts
       - tests/ops-isolation.test.ts
@@ -389,16 +386,15 @@ paths-exempt:
     paths:
       - docs/design/postgres.md
     until: db-10
-    reason: the Postgres design document names the one-shot import, the
-      throwaway-database harness and the tests that db-02 through db-08
-      create. db-01 delivered prisma/migrations/ and scripts/postgres-init.sql
-      on the owner's machine (question 40's runner could not pull images), so
-      those two targets left this list.
+    reason: the Postgres design document names the one-shot import and the
+      tests that db-03 through db-08 create. db-01 delivered the migrations
+      and init file, db-02 delivered the harness (tests/setup/postgres.ts,
+      tests/helpers/tmp-db.ts, tests/tmp-db.test.ts), so those targets left
+      this list.
   - target:
       - src/lib/kb/*
       - src/lib/kb/*/*
       - src/lib/ai/tools/kb.ts
-      - tests/setup/postgres.ts
     paths:
       - docs/design/knowledge-base.md
       - docs/design/extraction.md

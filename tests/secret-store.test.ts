@@ -1,7 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { encryptionEnabled, isSealed, open, seal } from "@/lib/secret-store";
 
 const KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"; // 64 hex
+
+// "Without a key" must mean without a key — not "without whatever the
+// developer's .env happens to carry" (vitest loads .env into workers).
+beforeEach(() => {
+  delete process.env.SERVO_ENCRYPTION_KEY;
+});
 
 afterEach(() => {
   delete process.env.SERVO_ENCRYPTION_KEY;

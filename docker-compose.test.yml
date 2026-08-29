@@ -1,0 +1,20 @@
+# The throwaway-Postgres test container (spec item db-02). Port 5433 so it
+# never collides with a dev instance; tmpfs for the data directory so nothing
+# survives and nothing needs cleaning.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: servo
+      POSTGRES_PASSWORD: servo
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servo -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
