@@ -369,28 +369,20 @@ paths-exempt:
     reason: gitignored runtime artefacts. They exist on an operator's machine
       and in no checkout; db-10 removes both the ignore rules and the files.
   # --- Forward references, by the item that creates the target -------------
+  # db-07 delivered docs/migrating-to-postgres.md, scripts/migrate-sqlite-
+  # to-postgres.mjs and the pg_dump backup procedure; its targets left this
+  # list, the same way db-01/02/03/08's did.
   - target:
-      - docs/migrating-to-postgres.md
-    paths:
-      - docs/POSITIONING.md
-      - docs/design/postgres.md
-    until: db-07
-    reason: db-07 writes the migration guide. Until then the path matches
-      nothing, which this canon already says in prose two screens above.
-  - target:
-      - scripts/migrate-sqlite-to-postgres.mjs
-      - tests/search-case.test.ts
-      - tests/ticket-number.test.ts
       - tests/ops-isolation.test.ts
-      - tests/pgvector-platform.test.ts
     paths:
       - docs/design/postgres.md
     until: db-10
     reason: the Postgres design document names the one-shot import and the
       tests that db-03 through db-08 create. db-01 delivered the migrations
       and init file, db-02 delivered the harness (tests/setup/postgres.ts,
-      tests/helpers/tmp-db.ts, tests/tmp-db.test.ts), so those targets left
-      this list.
+      tests/helpers/tmp-db.ts, tests/tmp-db.test.ts), db-03 delivered the
+      search and ticket-number tests, and db-08 delivered the platform
+      smoke test, so those targets left this list.
   - target:
       - src/lib/kb/*
       - src/lib/kb/*/*

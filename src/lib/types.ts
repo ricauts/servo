@@ -58,6 +58,11 @@ export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type DraftStatus = "PENDING" | "SENT" | "REJECTED";
 
+/** How a ticket entered the desk (ux-03). CHAT is in the union for the
+ *  roadmap chat surface (ux-07) — nothing may stamp it in v1, and it must
+ *  survive here until that surface ships. */
+export type TicketChannel = "WEB" | "EMAIL" | "MCP" | "CHAT";
+
 export const TICKET_STATUSES: TicketStatus[] = [
   "OPEN",
   "TRIAGED",
@@ -66,6 +71,7 @@ export const TICKET_STATUSES: TicketStatus[] = [
   "RESOLVED",
   "CLOSED",
 ];
+export const TICKET_CHANNELS: TicketChannel[] = ["WEB", "EMAIL", "MCP", "CHAT"];
 export const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 export const CATEGORIES: Category[] = [
   "ACCESS",

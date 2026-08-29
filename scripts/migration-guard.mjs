@@ -35,6 +35,15 @@ const CREATE_TABLE_RE = /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(["\w.]+)/i;
 const CREATE_INDEX_RE =
   /^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?[\w"]+\s+(?:USING\s+\w+\s+)?ON\s+(["\w.]+)/i;
 const ALTER_ADD_COLUMN_RE = /^ALTER\s+TABLE\s+(?:ONLY\s+)?(["\w.]+)\s+ADD\s+(COLUMN\s+)?(.*)$/is;
+// The one sanctioned data statement (db-03): pointing a sequence THIS
+// migration created past the MAX of an existing column, so an upgrade with
+// rows already beyond the sequence's START cannot collide on its first
+// nextval. COALESCE is required — the shape must also be correct on an
+// empty table — and the movement is forward-only by construction: it can
+// never remove or rewrite a row, which is what separates it from the data
+// mutations this guard exists to flag.
+const SETVAL_BACKFILL_RE =
+  /^SELECT\s+setval\(\s*'([^']+)'\s*,\s*\(SELECT\s+COALESCE\(MAX\([^)]+\)\s*,\s*\d+\)\s+FROM\s+(["\w.]+)\s*\)\s*\)\s*;?\s*$/i;
 
 /**
  * @typedef {object} MigrationVerdict
@@ -52,6 +61,7 @@ const ALTER_ADD_COLUMN_RE = /^ALTER\s+TABLE\s+(?:ONLY\s+)?(["\w.]+)\s+ADD\s+(COL
 export function classifyMigration(sql) {
   const reasons = [];
   const createdTables = new Set();
+  const createdSequences = new Set();
   const statements = splitStatements(sql);
 
   // First pass: tables created here. Indexes on them — unique or not — are
@@ -76,6 +86,20 @@ export function classifyMigration(sql) {
     if (/^CREATE\s+EXTENSION\b/i.test(s)) continue;
     if (/^CREATE\s+SCHEMA\b/i.test(s)) continue; // namespaces create, destroy nothing
     if (/^CREATE\s+TYPE\b/i.test(s)) continue;
+    // A sequence is an object this migration creates; nothing existing is
+    // read or constrained. Its first nextval simply starts at START.
+    if (/^CREATE\s+SEQUENCE\s+([\"\w.]+)/i.test(s)) {
+      createdSequences.add(normIdent(s.match(/^CREATE\s+SEQUENCE\s+([\"\w.]+)/i)[1]));
+      continue;
+    }
+    {
+      const backfill = s.match(SETVAL_BACKFILL_RE);
+      if (backfill) {
+        if (createdSequences.has(normIdent(backfill[1]))) continue;
+        reasons.push(`setval on a sequence this migration did not create: ${head}`);
+        continue;
+      }
+    }
 
     const alter = s.match(ALTER_ADD_COLUMN_RE);
     if (alter && alter[2]) {

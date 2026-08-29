@@ -60,6 +60,11 @@ model Ticket {
   title           String
   description     String
   status          String    @default("OPEN") // OPEN | TRIAGED | IN_PROGRESS | WAITING_APPROVAL | RESOLVED | CLOSED
+  // Where the ticket entered the desk (ux-03): WEB form, inbound EMAIL, or
+  // the MCP create_ticket tool. CHAT exists in the TicketChannel union but
+  // is deliberately unused until the chat surface ships (ux-07) — nobody
+  // deletes it, nobody claims it ships.
+  channel         String    @default("WEB") // TicketChannel: WEB | EMAIL | MCP | CHAT
   priority        String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
   category        String    @default("OTHER") // ACCESS | HARDWARE | SOFTWARE | DATABASE | DEVOPS | NETWORK | OTHER
   requesterId     String
