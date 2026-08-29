@@ -13,6 +13,8 @@
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { chunkMarkdown } from "@/lib/kb/chunk";
+import { keywordPass } from "@/lib/kb/keywords";
+import { rebuildEdgesFor } from "@/lib/kb/graph";
 
 /** Stored-byte cap, enforced before anything touches the database. */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -116,12 +118,15 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
     const text = input.bytes.toString("utf8");
     const chunks = chunkMarkdown(text);
     if (chunks.length > 0) {
+      // The deterministic keyword/entity pass rides along per chunk (kb-08);
+      // graph edges are built after the transaction, corpus-wide.
       await tx.documentChunk.createMany({
         data: chunks.map((c) => ({
           documentId,
           index: c.index,
           text: c.text,
           locator: c.locator,
+          keywords: keywordPass(c.text).keywords,
         })),
       });
     }
@@ -136,6 +141,10 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
     });
     return { documentId, textStatus: "EXTRACTED", chunkCount: chunks.length };
   });
+
+  if (document.textStatus === "EXTRACTED") {
+    await rebuildEdgesFor(document.documentId).catch(() => 0);
+  }
 
   return {
     documentId: document.documentId,
