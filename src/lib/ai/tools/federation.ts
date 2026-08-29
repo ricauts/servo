@@ -58,6 +58,9 @@ export const federationTools: Record<string, ToolDef> = {
       let footer = "";
       try {
         const routed = await routeSources(db, chain, question, { limit: FIND_BRIEF_LIMIT });
+        // Zero entitlement is its own answer (fed-06): never an empty
+        // dressed-up footer, and never a degraded list.
+        if (routed.entitledDatasets === 0) return "No accessible sources.";
         // The run's own discards suppress candidates: a source:ID discard
         // hides every dataset of that source; a dataset:ID discard hides
         // the one. Read from the ledger — the run's memory.
