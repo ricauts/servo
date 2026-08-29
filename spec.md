@@ -803,8 +803,8 @@ acceptance:
 
 ```
 ### [kb-03] Grant APIs, permissions and the effective-readers preview
-status: doing
-date: 2026-08-28
+status: done
+date: 2026-08-29
 size: one-tick
 tier: B
 depends-on: kb-02, rbac-01
