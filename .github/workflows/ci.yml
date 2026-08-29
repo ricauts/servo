@@ -41,6 +41,17 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      # The backup-restore check (db-07) shells out to pg_dump/psql; the
+      # runner's default client lags the pgvector:pg17 service, and
+      # pg_dump refuses a version mismatch — and CI's `services:` container
+      # cannot be docker-exec'd the way the local fallback does. Install
+      # the matching client from pgdg.
+      - name: Install PostgreSQL 17 client
+        run: |
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update && sudo apt-get install -y postgresql-client-17
+
       - name: Generate Prisma client
         run: npx prisma generate
 
