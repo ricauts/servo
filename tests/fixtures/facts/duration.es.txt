@@ -1,0 +1,2 @@
+El SLA permite 30 días para resolver y 2 horas para la primera respuesta.
+El trabajo duró 45 minutos; el reintento tomó 90 segundos.

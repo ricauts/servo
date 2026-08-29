@@ -1,0 +1,68 @@
+[
+  [
+    {
+      "kind": "DATE",
+      "text": "2026-01-31",
+      "ts": 1769817600000,
+      "tsEnd": 1769904000000,
+      "norm": "2026-01-31/2026-02-01",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DATE",
+      "text": "01/02/2026",
+      "ts": 1769904000000,
+      "tsEnd": 1769990400000,
+      "norm": "2026-02-01/2026-02-02",
+      "confidence": "ASSUMED"
+    }
+  ],
+  [
+    {
+      "kind": "DATE",
+      "text": "January 15, 2026",
+      "ts": 1768435200000,
+      "tsEnd": 1768521600000,
+      "norm": "2026-01-15/2026-01-16",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DATE",
+      "text": "January 2026",
+      "ts": 1767225600000,
+      "tsEnd": 1769904000000,
+      "norm": "2026-01-01/2026-02-01",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DATE",
+      "text": "Q3 2026",
+      "ts": 1782864000000,
+      "tsEnd": 1790812800000,
+      "norm": "2026-07-01/2026-10-01",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DATE",
+      "text": "Yesterday",
+      "ts": 1768348800000,
+      "tsEnd": 1768435200000,
+      "norm": "2026-01-14/2026-01-15",
+      "confidence": "ASSUMED"
+    },
+    {
+      "kind": "DATE",
+      "text": "tomorrow",
+      "ts": 1768521600000,
+      "tsEnd": 1768608000000,
+      "norm": "2026-01-16/2026-01-17",
+      "confidence": "ASSUMED"
+    }
+  ]
+]

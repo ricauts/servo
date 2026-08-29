@@ -1,0 +1,3 @@
+The SLA allows 30 days for resolution and 2 hours for first response.
+The job ran for 45 minutes; the retry took 90 seconds.
+The maintenance window is PT1H30M and the backup takes 3 weeks.
