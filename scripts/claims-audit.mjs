@@ -1,17 +1,28 @@
-// claims lint — spec item reb-07, §1.3 and §13. `docs/POSITIONING.md` is the
-// canon; this script is the machine that enforces it. Everything the scanner
-// needs lives INSIDE the fenced ```banned-phrases block of that file — the
-// scan set, the matching rules, the block's own self-exclusion, the allow
-// list and the path- and section-scoped exemptions. The prose around the
-// fence explains the choices and carries no rule, so a scanner that reads
-// only the fence is correct. This one reads only the fence.
+// claims lint — spec items reb-07 and hyg-03, §1.3 and §13.
+// `docs/POSITIONING.md` is the canon; this script is the machine that enforces
+// it. Everything the scanner needs lives INSIDE the fenced ```banned-phrases
+// block of that file — the two scan sets, the matching rules, the block's own
+// self-exclusion, the allow list, and the phrase- and path-scoped exemptions.
+// The prose around the fence explains the choices and carries no rule, so a
+// scanner that reads only the fence is correct. This one reads only the fence.
 //
 //   node scripts/claims-audit.mjs        (npm run claims:audit)
 //
-// Exit 1 with one `file:line:` line per violation. Exit 1 also when the canon
-// itself does not parse or names a section that resolves to no heading — a
-// lint that silently reads an empty policy passes vacuously, which is worse
-// than failing.
+// TWO HALVES, ONE SCRIPT. A claim can be false in two ways, and each half
+// catches one of them:
+//
+//   PHRASE CHECK (reb-07)  — a surface says something that is not true today.
+//   DEAD-PATH CHECK (hyg-03) — a surface points at a file that is not there.
+//
+// They share this script, `npm run claims:audit` and one CI step deliberately:
+// there is one canon, so there is one machine. Their scan sets differ and the
+// canon states both, because product copy and path citations do not live in
+// the same files. The dead-path half has its own header further down.
+//
+// Exit 1 with one `file:line:column:` line per violation. Exit 1 also when the
+// canon itself does not parse, names a section that resolves to no heading, or
+// declares a surface that has gone missing — a lint that silently reads an
+// empty policy passes vacuously, which is worse than failing.
 //
 // THE FOUR RULES THAT ARE EASY TO GET WRONG
 //
@@ -42,7 +53,7 @@
 // would still need this extractor written first; and its scalars are arbitrary
 // phrases, which a YAML parser would coerce (`12.10` -> 12.1, `null` -> null).
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -61,6 +72,12 @@ export const FENCE_NAME = "banned-phrases";
  * @property {string|null} until            // the item that retires it
  * @property {boolean} enforced             // false = recorded policy, inert
  *
+ * @typedef {object} PathExemptEntry
+ * @property {string[]} target   // globs over the referenced path
+ * @property {string[]} paths    // globs over the scanned files it applies to
+ * @property {string} reason
+ * @property {string|null} until // the item that retires it
+ *
  * @typedef {object} Canon
  * @property {string[]} scan
  * @property {string[]} unscanned
@@ -69,6 +86,27 @@ export const FENCE_NAME = "banned-phrases";
  * @property {string[]} banned
  * @property {string[]} allow
  * @property {ExemptEntry[]} exempt
+ * @property {string[]} pathsScan
+ * @property {string[]} pathsUnscanned
+ * @property {{ path: string, reason: string }[]} pathsUnscannedEntries
+ * @property {number} pathsExemptMalformed
+ * @property {{ separatorRequired?: boolean, anchored?: boolean }} pathsMatching
+ * @property {PathExemptEntry[]} pathsExempt
+ * @property {string[]} [problems]
+ *
+ * @typedef {object} PathCandidate
+ * @property {string} raw
+ * @property {number} line
+ * @property {number} column
+ * @property {"code"|"link"} kind
+ *
+ * @typedef {object} PathFinding
+ * @property {string} file
+ * @property {number} line
+ * @property {number} column
+ * @property {string} target
+ * @property {"code"|"link"} kind
+ * @property {number} [exemptIndex]
  *
  * @typedef {object} Violation
  * @property {string} file
@@ -308,6 +346,34 @@ export function parseCanonBlock(markdown, name = FENCE_NAME) {
     selfExclude: raw.selfExclude && typeof raw.selfExclude === "object" ? raw.selfExclude : {},
     banned: asStrings(raw.banned),
     allow: asStrings(raw.allow),
+    // The dead-path check (hyg-03) reads its own three keys. Its scan set is
+    // deliberately NOT `scan:`: it covers THIRD_PARTY.md and recurses into
+    // docs/design/, neither of which carries user-visible product copy, and it
+    // does not cover package.json, which holds no prose path reference.
+    pathsScan: asStrings(raw["paths-scan"]),
+    pathsUnscanned: asList(raw["paths-unscanned"]).map((e) =>
+      e && typeof e === "object" ? String(e.path) : String(e),
+    ),
+    // Kept with their reasons: an exclusion is how a file leaves the check, so
+    // an unexplained one is exactly the edit nobody should be able to make
+    // quietly.
+    pathsUnscannedEntries: asList(raw["paths-unscanned"]).map((e) =>
+      e && typeof e === "object"
+        ? { path: String(e.path ?? ""), reason: e.reason == null ? "" : String(e.reason) }
+        : { path: String(e), reason: "" },
+    ),
+    // Entries that were not maps at all are counted, not silently dropped.
+    pathsExemptMalformed: asList(raw["paths-exempt"]).filter((e) => !e || typeof e !== "object").length,
+    pathsMatching:
+      raw["paths-matching"] && typeof raw["paths-matching"] === "object" ? raw["paths-matching"] : {},
+    pathsExempt: asList(raw["paths-exempt"])
+      .filter((e) => e && typeof e === "object")
+      .map((e) => ({
+        target: asStrings(e.target),
+        paths: asStrings(e.paths),
+        reason: e.reason == null ? "" : String(e.reason),
+        until: e.until == null ? null : String(e.until),
+      })),
     exempt: asList(raw.exempt)
       .filter((e) => e && typeof e === "object")
       .map((e) => ({
@@ -348,6 +414,43 @@ export function validateCanon(canon) {
     if (!e.phrase) errors.push(`canon: exempt[${n}] has no phrase`);
     if (!e.paths.length) errors.push(`canon: exempt[${n}] (${e.phrase}) has no paths`);
     if (!e.reason) errors.push(`canon: exempt[${n}] (${e.phrase}) has no reason`);
+  });
+  // The dead-path half of the canon (hyg-03), held to the same standard: a
+  // policy that parsed to nothing must fail loudly rather than pass vacuously.
+  const pathsMatching = canon.pathsMatching ?? {};
+  if (!(canon.pathsScan ?? []).length) {
+    errors.push("canon: `paths-scan:` is empty — the dead-path check would scan nothing");
+  }
+  if (pathsMatching.anchored !== true) {
+    errors.push("canon: `paths-matching.anchored` is not true — this scanner implements only that mode");
+  }
+  if (pathsMatching.separatorRequired !== true) {
+    errors.push(
+      "canon: `paths-matching.separatorRequired` is not true — this scanner implements only that mode",
+    );
+  }
+  for (const key of Object.keys(pathsMatching)) {
+    // A misspelled mode reads as "not set", which would silently select a
+    // matching behaviour nobody asked for.
+    if (key !== "anchored" && key !== "separatorRequired") {
+      errors.push(`canon: \`paths-matching.${key}\` is not a mode this scanner knows`);
+    }
+  }
+  for (const e of canon.pathsUnscannedEntries ?? []) {
+    if (!e.path) errors.push("canon: a `paths-unscanned` entry has no path");
+    else if (!e.reason) {
+      errors.push(`canon: \`paths-unscanned\` entry \`${e.path}\` has no reason — an unexplained exclusion`);
+    }
+  }
+  if (canon.pathsExemptMalformed) {
+    errors.push(
+      `canon: ${canon.pathsExemptMalformed} \`paths-exempt\` entr(ies) are not maps and were dropped`,
+    );
+  }
+  (canon.pathsExempt ?? []).forEach((e, n) => {
+    if (!e.target.length) errors.push(`canon: paths-exempt[${n}] has no target`);
+    if (!e.paths.length) errors.push(`canon: paths-exempt[${n}] (${e.target.join(", ")}) has no paths`);
+    if (!e.reason) errors.push(`canon: paths-exempt[${n}] (${e.target.join(", ")}) has no reason`);
   });
   return errors;
 }
@@ -431,13 +534,26 @@ const sameSection = (a, b) => String(a).trim().toLowerCase() === String(b).trim(
  * The scan set
  * ------------------------------------------------------------------ */
 
-/** `docs/*.md` matches one segment and does not recurse. */
+/**
+ * `docs/*.md` matches one segment and does not recurse. A whole segment of
+ * `**` is the one recursive form, and it spans zero or more segments, so
+ * `docs/**` + `/*.md` reaches both `docs/ARCHITECTURE.md` and
+ * `docs/design/ux.md`. A `*` anywhere else stays single-segment — the
+ * banned-phrase scan set depends on that and must not widen here.
+ */
 export function globToRegExp(pattern) {
-  const escaped = String(pattern)
-    .split("/")
-    .map((seg) => seg.replace(ESCAPE_RE, "\\$&").replace(/\\\*/g, "[^/]*"))
-    .join("/");
-  return new RegExp(`^${escaped}$`);
+  const segs = String(pattern).split("/");
+  const parts = [];
+  for (let i = 0; i < segs.length; i++) {
+    if (segs[i] === "**") {
+      // Trailing `**` may also match nothing, so `a/**` covers `a/b` and `a`.
+      parts.push(i === segs.length - 1 ? "(?:[^/]+(?:/[^/]+)*)?" : "(?:[^/]+/)*");
+      continue;
+    }
+    parts.push(segs[i].replace(ESCAPE_RE, "\\$&").replace(/\\\*/g, "[^/]*"));
+    if (i < segs.length - 1) parts.push("/");
+  }
+  return new RegExp(`^${parts.join("")}$`);
 }
 
 /** @type {(file: string, patterns: string[]) => boolean} */
@@ -625,6 +741,444 @@ export function validateSections(canon, files) {
 }
 
 /* ------------------------------------------------------------------ *
+ * The dead-path check — spec item hyg-03
+ * ------------------------------------------------------------------ *
+ *
+ * A claim can be false in two ways. It can say something untrue, which the
+ * banned-phrase half catches; or it can point at a file that is not there,
+ * which is what this half catches. `hyg-02` repaired four such references by
+ * hand; this is the check that keeps them repaired.
+ *
+ * WHAT COUNTS AS A REFERENCE. Two forms, both from the item: a path written
+ * inside single-backtick inline code, and a markdown link or image target.
+ * They resolve differently and that difference is the rule, not a detail:
+ *
+ *   - A LINK TARGET is resolved relative to the document that contains it,
+ *     because that is what markdown does. `[the contract](CONTRACT.md)` inside
+ *     docs/ARCHITECTURE.md means docs/CONTRACT.md, and reading it as
+ *     repo-relative would report three healthy links as dead.
+ *   - AN INLINE-CODE PATH is resolved from the repository root, because that
+ *     is how every one of them is written in this tree.
+ *
+ * WHAT IS NOT A REFERENCE, and why each exclusion has to exist. Prose is full
+ * of backticked strings that are not repo paths, and admitting them would bury
+ * a real finding under noise:
+ *
+ *   1. FENCED BLOCKS ARE SKIPPED. A ``` block is a sample, not an assertion.
+ *      The canon's own fence names `docs/migrating-to-postgres.md` as exemption
+ *      DATA; scanning it would make the policy trip the check it defines.
+ *   2. A URI SCHEME in the first segment: `node:sqlite`, `https://…`,
+ *      `mailto:`, and Windows `C:/…`. Tested on the first segment only, so a
+ *      trailing `:12` line reference does not look like a scheme.
+ *   3. A LEADING `@` is an npm scope (`@modelcontextprotocol/sdk`); a leading
+ *      `/` is an absolute path or an HTTP route (`POST /api/inbound/email`);
+ *      a leading `#` is an anchor.
+ *   4. PLACEHOLDERS — anything holding `<`, `>`, `{`, `}` or `…`. The tree
+ *      writes `skills/<slug>/SKILL.md` and means the shape, not a file.
+ *   5. SEPARATOR REQUIRED (`paths-matching.separatorRequired`). A bare
+ *      basename in backticks — `engine.ts`, `SKILL.md`, `readme.md` — is a
+ *      NAME, not a location. Reading it as repo-root-relative reported nine
+ *      false positives on this tree, `SKILL.md` five times over.
+ *   6. ANCHORED (`paths-matching.anchored`), WITH A FILE-EXTENSION ESCAPE.
+ *      An inline-code path counts as repo-relative when its first segment
+ *      names something at the repository root — OR when it ends in an
+ *      extension this repository uses. The anchor alone is not enough:
+ *      `neverexisted/some/file.ts` would slip through it, which is exactly
+ *      the shape this check exists for, so an extension admits a candidate
+ *      whatever its first segment says. The anchor still does the work for
+ *      extension-less references, where a GitHub coordinate
+ *      (`paperclipai/paperclip`), a container image (`pgvector/pgvector:pg17`)
+ *      and a JSON-RPC method (`tools/call`) are indistinguishable from a
+ *      directory path by shape alone.
+ *      THE RESIDUE IS REAL AND IS NOT HIDDEN: a reference to a DIRECTORY that
+ *      was never created, whose first segment is also absent, is invisible to
+ *      this check. It is printed as a skipped-unanchored count every run, so
+ *      the gap is legible rather than silent.
+ *
+ * A trailing location suffix (`src/lib/mcp.ts:104-121`, `:37,80`, `:19/41`)
+ * and a `#fragment` are stripped before resolution: the file is the reference,
+ * the line number is a coordinate inside it.
+ *
+ * A GLOB TARGET IS RESOLVED BY GLOBBING and matching nothing is a failure —
+ * `agents/*.md` passes because four files match, and it would fail the day the
+ * directory emptied, which is the whole point of writing it as a glob.
+ *
+ * WHAT A CLEAN RUN DOES AND DOES NOT PROVE. The summary line reports every
+ * number a reader needs to judge it — references checked, how many RESOLVED
+ * (which is not the same as checked, because exemptions suppress the rest),
+ * how many were exempt, how many were skipped as not repo-relative, and how
+ * many inline spans were not path-shaped at all. A clean run means no
+ * unexempted reference in the scanned set is dead. It is NOT by itself proof
+ * that any particular historical reference was repaired: three of the four
+ * `hyg-02` fixed are out of this check's reach by design — two are bare
+ * basenames (`THIRD-PARTY.md`, `tailwind.config.ts`, rule 5) and one lives in
+ * package.json, which holds no prose path reference and is not in
+ * `paths-scan`. Those four are proved repaired by a direct test in
+ * tests/claims-audit.test.ts that resolves each against the tree, not by this
+ * script's exit code.
+ *
+ * KNOWN LIMITS, disclosed rather than discovered later. Each was found by an
+ * adversarial pass over this code and each is a MISS, never a false alarm:
+ *
+ *   - Candidates are matched PER LINE, so a markdown link whose target sits on
+ *     the next line, or an inline-code span wrapped across a line break, is not
+ *     seen. Per-line matching is also what makes the reported line and column
+ *     exact, which is the trade taken.
+ *   - The tree is built from the filesystem, not from `git ls-files`, so a
+ *     reference to an untracked or gitignored file resolves on a working
+ *     checkout and would fail in CI. The direction is safe — CI is the strict
+ *     one — but the two are not identical.
+ *   - An unanchored, extension-less DIRECTORY reference is skipped (rule 6).
+ *   - Only the five surfaces in `paths-scan` are covered. Source comments, UI
+ *     copy and `package.json` are not, and `package.json`'s `prisma.seed` is a
+ *     JSON value rather than prose, so no prose scanner would reach it.
+ */
+
+/** Directories never walked when building the tree the check resolves against. */
+export const TREE_SKIP = new Set([".git", "node_modules", ".next", ".claude", ".spec-build"]);
+
+/**
+ * Every repo-relative path in the tree, files AND directories, so a reference
+ * to `prisma/migrations/` resolves as readily as one to a file.
+ *
+ * `.claude/` is skipped for the reason `hyg-01` records: it holds two full
+ * worktree copies, and a stale copy inside it would make a deleted file look
+ * present.
+ *
+ * @param {(dir: string) => { name: string, isDir: boolean }[]} listDir
+ * @returns {Set<string>}
+ */
+export function collectTree(listDir) {
+  const out = new Set();
+  // A runaway guard, not a policy: the tree is 9 deep today. `isDirectory()`
+  // is false for a symlink, so a symlinked directory is never descended and
+  // there is no cycle to guard against; this cap only bounds a pathological
+  // tree. Truncating would make a real file look MISSING, which fails loudly.
+  const walk = (dir, depth) => {
+    if (depth > 32) return;
+    for (const entry of listDir(dir)) {
+      if (dir === "" && TREE_SKIP.has(entry.name)) continue;
+      const rel = dir === "" ? entry.name : `${dir}/${entry.name}`;
+      out.add(rel);
+      if (entry.isDir) walk(rel, depth + 1);
+    }
+  };
+  walk("", 0);
+  return out;
+}
+
+/** The top-level entries a repo-relative inline-code path may be anchored on. */
+export const topLevelNames = (tree) => new Set([...tree].filter((p) => !p.includes("/")));
+
+/**
+ * File extensions this repository actually holds. A candidate ending in one is
+ * a FILE reference and is checked even when it is not anchored — otherwise
+ * `neverexisted/some/file.ts` would be skipped for the same reason
+ * `paperclipai/paperclip` is, and the check would miss the very shape it is
+ * for. Extension-less unanchored references stay skipped, and that residue is
+ * counted and printed.
+ */
+export const REPO_FILE_EXT =
+  /\.(md|markdown|txt|ts|tsx|js|jsx|mjs|cjs|json|jsonc|sql|prisma|css|scss|ya?ml|sh|bash|svg|html|htm|toml|lock|xlsx|xls|csv|pdf|png|jpe?g|gif|webp|ico|mp4|woff2?)$/i;
+
+/**
+ * Inline-code spans and markdown link/image targets, outside fenced blocks.
+ * Pure: text in, candidates out.
+ * @returns {PathCandidate[]}
+ */
+export function pathCandidates(text) {
+  const body = String(text ?? "");
+  const fenced = new Set();
+  // Only a TERMINATED block masks lines. An unterminated ``` would otherwise
+  // run to EOF and silently un-scan the rest of the file — the same hole
+  // `unterminatedFences` closes for the phrase half, and `openFenceErrors`
+  // below is what makes it loud here rather than merely harmless.
+  for (const b of fencedBlocks(body)) {
+    if (!b.terminated) continue;
+    for (let n = b.start; n <= b.end; n++) fenced.add(n);
+  }
+  const out = [];
+  body.split(/\r?\n/).forEach((line, i) => {
+    const n = i + 1;
+    if (fenced.has(n)) return;
+
+    // Inline code first, and its spans MASK the link forms below: markdown
+    // link syntax written inside backticks — `[x](y.md)` — is a sample of
+    // syntax, not a link, and reading it as one is a false positive.
+    const codeSpans = [];
+    for (const m of line.matchAll(/(`+)([^`]+?)\1/g)) {
+      const start = m.index + m[1].length;
+      codeSpans.push({ start, end: start + m[2].length });
+      out.push({ raw: m[2], line: n, column: start + 1, kind: "code" });
+    }
+    const inCode = (idx) => codeSpans.some((s) => idx >= s.start && idx < s.end);
+    const push = (raw, at) => {
+      if (inCode(at)) return;
+      out.push({ raw, line: n, column: line.indexOf(raw, at) + 1, kind: "link" });
+    };
+
+    // Inline links and images, with an optional <target> and a "title".
+    for (const m of line.matchAll(/!?\[[^\]\n]*\]\(\s*<?([^)>\s]+)>?\s*(?:"[^"]*")?\s*\)/g)) {
+      push(m[1], m.index);
+    }
+    // Reference-style definitions: `[ref]: path "title"`. The definition line
+    // is where the target actually lives, so this is the line to report.
+    const def = /^\s{0,3}\[[^\]\n]+\]:\s*<?([^>\s]+)>?/.exec(line);
+    if (def) push(def[1], 0);
+    // HTML in markdown. README ships six <img src> screenshots, and without
+    // this a deleted screenshot keeps the lint green.
+    for (const m of line.matchAll(/<(?:img[^>]*?\ssrc|a[^>]*?\shref)\s*=\s*["']([^"']+)["']/gi)) {
+      push(m[1], m.index);
+    }
+  });
+  return out;
+}
+
+/**
+ * ANY unterminated fence in a dead-path-scanned file is an error, not just an
+ * unterminated `banned-phrases` one: a stray ``` changes how every line after
+ * it reads, and a reader who cannot see the block boundaries cannot trust the
+ * clean run. Reported loudly so the cause is named rather than inferred.
+ * @returns {string[]}
+ */
+export function openFenceErrors(relPath, text) {
+  return fencedBlocks(text)
+    .filter((b) => !b.terminated)
+    .map(
+      (b) =>
+        `${relPath}:${b.start}: unterminated \`\`\` fence — every line after it reads as prose, ` +
+        `and the block boundaries in this file cannot be trusted`,
+    );
+}
+
+/** Strip a `#fragment` and a trailing location suffix, then trailing punctuation. */
+export function normalizePathRef(raw) {
+  let s = String(raw ?? "").trim();
+  // `./docs/x.md` is `docs/x.md`. Without this the leading `.` segment made it
+  // look like an escape out of the repository and it was dropped uncounted.
+  s = s.replace(/^(?:\.\/)+/, "");
+  s = s.replace(/#.*$/, "");
+  // `:12`, `:12:34`, `:37,80`, `:22-39`, `:19/41` — a coordinate, not the file.
+  s = s.replace(/:(?=\d).*$/, "");
+  s = s.replace(/[.,;:]+$/, "");
+  return s.trim();
+}
+
+/**
+ * Decide whether a candidate is a repo path reference this check owns, and
+ * return it normalized. `null` means "not a reference"; the second element of
+ * the tuple says WHY, so an unanchored skip can be counted rather than lost.
+ * @returns {{ path: string|null, skip: string|null }}
+ */
+export function classifyPathRef(raw, kind, topLevel) {
+  const s = String(raw ?? "").trim();
+  if (!s || /\s/.test(s)) return { path: null, skip: null };
+  if (s.startsWith("@") || s.startsWith("#") || s.startsWith("/")) return { path: null, skip: null };
+  if (/[<>{}|]|\.\.\.|…/.test(s)) return { path: null, skip: null };
+  // A scheme lives in the FIRST segment; `src/lib/mcp.ts:104` has none.
+  const firstRaw = s.split("/")[0];
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(firstRaw)) return { path: null, skip: null };
+  const clean = normalizePathRef(s);
+  if (!clean || clean === "." || clean === "..") return { path: null, skip: null };
+  if (kind === "link") return { path: clean, skip: null };
+  if (!clean.includes("/")) return { path: null, skip: null }; // a name, not a location
+  const first = clean.split("/")[0];
+  if (first === "." || first === "..") return { path: null, skip: null };
+  // Anchored, OR naming a file by an extension this repository uses. The
+  // second route is what stops the anchor rule from swallowing a dangling
+  // file reference whose directory was never created.
+  if (topLevel.has(first) || REPO_FILE_EXT.test(clean)) return { path: clean, skip: null };
+  return { path: null, skip: "unanchored" };
+}
+
+/**
+ * Resolve a classified reference to a repo-relative target: link targets
+ * against the containing document, inline-code paths against the root.
+ * Returns null when the target escapes the repository.
+ */
+export function resolvePathRef(clean, kind, containingFile) {
+  const base = kind === "link" ? path.posix.dirname(containingFile) : ".";
+  const joined = path.posix.normalize(path.posix.join(base, clean));
+  const target = joined.replace(/\/+$/, "");
+  if (!target || target === "." || target.startsWith("..")) return null;
+  return target;
+}
+
+/**
+ * Does `target` resolve in the tree? A glob resolves when at least one path
+ * matches it; matching nothing is the failure the item names.
+ */
+export function treeResolves(tree, target) {
+  if (!target.includes("*")) return tree.has(target);
+  const re = globToRegExp(target);
+  for (const p of tree) if (re.test(p)) return true;
+  return false;
+}
+
+/**
+ * Every reference in one file that does not resolve.
+ * @returns {{ findings: PathFinding[], skippedUnanchored: number, skippedNotPathShaped: number, skippedOutsideRepo: number, unresolved: number, checked: number }}
+ */
+export function scanFilePaths(relPath, text, tree, topLevel) {
+  const findings = [];
+  const seen = new Set();
+  let skippedUnanchored = 0;
+  let skippedNotPathShaped = 0;
+  let skippedOutsideRepo = 0;
+  let unresolved = 0;
+  let checked = 0;
+  for (const c of pathCandidates(text)) {
+    const { path: clean, skip } = classifyPathRef(c.raw, c.kind, topLevel);
+    if (skip === "unanchored") skippedUnanchored += 1;
+    // Every dropped candidate is counted, not only the interesting ones: an
+    // undisclosed skip class is how a lint looks thorough while doing little.
+    if (clean === null && skip === null) skippedNotPathShaped += 1;
+    if (clean === null) continue;
+    const target = resolvePathRef(clean, c.kind, relPath);
+    if (target === null) {
+      // `../../elsewhere` resolves outside the tree. Counted, not lost: the
+      // contract is that EVERY dropped candidate lands in some counter.
+      skippedOutsideRepo += 1;
+      continue;
+    }
+    checked += 1;
+    if (treeResolves(tree, target)) continue;
+    // Counted BEFORE the dedup below. `docs/design/postgres.md:242` writes
+    // `prisma/*.db` twice on one line: both are checked and both fail, so
+    // deriving "resolved" from the deduped finding list would report the
+    // second dead reference as healthy.
+    unresolved += 1;
+    const key = `${c.line}:${target}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    findings.push({ file: relPath, line: c.line, column: c.column, target, kind: c.kind });
+  }
+  return { findings, skippedUnanchored, skippedNotPathShaped, skippedOutsideRepo, unresolved, checked };
+}
+
+/**
+ * A `paths-exempt` entry covers a finding when both its globs match.
+ * @param {PathExemptEntry} entry
+ * @param {PathFinding} finding
+ */
+export function pathExemptionCovers(entry, finding) {
+  return matchesAnyPath(finding.file, entry.paths) && matchesAnyPath(finding.target, entry.target);
+}
+
+/**
+ * Split dead-path findings into reported and exempt, and report which
+ * exemptions matched nothing. A dead exemption is a NOTE, not an error: the
+ * day `db-07` creates `docs/migrating-to-postgres.md` its entry goes quiet,
+ * and failing CI inside an unrelated tick would be a booby trap. It is still
+ * printed, because a silent dead exemption is exactly the gap owner question
+ * 39(g) records against the phrase half.
+ * @param {PathFinding[]} findings
+ * @param {Canon} canon
+ * @returns {{ reported: PathFinding[], exempted: PathFinding[], notes: string[] }}
+ */
+export function applyPathExemptions(findings, canon) {
+  const reported = [];
+  const exempted = [];
+  const used = new Set();
+  const usedTargets = new Set();
+  for (const f of findings) {
+    const idx = canon.pathsExempt.findIndex((e) => pathExemptionCovers(e, f));
+    if (idx === -1) {
+      reported.push(f);
+      continue;
+    }
+    used.add(idx);
+    // Liveness is tracked PER TARGET, not per entry: an entry holding twelve
+    // targets of which one still matches would otherwise report nothing, and
+    // eleven dead exemptions would accumulate invisibly inside a live entry.
+    for (const t of canon.pathsExempt[idx].target) {
+      if (matchesAnyPath(f.target, [t])) usedTargets.add(`${idx}:${t}`);
+    }
+    exempted.push({ ...f, exemptIndex: idx });
+  }
+  const notes = canon.pathsExempt.flatMap((e, i) => {
+    if (!used.has(i)) return [`paths-exempt entry ${i} (${e.target.join(", ")}) matched nothing`];
+    const dead = e.target.filter((t) => !usedTargets.has(`${i}:${t}`));
+    return dead.length ? [`paths-exempt entry ${i}: target(s) ${dead.join(", ")} matched nothing`] : [];
+  });
+  // One summary line rather than one per entry: the useful signal is WHICH
+  // items still owe a file, not the target list, which is in the canon.
+  const items = [...new Set([...used].map((i) => canon.pathsExempt[i].until).filter(Boolean))].sort();
+  const transitional = items.length
+    ? [`paths-exempt: ${items.length} exemption group(s) transitional until ${items.join(", ")}`]
+    : [];
+  return { reported, exempted, notes: [...new Set([...transitional, ...notes])] };
+}
+
+/**
+ * A declared dead-path surface that has gone missing must fail, for the same
+ * reason `scanSetErrors` exists: a rename that quietly un-enforces a file
+ * while the lint still prints OK is the silent pass this script swears off.
+ */
+export function pathScanSetErrors(canon, present) {
+  const errors = [];
+  for (const pattern of canon.pathsScan) {
+    const hit = pattern.includes("*")
+      ? present.some((f) => globToRegExp(pattern).test(f))
+      : present.includes(pattern);
+    if (!hit) {
+      errors.push(`canon: paths-scan entry \`${pattern}\` matched no file — a declared surface is missing`);
+    }
+  }
+  if (!present.length) errors.push("canon: the dead-path scan set is empty — nothing would be checked");
+  return errors;
+}
+
+/**
+ * The dead-path audit over its own scan set.
+ * @param {SourceFile[]} files
+ * @param {Canon} canon
+ * @param {Set<string>} tree
+ */
+export function auditPaths(files, canon, tree) {
+  const topLevel = topLevelNames(tree);
+  const errors = [
+    ...pathScanSetErrors(canon, files.map((f) => f.path)),
+    ...files.flatMap((f) => openFenceErrors(f.path, f.text)),
+  ];
+  const raw = [];
+  let skippedUnanchored = 0;
+  let skippedNotPathShaped = 0;
+  let skippedOutsideRepo = 0;
+  let unresolved = 0;
+  let checked = 0;
+  for (const f of files) {
+    const r = scanFilePaths(f.path, f.text, tree, topLevel);
+    raw.push(...r.findings);
+    skippedUnanchored += r.skippedUnanchored;
+    skippedNotPathShaped += r.skippedNotPathShaped;
+    skippedOutsideRepo += r.skippedOutsideRepo;
+    unresolved += r.unresolved;
+    checked += r.checked;
+  }
+  raw.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column);
+  const { reported, exempted, notes } = applyPathExemptions(raw, canon);
+  return {
+    missing: reported,
+    exempted,
+    notes,
+    errors,
+    skippedUnanchored,
+    skippedNotPathShaped,
+    skippedOutsideRepo,
+    unresolved,
+    checked,
+    // `checked` counts every reference put to the tree; only these RESOLVED.
+    // Reporting `checked` as "resolved" would overstate a clean run by the
+    // size of the exemption list, which is the number a reader most needs.
+    // Derived from `unresolved`, NOT from the deduped finding list: two dead
+    // references to the same target on one line are two failures and one
+    // finding, and subtracting findings would report the second as healthy.
+    resolved: checked - unresolved,
+  };
+}
+
+/* ------------------------------------------------------------------ *
  * The whole audit
  * ------------------------------------------------------------------ */
 
@@ -660,6 +1214,51 @@ function listDir(dir) {
   }
 }
 
+/** Files and directories both, for `collectTree`. */
+function listEntries(dir) {
+  try {
+    return readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).map((e) => ({
+      name: e.name,
+      isDir: e.isDirectory(),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Expand the dead-path scan set. `docs/**\/*.md` recurses, so this walks the
+ * tree rather than one directory, which is what `expandScanSet`'s file-only
+ * lister cannot do. Exported so both of its rules — the directory filter and
+ * the `paths-unscanned` filter — are driven by tests rather than only by the
+ * CLI, where a deletion would go unnoticed.
+ * @param {Canon} canon
+ * @param {Set<string>} tree
+ * @param {(rel: string) => boolean} isFile
+ * @returns {string[]}
+ */
+export function expandPathScanSet(canon, tree, isFile) {
+  const found = new Set();
+  for (const pattern of canon.pathsScan) {
+    if (!pattern.includes("*")) {
+      if (tree.has(pattern)) found.add(pattern);
+      continue;
+    }
+    const re = globToRegExp(pattern);
+    for (const p of tree) if (re.test(p)) found.add(p);
+  }
+  return (
+    [...found]
+      // A glob such as `docs/**` matches directories too, and reading one is an
+      // uncaught EISDIR rather than a diagnostic. Directories are dropped here;
+      // `pathScanSetErrors` still fails a pattern that matched no FILE at all,
+      // so a scan entry that resolves only to directories is loud, not silent.
+      .filter((f) => isFile(f))
+      .filter((f) => !matchesAnyPath(f, canon.pathsUnscanned))
+      .sort()
+  );
+}
+
 function main() {
   const canonAbs = path.join(REPO_ROOT, CANON_PATH);
   if (!existsSync(canonAbs)) {
@@ -680,7 +1279,23 @@ function main() {
 
   const { violations, exempted, notes, errors } = audit(files, canon);
 
-  for (const e of errors) console.error(`claims-audit: ${e}`);
+  // The dead-path check (hyg-03) runs in the SAME script, under the same
+  // `npm run claims:audit` and the same CI step. Its scan set is its own.
+  const tree = collectTree(listEntries);
+  const isFile = (rel) => {
+    try {
+      return statSync(path.join(REPO_ROOT, rel)).isFile();
+    } catch {
+      return false;
+    }
+  };
+  const pathFiles = expandPathScanSet(canon, tree, isFile).map((rel) => ({
+    path: rel,
+    text: readFileSync(path.join(REPO_ROOT, rel), "utf8"),
+  }));
+  const paths = auditPaths(pathFiles, canon, tree);
+
+  for (const e of [...errors, ...paths.errors]) console.error(`claims-audit: ${e}`);
   for (const v of violations) {
     const suffix = v.note ? ` (${v.note})` : "";
     // A phrase matched across a line wrap carries the newline; keep one
@@ -688,16 +1303,31 @@ function main() {
     const matched = v.text.replace(/\s+/g, " ");
     console.error(`claims-audit: ${v.file}:${v.line}:${v.column}: banned phrase "${matched}"${suffix}`);
   }
-  if (errors.length + violations.length > 0) {
+  for (const m of paths.missing) {
     console.error(
-      `claims-audit: FAILED — ${violations.length} violation(s), ${errors.length} canon error(s)`,
+      `claims-audit: ${m.file}:${m.line}:${m.column}: missing path "${m.target}" ` +
+        `(${m.kind === "link" ? "markdown link target" : "inline code"})`,
+    );
+  }
+  const failures = errors.length + paths.errors.length + violations.length + paths.missing.length;
+  if (failures > 0) {
+    console.error(
+      `claims-audit: FAILED — ${violations.length} banned phrase(s), ${paths.missing.length} missing path(s), ` +
+        `${errors.length + paths.errors.length} canon error(s)`,
     );
     process.exit(1);
   }
-  for (const n of notes) console.log(`claims-audit: ${n}`);
+  for (const n of [...notes, ...paths.notes]) console.log(`claims-audit: ${n}`);
   console.log(
     `claims-audit: OK (${files.length} files, ${canon.banned.length} banned phrases, ` +
       `${canon.allow.length} allowed, ${exempted.length} exempt occurrence(s))`,
+  );
+  console.log(
+    `claims-audit: OK (${pathFiles.length} files, ${paths.checked} path reference(s) checked, ` +
+      `${paths.resolved} resolved, ${paths.exempted.length} exempt, ` +
+      `${paths.skippedUnanchored} skipped as not repo-relative, ` +
+      `${paths.skippedOutsideRepo} outside the repository, ` +
+      `${paths.skippedNotPathShaped} spans that are not path-shaped)`,
   );
 }
 
