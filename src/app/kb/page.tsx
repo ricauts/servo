@@ -2,10 +2,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
+import Link from "next/link";
 import { BookOpen, Lock } from "lucide-react";
 import EmptyState from "@/components/legacy/EmptyState";
 import KbUpload from "@/components/kb/KbUpload";
 import KbDocumentList from "@/components/kb/KbDocumentList";
+import KbAdminPanel from "@/components/kb/KbAdminPanel";
 import PageHeader from "@/components/shell/PageHeader";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +53,41 @@ export default async function KnowledgePage() {
   });
   const agentGrants = await db.kbGrant.count({ where: { subjectType: "AGENT" } });
 
+  // The admin panel (kb-17): collections, embeddings with the query-egress
+  // warning beside the field, auto-delivery toggles — kb.manage only.
+  let admin: React.ReactNode = null;
+  if (can(user, "kb.manage")) {
+    const [settings, collections] = await Promise.all([
+      db.setting.findMany({ where: { key: { startsWith: "kb." } } }),
+      db.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } } ),
+    ]);
+    const map = new Map(settings.map((s) => [s.key, s.value]));
+    const autodeliverCategories = settings
+      .filter((s) => s.key.startsWith("kb.autodeliver.") && s.key !== "kb.autodeliver.dailyCap" && s.value === "true")
+      .map((s) => s.key.slice("kb.autodeliver.".length));
+    admin = (
+      <KbAdminPanel
+        settings={{
+          embedBaseUrl: map.get("kb.embed.baseUrl") ?? "",
+          embedModel: map.get("kb.embed.model") ?? "",
+          embedDimensions: map.get("kb.embed.dimensions") ?? "",
+          autodeliverCategories,
+          dailyCap: map.get("kb.autodeliver.dailyCap") ?? "",
+        }}
+        collections={collections}
+      />
+    );
+  }
+
+  // The audit view (kb-17): auto-delivered replies, always visible after
+  // the fact — full timeline/webhook parity shipped with kb-14.
+  const autoDelivered = await db.replyDraft.findMany({
+    where: { status: "SENT", autoDelivered: true },
+    include: { ticket: { select: { number: true, title: true } } },
+    orderBy: { decidedAt: "desc" },
+    take: 10,
+  });
+
   return (
     <div>
       <PageHeader title="Knowledge" description="The company's own documents — manuals, spreadsheets, procedures — searchable by the desk's agents with citations back to the exact page, sheet or lines." />
@@ -66,6 +103,26 @@ export default async function KnowledgePage() {
         />
         </div>
       )}
+        {admin}
+
+        {autoDelivered.length > 0 && (
+          <section className="mt-6 rounded-md border border-border bg-card p-4">
+            <h2 className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
+              Auto-delivered replies · audit
+            </h2>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {autoDelivered.map((d) => (
+                <li key={d.id} className="text-xs text-muted-foreground">
+                  <span className="font-mono">#{d.ticket.number}</span>{" "}
+                  <Link href={`/tickets/${d.ticketId}`} className="underline-offset-2 hover:underline">
+                    {d.ticket.title}
+                  </Link>{" "}
+                  · sent {d.decidedAt?.toISOString().slice(0, 16).replace("T", " ")} UTC
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { can } from "@/lib/permissions";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import { relatedDocuments } from "@/lib/kb/graph";
 import { statusCopy } from "@/components/kb/KbDocumentList";
+import KbSharePanel from "@/components/kb/KbSharePanel";
 import PageHeader from "@/components/shell/PageHeader";
 import EmptyState from "@/components/legacy/EmptyState";
 
@@ -85,6 +86,8 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       </div>
       {status.hint && <p className="mt-1.5 text-xs text-muted-foreground">{status.hint}</p>}
       {doc.summary && <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{doc.summary}</p>}
+
+      {can(user, "kb.share") && <KbSharePanel documentId={doc.id} />}
 
       {agentReaders === 0 && (
         <p
