@@ -123,7 +123,7 @@ describe("one statement, CTE outermost, no JS scoring", () => {
     // The entitlement CTE is OUTERMOST (WITH human_docs...), the FROM joins
     // entitled, and no JS-side sort/scoring happened — the SELECT carries
     // the full ORDER BY.
-    expect(statements[0].trimStart().startsWith("WITH human_docs")).toBe(true);
+    expect(statements[0].trimStart().startsWith("WITH RECURSIVE human_docs")).toBe(true);
     expect(statements[0]).toMatch(/JOIN entitled e ON e\.id = d\.id/);
     expect(statements[0]).toMatch(/ORDER BY entity_hit DESC NULLS LAST, score DESC, document_id ASC/);
     expect(result.sources.length).toBeGreaterThan(0);
