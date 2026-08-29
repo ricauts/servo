@@ -115,8 +115,10 @@ export const historyTools: Record<string, ToolDef> = {
       const current = await currentTicket(ctx.ticketId);
 
       try {
-        // `mode: "insensitive"` compiles to ILIKE on PostgreSQL: search stays
-        // case-insensitive, as it was on SQLite's ASCII LIKE.
+        // Case-insensitive search is a contract (db-03): `mode:
+        // "insensitive"` is ILIKE on PostgreSQL — plain `contains` would be
+        // case-sensitive LIKE. tests/search-case.test.ts pins vpn/VPN/Vpn
+        // equivalence for this tool and for the queue's ?q= filter.
         const rows = (await db.ticket.findMany({
           where: {
             ...(current ? { id: { not: current.id } } : {}),
