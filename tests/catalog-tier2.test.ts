@@ -215,8 +215,10 @@ describe("salty MinHash with LSH bands", () => {
   it("the oracle sentence lives in the module header, and secret-store is untouched", () => {
     const header = readFileSync("src/lib/catalog/minhash.ts", "utf8").split("\n").slice(0, 12).join("\n");
     expect(header).toMatch(/membership oracle/i);
+    // Forbidden by MODULE NAME: the literal import path must not appear
+    // here either, or repo-refs parses this very line as the import. The
+    // module's only import is node:crypto, which is exactly right.
     const minhashSource = readFileSync("src/lib/catalog/minhash.ts", "utf8");
-    expect(minhashSource).not.toMatch(/from "@\/lib\/secret-store"/);
-    expect(minhashSource).not.toMatch(/import[^;]*secret/);
+    expect(minhashSource).not.toMatch(/secret-store/);
   });
 });
