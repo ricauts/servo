@@ -55,6 +55,36 @@ function writeClient(): PrismaClient {
 }
 
 /**
+ * q48(b), owner-authorised 2026-08-28: the sandbox refuses to be Servo's
+ * own database. URL-string comparisons fail open — the driver resolves
+ * spellings a parser does not (`?port=`, a repeated `?host=`, `0.0.0.0`,
+ * a socket path, an omitted database) — so the check that holds ASKS THE
+ * DATABASE THE DRIVER ACTUALLY REACHED whether it carries the desk's
+ * application tables. A catalog probe on first connection; the result is
+ * cached per process (the check runs once, not per statement).
+ */
+const APP_TABLES = ['"Ticket"', '"AgentRun"', '"Approval"'] as const;
+let ownDatabaseCheck: Promise<void> | null = null;
+
+function assertNotServoDatabase(client: PrismaClient): Promise<void> {
+  ownDatabaseCheck ??= (async () => {
+    const rows = (await client.$queryRawUnsafe(
+      `SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name IN ('Ticket', 'AgentRun', 'Approval')`,
+    )) as { table_name: string }[];
+    if (rows.length > 0) {
+      ownDatabaseCheck = null; // do not cache the refusal
+      throw new Error(
+        "OPS_DATABASE_URL points at Servo's own database — the ops sandbox " +
+          "must be a separate database. Refusing to run agent SQL against the desk.",
+      );
+    }
+  })();
+  return ownDatabaseCheck;
+}
+
+/**
  * One read-only query. The statement runs INSIDE a transaction that is
  * explicitly read-only — belt to the ro role's default_transaction_read_only
  * braces — so a mutation fails at the server even if the role default was
@@ -62,6 +92,7 @@ function writeClient(): PrismaClient {
  */
 export async function opsSelect(sql: string, params: unknown[] = []): Promise<unknown[]> {
   const client = readClient();
+  await assertNotServoDatabase(client);
   return client.$transaction(
     async (tx) => {
       await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
@@ -75,6 +106,7 @@ export async function opsSelect(sql: string, params: unknown[] = []): Promise<un
  *  affected rows. */
 export async function opsExecute(sql: string, params: unknown[] = []): Promise<number> {
   const client = writeClient();
+  await assertNotServoDatabase(client);
   return client.$executeRawUnsafe(sql, ...params);
 }
 
