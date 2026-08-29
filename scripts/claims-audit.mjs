@@ -843,7 +843,10 @@ export function validateSections(canon, files) {
  *     one — but the two are not identical.
  *   - An unanchored, extension-less DIRECTORY reference is skipped (rule 6),
  *     as is an unanchored path carrying an extension this repository does not
- *     use (`.rb`, `.py`). Both land in the printed unanchored counter.
+ *     use (`.rb`, `.py`), and any unanchored TWO-SEGMENT path, because
+ *     `owner/repo.js` and `dir/file.js` cannot be told apart and this tree
+ *     cites the first kind constantly. All land in the printed unanchored
+ *     counter.
  *   - Wrapping a region in a BALANCED pair of unindented fences still masks
  *     it. That is what a fence is for, and unlike the indented form it is a
  *     visible edit; `openFenceErrors` only catches an unbalanced one.
@@ -979,13 +982,18 @@ export function openFenceErrors(relPath, text) {
     );
 }
 
-/** Strip a `#fragment` and a trailing location suffix, then trailing punctuation. */
+/**
+ * Strip a `#fragment` or `?query`, a trailing location suffix, then trailing
+ * punctuation. `docs/POSITIONING.md?plain=1` is GitHub-idiomatic and names a
+ * file that exists; without the `?` arm it was reported missing — a false
+ * positive, which is worse than a miss because it fails CI on healthy copy.
+ */
 export function normalizePathRef(raw) {
   let s = String(raw ?? "").trim();
   // `./docs/x.md` is `docs/x.md`. Without this the leading `.` segment made it
   // look like an escape out of the repository and it was dropped uncounted.
   s = s.replace(/^(?:\.\/)+/, "");
-  s = s.replace(/#.*$/, "");
+  s = s.replace(/[#?].*$/, "");
   // `:12`, `:12:34`, `:37,80`, `:22-39`, `:19/41` — a coordinate, not the file.
   s = s.replace(/:(?=\d).*$/, "");
   s = s.replace(/[.,;:]+$/, "");
@@ -1015,7 +1023,19 @@ export function classifyPathRef(raw, kind, topLevel) {
   // Anchored, OR naming a file by an extension this repository uses. The
   // second route is what stops the anchor rule from swallowing a dangling
   // file reference whose directory was never created.
-  if (topLevel.has(first) || REPO_FILE_EXT.test(clean)) return { path: clean, skip: null };
+  //
+  // It does NOT fire on a TWO-SEGMENT unanchored path, because `owner/repo.js`
+  // and `dir/file.js` are the same shape and this repository's documents are
+  // full of the first kind: `vercel/next.js`, `mrdoob/three.js`,
+  // `lodash/merge.js`. THIRD_PARTY.md exists to cite upstream projects, so
+  // resolving those would fail CI on a healthy citation — a false positive,
+  // which costs more than the miss it prevents. The miss (a two-segment
+  // dangling file reference under a directory that does not exist) lands in
+  // the printed unanchored counter like every other one.
+  const deepEnough = clean.split("/").length > 2;
+  if (topLevel.has(first) || (deepEnough && REPO_FILE_EXT.test(clean))) {
+    return { path: clean, skip: null };
+  }
   return { path: null, skip: "unanchored" };
 }
 
