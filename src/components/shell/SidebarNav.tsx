@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { NAV_ICONS } from "@/components/shell/nav-icons";
 import type { NavEntry } from "@/components/shell/nav-items";
 
 const SECTION_LABELS: Partial<Record<NavEntry["section"], string>> = {
@@ -29,6 +30,7 @@ export default function SidebarNav({
   return (
     <nav className="flex flex-col gap-0.5 px-3">
       {entries.map((item) => {
+        const Icon = NAV_ICONS[item.icon];
         const active =
           pathname === item.href || pathname.startsWith(item.href + "/");
         const showSection = item.section !== "work" && item.section !== lastSection;
@@ -57,7 +59,7 @@ export default function SidebarNav({
                   : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
               )}
             >
-              <item.icon size={16} strokeWidth={2} className="shrink-0" />
+              <Icon size={16} strokeWidth={2} className="shrink-0" />
               <span className="flex-1">{item.label}</span>
               {count !== undefined && count > 0 && (
                 <span

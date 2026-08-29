@@ -18,6 +18,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import Badge from "@/components/legacy/Badge";
+import { NAV_ICONS } from "@/components/shell/nav-icons";
 import type { NavEntry } from "@/components/shell/nav-items";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
 import type { TicketStatus } from "@/lib/types";
@@ -127,16 +128,19 @@ export default function CommandPalette({ entries = [] }: { entries?: NavEntry[] 
             (entry) =>
               query.trim() === "" ||
               entry.label.toLowerCase().includes(query.trim().toLowerCase()),
-          ).map((entry) => (
-            <CommandItem
-              key={entry.href}
-              value={entry.href}
-              onSelect={() => go(entry.href)}
-            >
-              <entry.icon size={15} />
-              {entry.label}
-            </CommandItem>
-          ))}
+          ).map((entry) => {
+            const Icon = NAV_ICONS[entry.icon];
+            return (
+              <CommandItem
+                key={entry.href}
+                value={entry.href}
+                onSelect={() => go(entry.href)}
+              >
+                <Icon size={15} />
+                {entry.label}
+              </CommandItem>
+            );
+          })}
         </CommandGroup>
       </CommandList>
       </Command>
