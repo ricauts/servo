@@ -7,6 +7,7 @@
 // an icon is actually rendered.
 
 import {
+  Activity,
   Bot,
   BookOpen,
   Database,
@@ -27,6 +28,7 @@ export const NAV_ICONS = {
   approvals: ShieldCheck,
   groups: Users2,
   agents: Bot,
+  runs: Activity,
   skills: BookOpen,
   knowledge: Database,
   integrations: Plug,

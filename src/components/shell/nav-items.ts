@@ -29,6 +29,9 @@ export const NAV_ENTRIES: NavEntry[] = [
   { href: "/approvals", label: "Approvals", icon: "approvals", section: "work", action: "approval.view" },
   { href: "/groups", label: "Groups", icon: "groups", section: "work", action: "group.view" },
   { href: "/agents", label: "Agents", icon: "agents", section: "fleet", action: "agents.view" },
+  // The runs console (ux-05): the "monitor agents" surface, same gate as
+  // /agents — a cross-ticket read-only view of every run and its steps.
+  { href: "/runs", label: "Runs", icon: "runs", section: "fleet", action: "agents.view" },
   { href: "/skills", label: "Skills", icon: "skills", section: "fleet", action: "skills.view" },
   // The Knowledge entry (kb-16): kb.view excludes REQUESTER and AI_AGENT, so
   // the entry is absent from their nav — they meet the KB as cited answers.

@@ -21,7 +21,7 @@ describe("navForUser — the four role trees", () => {
     const entries = navForUser(role("AGENT"));
     expect(hrefs(entries)).not.toContain("/integrations");
     expect(hrefs(entries)).not.toContain("/settings");
-    for (const href of ["/dashboard", "/tickets", "/approvals", "/groups", "/agents", "/skills", "/kb"]) {
+    for (const href of ["/dashboard", "/tickets", "/approvals", "/groups", "/agents", "/runs", "/skills", "/kb"]) {
       expect(hrefs(entries)).toContain(href);
     }
   });
@@ -47,7 +47,7 @@ describe("the registry itself", () => {
     // The admin tree includes the two adminOnly pages; the operator tree is
     // a strict subset. If a page is added without a NavEntry, this count is
     // where the drift shows first.
-    expect(NAV_ENTRIES).toHaveLength(10); // + Knowledge (kb-16)
+    expect(NAV_ENTRIES).toHaveLength(11); // + Knowledge (kb-16), + Runs (ux-05)
   });
 
   it("addresses icons by name — entries cross the server/client boundary", () => {
