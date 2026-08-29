@@ -362,18 +362,10 @@ paths-exempt:
   # --- Forward references, by the item that creates the target -------------
   # db-07 delivered docs/migrating-to-postgres.md, scripts/migrate-sqlite-
   # to-postgres.mjs and the pg_dump backup procedure; its targets left this
-  # list, the same way db-01/02/03/08's did.
-  - target:
-      - tests/ops-isolation.test.ts
-    paths:
-      - docs/design/postgres.md
-    until: db-10
-    reason: the Postgres design document names the one-shot import and the
-      tests that db-03 through db-08 create. db-01 delivered the migrations
-      and init file, db-02 delivered the harness (tests/setup/postgres.ts,
-      tests/helpers/tmp-db.ts, tests/tmp-db.test.ts), db-03 delivered the
-      search and ticket-number tests, and db-08 delivered the platform
-      smoke test, so those targets left this list.
+  # list, the same way db-01/02/03/08's did. db-06 delivered
+  # tests/ops-isolation.test.ts, which was this list's last Postgres-area
+  # forward reference and left with it — the reference in
+  # docs/design/postgres.md now resolves.
   - target:
       - src/lib/kb/*
       - src/lib/kb/*/*
