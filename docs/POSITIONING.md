@@ -379,8 +379,6 @@ paths-exempt:
       nothing, which this canon already says in prose two screens above.
   - target:
       - scripts/migrate-sqlite-to-postgres.mjs
-      - tests/search-case.test.ts
-      - tests/ticket-number.test.ts
       - tests/ops-isolation.test.ts
       - tests/pgvector-platform.test.ts
     paths:
@@ -389,8 +387,8 @@ paths-exempt:
     reason: the Postgres design document names the one-shot import and the
       tests that db-03 through db-08 create. db-01 delivered the migrations
       and init file, db-02 delivered the harness (tests/setup/postgres.ts,
-      tests/helpers/tmp-db.ts, tests/tmp-db.test.ts), so those targets left
-      this list.
+      tests/helpers/tmp-db.ts, tests/tmp-db.test.ts), and db-03 delivered
+      the search and ticket-number tests, so those targets left this list.
   - target:
       - src/lib/kb/*
       - src/lib/kb/*/*

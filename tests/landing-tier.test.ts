@@ -60,6 +60,31 @@ describe("migration-guard", () => {
     expect(classifyMigration(ADDITIVE)).toEqual({ verdict: "additive", reasons: [] });
   });
 
+  it("classifies a sequence plus its forward-only backfill as additive (db-03)", () => {
+    // The exact shape of migration 0002_ticket_number_seq: create the
+    // sequence, then point it past the MAX of an existing column so an
+    // upgrade's first nextval cannot collide. COALESCE keeps an empty
+    // table correct.
+    const sql = [
+      "CREATE SEQUENCE ticket_number_seq START 1001;",
+      'SELECT setval(\'ticket_number_seq\', (SELECT COALESCE(MAX("number"), 1000) FROM "Ticket"));',
+    ].join("\n\n");
+    expect(classifyMigration(sql)).toEqual({ verdict: "additive", reasons: [] });
+  });
+
+  it("rejects a setval the shape does not sanction", () => {
+    // A sequence this migration did NOT create:
+    const foreign = classifyMigration(
+      'SELECT setval(\'other_seq\', (SELECT COALESCE(MAX("n"), 1) FROM "T"));',
+    );
+    expect(foreign.verdict).toBe("destructive");
+    expect(foreign.reasons[0]).toMatch(/sequence this migration did not create/);
+    // A literal instead of the COALESCE subselect — not the sanctioned shape:
+    const literal = classifyMigration("SELECT setval('ticket_number_seq', 42);");
+    expect(literal.verdict).toBe("destructive");
+    expect(literal.reasons[0]).toMatch(/non-additive/);
+  });
+
   it("rejects DROP, ALTER COLUMN, RENAME and data mutation", () => {
     for (const sql of [
       'DROP TABLE "Old";',

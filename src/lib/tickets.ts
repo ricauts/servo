@@ -55,10 +55,15 @@ export const ticketDetailInclude = {
   },
 } as const;
 
-/** Next sequential ticket number: (max number) + 1. */
+/** Next sequential ticket number, from the Postgres sequence
+ *  `ticket_number_seq` (db-03, migration 0002): a sequence hands out
+ *  distinct numbers to concurrent creates by construction, where
+ *  max(number)+1 raced and one create always died on the unique
+ *  constraint. The three creation sites (POST /api/tickets, the MCP
+ *  create_ticket tool, inbound email) all route through here. */
 export async function nextTicketNumber(): Promise<number> {
-  const agg = await db.ticket.aggregate({ _max: { number: true } });
-  return (agg._max.number ?? 1000) + 1;
+  const [row] = await db.$queryRaw<{ n: bigint }[]>`SELECT nextval('ticket_number_seq') AS n`;
+  return Number(row.n);
 }
 
 /** Local-date YYYY-MM-DD (KPI series buckets use local calendar days). */
