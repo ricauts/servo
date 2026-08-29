@@ -18,9 +18,11 @@ function singleStatement(sql: string): string | null {
 }
 
 // Courtesy pre-check for the read-only tool so the model gets an actionable
-// error message. Real enforcement is the query_only connection in opsdb.ts.
+// error message. Real enforcement is the ro ROLE plus the read-only
+// TRANSACTION in opsdb.ts. No "pragma" — that was SQLite; Postgres has
+// none. Added the Postgres mutation verbs the courtesy check should know.
 const MUTATING_KEYWORD =
-  /\b(insert|update|delete|drop|alter|create|replace|attach|detach|pragma|vacuum|reindex)\b/i;
+  /\b(insert|update|delete|drop|alter|create|replace|truncate|grant|revoke|call|copy|attach|detach|vacuum|reindex)\b/i;
 
 function looksMutating(sql: string): boolean {
   const withoutLiterals = sql.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, "");
@@ -93,7 +95,9 @@ export const opsDbTools: Record<string, ToolDef> = {
       if (!assetTag) return "Error: assetTag is required.";
       try {
         const rows = await opsSelect(
-          "SELECT * FROM devices WHERE asset_tag = '" + assetTag.replace(/'/g, "''") + "'",
+          // $1 placeholder — the value never touches the SQL text (db-05).
+          "SELECT * FROM devices WHERE asset_tag = $1",
+          [assetTag],
         );
         if (rows.length === 0) return `No device found with asset tag ${assetTag}.`;
         return jsonSafe(rows[0]);

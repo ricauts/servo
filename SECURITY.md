@@ -61,8 +61,10 @@ Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
 - Every tool carries a risk level and an optional **human-approval gate**
   (defaults in `src/lib/ai/tool-policies.ts`, editable per install); HIGH-risk
   approvals are admin-only, and QA reviews risky runs.
-- Read-only SQL is enforced at the driver (`PRAGMA query_only`), not just by
-  keyword filtering; mutating SQL defaults to requiring approval.
+- Read-only SQL is enforced by a read-only Postgres role and a read-only
+  transaction (`SET TRANSACTION READ ONLY` over the `servo_ops_ro` role,
+  whose `default_transaction_read_only` is on), not just by keyword
+  filtering; mutating SQL defaults to requiring approval.
 - Agents that cannot complete an objective **escalate to a human** — an
   unmet objective is never marked resolved.
 - The MCP endpoint and the inbound-email webhook are disabled until you set

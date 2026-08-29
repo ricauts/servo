@@ -27,9 +27,12 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: "postgresql://servo:servo@db:5432/servo?schema=public"
-      # The ops sandbox stays SQLite until db-05 moves it to its own Postgres
-      # database — explicitly out of scope for the cutover (spec §3.3).
-      OPS_DATABASE_URL: "file:/data/ops.db"
+      # The ops sandbox (db-05): its own Postgres database behind two roles —
+      # rw for the gated mutating tool, ro for every read. postgres-init.sql
+      # creates both on a fresh volume; upgrades apply the same SQL by hand
+      # (docs/migrating-to-postgres.md).
+      OPS_DATABASE_URL: "postgresql://servo_ops_rw:servo_ops_rw@db:5432/servo_ops?schema=public"
+      OPS_DATABASE_READONLY_URL: "postgresql://servo_ops_ro:servo_ops_ro@db:5432/servo_ops?schema=public"
       # Production checklist (see SECURITY.md):
       # AUTH_SECRET: "any-long-random-string"            # session signing
       # SERVO_ENCRYPTION_KEY: "64-hex-or-passphrase"     # secrets encrypted at rest

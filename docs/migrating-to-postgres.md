@@ -45,10 +45,39 @@ real binary blobs (byte-identical); ticket numbers move to the
 
 **The ops sandbox (`ops.db`) is not migrated.** It is disposable fixture
 data — devices, employees, licences — that exists so the agent's sandboxed
-SQL tools have something to operate on. The container entrypoint recreates
-it on an empty directory, and db-05 moves it to its own Postgres database
-with fresh fixtures. Carrying fictional HR rows across a migration would be
-work with no reader.
+SQL tools have something to operate on. db-05 moved the sandbox to its own
+Postgres database (`servo_ops`) with fresh fixtures; the fictional HR rows
+are recreated by the seed, never carried. Carrying them across a migration
+would be work with no reader.
+
+An **upgraded volume never runs `docker-entrypoint-initdb.d`** — only a
+fresh data directory does — so an existing install creates `servo_ops` by
+hand, once:
+
+```bash
+docker compose exec db psql -U servo -d postgres -f - <<'SQL'
+-- the same statements scripts/postgres-init.sql runs on a fresh volume
+CREATE DATABASE servo_ops;
+CREATE ROLE servo_ops_rw LOGIN PASSWORD 'servo_ops_rw';
+CREATE ROLE servo_ops_ro LOGIN PASSWORD 'servo_ops_ro';
+ALTER ROLE servo_ops_ro SET default_transaction_read_only = on;
+REVOKE CONNECT ON DATABASE servo FROM PUBLIC;
+REVOKE CONNECT ON DATABASE servo FROM servo_ops_rw;
+REVOKE CONNECT ON DATABASE servo FROM servo_ops_ro;
+SQL
+docker compose exec db psql -U servo -d servo_ops -f - <<'SQL'
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO servo_ops_rw;
+GRANT CREATE ON SCHEMA public TO servo_ops_rw;
+GRANT USAGE ON SCHEMA public TO servo_ops_ro;
+REVOKE TEMPORARY ON DATABASE servo_ops FROM PUBLIC;
+SQL
+```
+
+`ensureOpsSchema()` (run at boot) creates the sandbox tables idempotently
+and re-applies the table grants; `docker compose up -d` afterwards picks
+the new `OPS_DATABASE_URL` up from the compose file. The old `ops.db` file
+stays on the `servo-data` volume, unread, until you remove it.
 
 ## If you skip this guide
 

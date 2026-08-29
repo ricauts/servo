@@ -123,7 +123,7 @@ describe("ingest keeps a scanned PDF downloadable and shareable", () => {
     // The file remains downloadable and shareable: bytes intact, id stable.
     const doc = await db.document.findUniqueOrThrow({ where: { id: result.documentId } });
     expect(doc.textError).toBe(SCANNED_PDF_ERROR);
-    expect(Buffer.from(doc.data).equals(scanned())).toBe(true);
+    expect(Buffer.from(doc.data ?? new Uint8Array()).equals(scanned())).toBe(true);
     const grants = await db.kbGrant.create({
       data: { documentId: doc.id, subjectType: "USER", subjectId: admin.id, grantedById: admin.id },
     });
