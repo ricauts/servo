@@ -588,8 +588,8 @@ acceptance:
 
 ```
 ### [loop-05] Approval-gate E2E on the mock provider, with env scrub
-status: todo
-date: -
+status: doing
+date: 2026-08-29
 size: two-ticks
 tier: A
 depends-on: db-02
