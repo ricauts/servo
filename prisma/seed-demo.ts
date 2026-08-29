@@ -872,6 +872,13 @@ async function main() {
     approvals: await db.approval.count(),
   };
   console.log("Seed complete:", counts);
+
+  // db-03: the seed writes explicit ticket numbers (#1001..), so the
+  // sequence must be pushed past them or the first real create collides.
+  await db.$executeRawUnsafe(
+    "SELECT setval('ticket_number_seq', (SELECT COALESCE(MAX(\"number\"), 1000) FROM \"Ticket\"))",
+  );
+  console.log("ticket_number_seq set past the seeded numbers");
 }
 
 main()
