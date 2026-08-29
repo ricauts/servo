@@ -103,55 +103,42 @@ export async function routeSources(
     : "NULL";
   const modelLit = opts.embeddingModel ? lit(opts.embeddingModel) : "NULL";
 
+  // RECURSIVE covers the whole WITH list (PostgreSQL places the
+  // keyword after WITH); the graph walk below needs it.
   const sql = `
-    ${cte}
+    ${cte.replace(/^WITH /, "WITH RECURSIVE ")}
+    -- Content aggregates per Document over its hit chunks. MAX, never SUM:
+    -- switching to SUM lets a 34-chunk wide table out-shout a 3-chunk exact
+    -- match — the fixture pair pins this.
     , scored AS (
       SELECT
         d.id AS document_id,
         d.name AS doc_name,
-        e.id IS NOT NULL AS entitled,
-        -- MAX, never SUM: per-document aggregation over its hit chunks.
-        -- Switching to SUM lets a 34-chunk wide table out-shout a 3-chunk
-        -- exact match — the fixture pair pins this.
         MAX(ts_rank_cd(c.tsv, websearch_to_tsquery('simple', ${q}), 32)) AS lex,
         MAX(CASE WHEN c.embedding IS NULL OR c."embeddingModel" IS DISTINCT FROM ${modelLit}
                  THEN NULL ELSE 1 - (c.embedding <=> ${vecLiteral}) END) AS vec,
         COUNT(DISTINCT (c.locator->>'section')) FILTER (
           WHERE ts_rank_cd(c.tsv, websearch_to_tsquery('simple', ${q}), 32) >= 0.15
         ) AS alt,
-        ${entityTs ? `BOOL_OR(c.tsv @@ to_tsquery('simple', ${entityTs}))` : "FALSE"} AS entity_hit,
-        MAX(COALESCE(g.weight, 0)) AS graph,
-        MAX(COALESCE(g.near_dup, 0))::int AS near_dup_of_higher
+        ${entityTs ? `BOOL_OR(c.tsv @@ to_tsquery('simple', ${entityTs}))` : "FALSE"} AS entity_hit
       FROM "Document" d
       JOIN entitled e ON e.id = d.id
       LEFT JOIN "DocumentChunk" c ON c."documentId" = d.id
         AND (c.tsv @@ websearch_to_tsquery('simple', ${q})
              ${entityTs ? `OR c.tsv @@ to_tsquery('simple', ${entityTs})` : ""})
-      LEFT JOIN LATERAL (
-        -- graph: MAX weight of an ENTITLED edge touching this document
-        -- (both endpoints entitled — the kb-08 rule), plus whether a
-        -- NEAR_DUPLICATE edge exists at all (resolved per-peer in the
-        -- second pass below).
-        SELECT MAX(CASE WHEN p2.id IS NOT NULL THEN k.weight ELSE 0 END) AS weight,
-               BOOL_OR(k.kind = 'NEAR_DUPLICATE')::int AS near_dup
-          FROM "KnowledgeEdge" k
-          JOIN "Document" d2
-            ON d2.id = CASE WHEN k."fromId" = d.id THEN k."toId" ELSE k."fromId" END
-          JOIN entitled p2 ON p2.id = d2.id
-         WHERE (k."fromId" = d.id OR k."toId" = d.id)
-           AND k.weight > 0
-      ) g ON true
       WHERE d.kind = 'CATALOG'
-      GROUP BY d.id, d.name, e.id
+      GROUP BY d.id, d.name
     )
     , pre_scored AS (
+      -- The CONTENT pre (graph arrives after the dup pass, below).
       SELECT *,
-        0.5 * COALESCE(vec, 0) + 0.5 * COALESCE(lex, 0) + 0.20 * COALESCE(graph, 0) + 0.05 * LEAST(alt, 3) AS pre
+        0.5 * COALESCE(vec, 0) + 0.5 * COALESCE(lex, 0) + 0.05 * LEAST(alt, 3) AS pre0
       FROM scored
     )
     -- The duplicate SECOND PASS: a NEAR_DUPLICATE peer with a strictly
-    -- higher pre costs 0.50; ties broken on id (the peer's id must be
-    -- strictly smaller). Ordered AFTER pre is computed — a window, not a term.
+    -- higher content pre costs 0.50; ties broken on id (the peer's id must
+    -- be strictly smaller). Ordered AFTER pre is computed — a window, not a
+    -- term of it.
     , dup_applied AS (
       SELECT p.*,
         EXISTS (
@@ -162,9 +149,76 @@ export async function routeSources(
                                          THEN k."toId" ELSE k."fromId" END
            WHERE k.kind = 'NEAR_DUPLICATE'
              AND (k."fromId" = p.document_id OR k."toId" = p.document_id)
-             AND (peer.pre > p.pre OR (peer.pre = p.pre AND peer.document_id < p.document_id))
+             AND (peer.pre0 > p.pre0 OR (peer.pre0 = p.pre0 AND peer.document_id < p.document_id))
         ) AS dup
       FROM pre_scored p
+    )
+    -- Seeds for graph expansion: every dataset with a content signal, PLUS
+    -- every dataset this run DISCARDED (dup-suppressed) — a rejected
+    -- duplicate still points at its neighbourhood.
+    , seeds AS (
+      SELECT document_id AS id FROM dup_applied
+       WHERE COALESCE(lex, 0) > 0 OR entity_hit OR dup
+    )
+    -- graph(d) = MAX over seeds of 0.6^hop * carried, where carried
+    -- accumulates weight × kindFactor per hop. Weights are used RAW — no
+    -- normalisation: dividing by the max out-edge would make every node's
+    -- best edge exactly 1.0 and inflate weak neighbourhoods.
+    , graph_cte(seed_id, doc_id, hop, carried) AS (
+        -- Same-source siblings: evaluated as a PREDICATE (equality of the
+        -- entries' dataSourceId), never read from an edge row — a hop-1
+        -- contribution with factor 0.30.
+        SELECT s.id, sibling."documentId", 1, 0.30::float
+          FROM seeds s
+          JOIN "CatalogEntry" ce_s ON ce_s."documentId" = s.id
+          JOIN "CatalogEntry" sibling
+            ON sibling."dataSourceId" = ce_s."dataSourceId"
+           AND sibling."documentId" IS NOT NULL
+           AND sibling."documentId" <> s.id
+          JOIN entitled e2 ON e2.id = sibling."documentId"
+        UNION ALL
+        -- Seed anchors (hop 0, carried 1) so edge walks have a base.
+        SELECT s.id, s.id, 0, 1.0::float FROM seeds s
+        UNION ALL
+        SELECT g.seed_id, nxt.id, g.hop + 1,
+               g.carried * CASE
+                 WHEN k.kind = 'TEMPORAL_ALIGNMENT' THEN (1 + k.weight)  -- amplifier only, never additive
+                 ELSE k.weight * CASE k.kind
+                   WHEN 'DECLARED_FK' THEN 0.90
+                   WHEN 'SHARED_VALUES' THEN 0.80
+                   WHEN 'SHARED_ENTITY' THEN 1.00
+                   WHEN 'SHARED_KEYWORD' THEN 0.50
+                   WHEN 'SAME_COLLECTION' THEN 0.40
+                   ELSE 0  -- NEAR_DUPLICATE is a penalty, handled by the dup pass
+                 END
+               END
+          FROM graph_cte g
+          JOIN "KnowledgeEdge" k
+            ON (k."fromId" = g.doc_id OR k."toId" = g.doc_id)
+          JOIN "Document" nxt
+            ON nxt.id = CASE WHEN k."fromId" = g.doc_id THEN k."toId" ELSE k."fromId" END
+          -- THE ENTITLEMENT JOIN INSIDE THE RECURSIVE TERM. Moving it out to
+          -- a post-filter over the final rows makes the fed-02 red-team test
+          -- fail: the expansion would traverse B and disclose its id, its
+          -- name and the edge evidence to a principal not entitled to B.
+          JOIN entitled eN ON eN.id = nxt.id
+         WHERE g.hop < 2  -- depth capped BY THE CTE, not by a JS slice
+           AND k.weight > 0
+           AND nxt.id <> g.seed_id
+           AND nxt.id <> g.doc_id
+    )
+    , graph_score AS (
+      SELECT doc_id AS document_id, MAX(carried * power(0.6, hop)) AS graph
+        FROM graph_cte
+       WHERE hop > 0  -- a seed's own anchor contributes nothing
+       GROUP BY doc_id
+    )
+    , final AS (
+      SELECT da.*,
+        da.pre0 + 0.20 * COALESCE(gs.graph, 0) AS pre,
+        COALESCE(gs.graph, 0) AS graph
+      FROM dup_applied da
+      LEFT JOIN graph_score gs ON gs.document_id = da.document_id
     )
     SELECT
         document_id AS "documentId",
@@ -176,7 +230,7 @@ export async function routeSources(
         alt,
         dup,
         COUNT(*) OVER () AS "entitledDatasets"
-      FROM dup_applied
+      FROM final
      ORDER BY entity_hit DESC NULLS LAST, score DESC, document_id ASC
      LIMIT ${limit}
   `;
