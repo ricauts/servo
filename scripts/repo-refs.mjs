@@ -1446,7 +1446,13 @@ export function parseMediaAllowlist(text) {
       // ANY fence marker inside the block ends it. A `media-tooling` block is a
       // flat list of module names, so a nested opener is never data — treating
       // it as data let ```js and the lines under it become "modules".
-      if (m) return out;
+      // Closing does not stop the scan: a guide may split the list over more
+      // than one block, and silently reading only the first would drop
+      // entries hyg-09 wrote in good faith.
+      if (m) {
+        fence = null;
+        continue;
+      }
       const body = line.replace(/(^|\s)#.*$/, "").replace(/^\s*-\s*/, "").trim();
       if (body) out.push(body);
       continue;
@@ -1483,6 +1489,17 @@ export function parseBaseline(text) {
   } catch (err) {
     return { files: [], dependencies: [], problems: [`${BASELINE_PATH}: not valid JSON — ${err?.message ?? err}`] };
   }
+  // A top-level array, string or null parses fine and yields an EMPTY keep-list.
+  // The failure direction is safe — everything goes uncovered and --check exits
+  // 1 — but "0 findings covered" is the wrong diagnosis for "the keep-list is
+  // malformed", and the wrong diagnosis is what sends someone editing rows.
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      files: [],
+      dependencies: [],
+      problems: [`${BASELINE_PATH}: must be a JSON object with \`files\` and \`dependencies\` arrays`],
+    };
+  }
   const rows = (key, idField) => {
     const list = raw?.[key];
     if (list === undefined) return [];
@@ -1501,6 +1518,12 @@ export function parseBaseline(text) {
       }
       if (seen.has(id)) problems.push(`${at}: duplicate row for \`${id}\` — the later one would silently win`);
       seen.add(id);
+      // A row's path is compared against `git ls-files` output, which is always
+      // repo-relative and forward-slashed. An absolute or escaping path can
+      // never match one, so it is a typo, not a keep decision.
+      if (idField === "path" && (id.startsWith("/") || id.startsWith("../") || id.includes("/../"))) {
+        problems.push(`${at} (${id}): \`path\` must be repo-relative — it is matched against \`git ls-files\``);
+      }
       if (typeof row.reason !== "string" || row.reason.trim() === "") {
         problems.push(`${at} (${id}): missing \`reason\` — a keep-list row with no reason is a to-delete list row`);
       }

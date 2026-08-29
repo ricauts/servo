@@ -1,14 +1,14 @@
 {
-  "$schema-note": "hyg-04. A KEEP-LIST, not a to-delete list. One row per finding the repository has decided to live with: an unreferenced-but-kept file, or a dependency finding (declared-and-unimported, imported-and-undeclared, or claimed-but-absent). Findings the scanner already reports as `keep` (the never-delete list) and dependencies it already reports as `referenced` or `tooling` are not findings and get no row. Every row carries a one-line `reason` and an `owner`: the backlog item id that will end it, or the numbered question under spec.md section 14 that decided to keep it. `node scripts/repo-refs.mjs --check` (npm run hygiene:check) fails on any finding with no row here. A row may only be REMOVED in the same commit that removes the thing it describes or adds a reference to it; tests/repo-refs-baseline.test.ts asserts every row still describes something real.",
+  "$schema-note": "hyg-04. A KEEP-LIST, not a to-delete list. One row per finding the repository has decided to live with: an unreferenced-but-kept file, or a dependency finding (declared-and-unimported, imported-and-undeclared, or claimed-but-absent). Findings the scanner already reports as `keep` (the never-delete list) and dependencies it already reports as `referenced` or `tooling` are not findings and get no row. Every row carries a one-line `reason` and an `owner`. The owner convention is: the backlog item id that will END the row, and a `question-<n>` under spec.md section 14 ONLY where no item ends it. That is why run-relay.ts is owned by hyg-09 even though question 31 names it — hyg-09 is what resolves it — while the shadcn primitives and react-is are owned by question 31, which decided to keep them indefinitely. `node scripts/repo-refs.mjs --check` (npm run hygiene:check) fails on any finding with no row here. A row may only be REMOVED in the same commit that removes the thing it describes or adds a reference to it; tests/repo-refs-baseline.test.ts asserts every row still describes something real.",
   "files": [
     {
       "path": "docs/design/connectors.md",
-      "reason": "design document for the cnp-* area; spec.md section 0.9 is its only pointer and spec.md is excluded as a referencing source, so it reads unreferenced",
+      "reason": "design document for the cnp-* area; every pointer to it is inside spec.md (sections 0.9 and 6), which is excluded as a referencing source, so it reads unreferenced",
       "owner": "hyg-08"
     },
     {
       "path": "docs/design/external-sources.md",
-      "reason": "design document for the xds-* area; same spec.md-only pointer as connectors.md",
+      "reason": "design document for the xds-* area; same spec.md-only pointers as connectors.md",
       "owner": "hyg-08"
     },
     {

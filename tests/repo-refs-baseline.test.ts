@@ -235,6 +235,22 @@ describe("hyg-04 · the keep-list must stay a keep-list", () => {
     expect(parsed.problems.some((p) => p.includes("duplicate"))).toBe(true);
   });
 
+  it("diagnoses a malformed top level rather than reporting an empty keep-list", () => {
+    // All three parse fine as JSON. The failure direction is safe either way,
+    // but "0 findings covered" sends someone editing rows instead of the shape.
+    for (const text of ["[]", '"nope"', "null"]) {
+      const parsed = parseBaseline(text);
+      expect(parsed.problems.some((p) => p.includes("must be a JSON object"))).toBe(true);
+    }
+  });
+
+  it("rejects a row whose path could never match git ls-files", () => {
+    for (const bad of ["/etc/passwd", "../../etc/passwd", "src/../../x.ts"]) {
+      const parsed = baseline([{ path: bad, ...ROW }]);
+      expect(parsed.problems.some((p) => p.includes("must be repo-relative"))).toBe(true);
+    }
+  });
+
   it("fails loudly on unreadable JSON instead of passing an empty keep-list", () => {
     const parsed = parseBaseline("{ not json");
     expect(parsed.problems).toHaveLength(1);
@@ -270,6 +286,14 @@ describe("hyg-04 · the media-tooling allowlist", () => {
   it("stops at a nested fence rather than swallowing its lines as module names", () => {
     const md = "```" + MEDIA_FENCE_NAME + "\nsharp\n```js\nrequire(\"left-pad\")\n```\n";
     expect(parseMediaAllowlist(md)).toEqual(["sharp"]);
+  });
+
+  it("reads every media-tooling block, not only the first", () => {
+    // A guide may split the list across sections; dropping the rest silently
+    // would suppress entries hyg-09 wrote in good faith.
+    const md =
+      "```" + MEDIA_FENCE_NAME + "\nsharp\n```\n\nprose\n\n```" + MEDIA_FENCE_NAME + "\nffmpeg-static\n```\n";
+    expect(parseMediaAllowlist(md)).toEqual(["sharp", "ffmpeg-static"]);
   });
 
   it("treats an absent file, an absent fence and an unterminated fence as an empty list", () => {
@@ -384,8 +408,14 @@ describe("hyg-04 · the real tree", () => {
   it("every owner names a backlog item or a numbered question that exists", () => {
     const spec = read("spec.md");
     const items = new Set([...spec.matchAll(/^### \[([a-z0-9-]+)\]/gm)].map((m) => m[1]));
+    // Bound the slice to section 14. Running to end-of-file would sweep in the
+    // Changelog, and the criterion says "the numbered question under §14".
+    const from = spec.indexOf("## 14. Open questions");
+    const to = spec.indexOf("\n## 15.", from);
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
     const questions = new Set(
-      [...spec.slice(spec.indexOf("## 14. Open questions")).matchAll(/^\s*(\d+)\.\s+\*\*/gm)].map((m) => m[1]),
+      [...spec.slice(from, to).matchAll(/^\s*(\d+)\.\s+\*\*/gm)].map((m) => m[1]),
     );
     const owners = [...fileRows, ...depRows].map((r) => r.owner);
     const dangling = [...new Set(owners)].filter((o) => {
