@@ -115,18 +115,14 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
     if (
       !TEXT_CONTENT_TYPES.has(input.contentType) &&
       !isSpreadsheetContentType(input.contentType) &&
+      input.contentType !== "application/pdf" &&
       !isZipShaped(input.bytes)
     ) {
       await tx.document.update({
         where: { id: documentId },
         data: {
           textStatus: "UNSUPPORTED",
-          // PDF keeps its named-arriving-item message until kb-07's
-          // extractor lands (kb-04's promise); xlsx now extracts for real.
-          textError:
-            input.contentType === "application/pdf"
-              ? "PDF extraction arrives with kb-07."
-              : `No extractor for ${input.contentType} yet.`,
+          textError: `No extractor for ${input.contentType} yet.`,
         },
       });
       return { documentId, textStatus: "UNSUPPORTED", chunkCount: 0 };

@@ -135,13 +135,17 @@ describe("upload + extraction", () => {
     expect(await db.kbGrant.count({ where: { documentId: first.documentId } })).toBe(1);
   });
 
-  it("marks non-text types UNSUPPORTED with a message naming the arriving item", async () => {
+  it("marks a corrupt declared PDF FAILED with the parser's reason (kb-07 landed)", async () => {
+    // kb-04 asserted the transitional "arrives with kb-07" message; the
+    // extractor now exists, so a 4-byte garbage file is honestly FAILED,
+    // never silently extracted. The scanned-PDF UNSUPPORTED verdict lives
+    // in tests/kb-pdf.test.ts.
     const res = await postDocuments(req("POST", (() => { const f = new FormData(); f.set("file", new File([new Uint8Array(4)], "manual.pdf", { type: "application/pdf" })); return f; })()));
     expect(res.status).toBe(201);
     const { documentId } = (await res.json()) as { documentId: string };
     const doc = await db.document.findUniqueOrThrow({ where: { id: documentId } });
-    expect(doc.textStatus).toBe("UNSUPPORTED");
-    expect(doc.textError).toMatch(/kb-07/);
+    expect(doc.textStatus).toBe("FAILED");
+    expect(doc.textError).toMatch(/PDF could not be parsed/);
   });
 });
 
