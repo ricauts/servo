@@ -5,7 +5,7 @@
 // and all agents consistent with them.
 
 export type Role = "ADMIN" | "AGENT" | "REQUESTER" | "AI_AGENT";
-export type AiKind = "TRIAGE" | "RESOLVER" | "QA";
+export type AiKind = "TRIAGE" | "RESOLVER" | "QA" | "DRAFT";
 
 export type TicketStatus =
   | "OPEN"

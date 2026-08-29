@@ -12,12 +12,15 @@ import { opsExecute } from "./opsdb";
 import { parseProfileMarkdown, slugify } from "./agent-profile-format";
 import { parseSkillMarkdown } from "./skill-format";
 
-/** The three system AI users the engine looks up by aiKind. */
+/** The system AI users the engine and drafter look up by aiKind. */
 export async function ensureAiAgents(): Promise<void> {
   const agents = [
     { name: "Servo Triage", email: "triage@servo.ai", aiKind: "TRIAGE", color: "#0A6E66" },
     { name: "Servo Resolver", email: "resolver@servo.ai", aiKind: "RESOLVER", color: "#14625D" },
     { name: "Servo QA", email: "qa@servo.ai", aiKind: "QA", color: "#52514E" },
+    // The timeline-comment author for auto-delivered replies (kb-14),
+    // matching the agentName the drafter already uses.
+    { name: "Servo Drafter", email: "drafter@servo.ai", aiKind: "DRAFT", color: "#4A3AA7" },
   ];
   for (const agent of agents) {
     await db.user.upsert({

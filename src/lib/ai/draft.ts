@@ -194,20 +194,88 @@ async function draftReplyInner(ticketId: string): Promise<ReplyDraft> {
   const pending = await db.replyDraft.findFirst({
     where: { ticketId, status: "PENDING" },
   });
-  if (pending) {
-    // Guarded update: if the draft was approved/rejected while the model was
-    // writing, leave the decided row untouched and store a fresh one instead.
-    const { count } = await db.replyDraft.updateMany({
-      where: { id: pending.id, status: "PENDING" },
-      data: { body, agentName, sources: sources as unknown as never, createdAt: new Date() },
-    });
-    if (count === 1) {
-      return db.replyDraft.findUniqueOrThrow({ where: { id: pending.id } });
-    }
-  }
-  return db.replyDraft.create({
-    data: { ticketId, body, agentName, sources: sources as unknown as never },
+  const stored = pending
+    ? (await db.replyDraft.updateMany({
+        where: { id: pending.id, status: "PENDING" },
+        data: { body, agentName, sources: sources as unknown as never, createdAt: new Date() },
+      }).then(({ count }) =>
+        count === 1 ? db.replyDraft.findUniqueOrThrow({ where: { id: pending.id } }) : null,
+      ))
+    : null;
+  const draft =
+    stored ??
+    (await db.replyDraft.create({
+      data: { ticketId, body, agentName, sources: sources as unknown as never },
+    }));
+
+  // Auto-delivery (kb-14): default OFF, per category, capped per day. Any
+  // condition failing leaves the draft PENDING in the ordinary queue —
+  // nothing auto-sends on a fresh install.
+  await maybeAutoDeliver(draft);
+  return db.replyDraft.findUniqueOrThrow({ where: { id: draft.id } });
+}
+
+export const AUTODELIVER_SETTING_PREFIX = "kb.autodeliver.";
+export const AUTODELIVER_CAP_KEY = "kb.autodeliver.dailyCap";
+export const AUTODELIVER_DEFAULT_CAP = 20;
+
+/**
+ * The five preconditions, in order (spec kb-14): the per-category setting is
+ * ON; the draft has at least one citation; re-verification passes; the QA
+ * reviewer has not flagged the ticket's latest run; the daily cap is not
+ * exhausted. The automatic path then fires the SAME atomic claim through
+ * approveDraft with decider null — inheriting kb-13's guard rather than
+ * owning a second one.
+ */
+async function maybeAutoDeliver(draft: ReplyDraft): Promise<void> {
+  const settings = await db.setting.findMany({
+    where: { key: { startsWith: AUTODELIVER_SETTING_PREFIX } },
   });
+  const map = new Map(settings.map((s) => [s.key, s.value]));
+
+  const ticket = await db.ticket.findUniqueOrThrow({
+    where: { id: draft.ticketId },
+    select: { category: true, status: true },
+  });
+  if (ticket.status === "CLOSED") return;
+
+  // 1. Per-category opt-in: absent = OFF.
+  if (map.get(`${AUTODELIVER_SETTING_PREFIX}${ticket.category}`) !== "true") return;
+
+  // 2. At least one citation — an uncited answer is never auto-sent.
+  const sources = Array.isArray(draft.sources) ? (draft.sources as unknown[]) : [];
+  if (sources.length === 0) return;
+
+  // 3. Send-time re-verification passes (kb-13 runs again inside approveDraft,
+  //    but checking first keeps the failure visible as a parked draft).
+  const fresh = await db.replyDraft.findUniqueOrThrow({
+    where: { id: draft.id },
+    include: { ticket: true },
+  });
+  if ((await reverifyCitations(fresh)) !== null) return;
+
+  // 4. The QA reviewer has not flagged the ticket's latest run.
+  const flagged = await db.agentRun.findFirst({
+    where: { ticketId: draft.ticketId, qaVerdict: "FAIL" },
+    select: { id: true },
+  });
+  if (flagged) return;
+
+  // 5. The daily cap (default 20) bounds the blast radius.
+  const cap = Number.parseInt(map.get(AUTODELIVER_CAP_KEY) ?? "", 10);
+  const dailyCap = Number.isFinite(cap) && cap >= 0 ? cap : AUTODELIVER_DEFAULT_CAP;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const sentToday = await db.replyDraft.count({
+    where: { status: "SENT", autoDelivered: true, decidedAt: { gte: since } },
+  });
+  if (sentToday >= dailyCap) return;
+
+  try {
+    await approveDraft(draft.id, null);
+  } catch {
+    // A lost race or a just-revoked citation parks the draft — the queue
+    // keeps it, a human sees it. Never crash draft generation over delivery.
+  }
 }
 
 /**
@@ -251,7 +319,7 @@ async function reverifyCitations(
  */
 export async function approveDraft(
   draftId: string,
-  decider: User,
+  decider: User | null,
   finalBody?: string,
 ): Promise<ReplyDraft> {
   const draft = await db.replyDraft.findUnique({
@@ -276,14 +344,31 @@ export async function approveDraft(
 
   // Atomic claim: only one concurrent decision wins; the rest see 0 rows and
   // never send anything. The row records the body that actually went out.
+  // decider === null means the AUTOMATIC path (kb-14): autoDelivered true and
+  // the timeline comment is authored by the Servo Drafter system user.
+  const automatic = decider === null;
   const { count } = await db.replyDraft.updateMany({
     where: { id: draftId, status: "PENDING" },
-    data: { status: "SENT", body, edited, decidedAt: new Date(), deciderId: decider.id },
+    data: {
+      status: "SENT",
+      body,
+      edited,
+      decidedAt: new Date(),
+      ...(automatic ? { autoDelivered: true } : { deciderId: decider.id }),
+    },
   });
   if (count === 0) throw new Error("Draft was already decided.");
 
+  // The timeline comment needs an author: the approving human, or Servo
+  // Drafter when policy sent it without one.
+  let commentAuthorId = automatic ? null : decider.id;
+  if (automatic) {
+    const drafter = await db.user.findFirst({ where: { role: "AI_AGENT", aiKind: "DRAFT" } });
+    if (!drafter) throw new Error("Servo Drafter system user missing — run the core bootstrap.");
+    commentAuthorId = drafter.id;
+  }
   await db.comment.create({
-    data: { ticketId: draft.ticketId, authorId: decider.id, body, kind: "COMMENT" },
+    data: { ticketId: draft.ticketId, authorId: commentAuthorId!, body, kind: "COMMENT" },
   });
   // Guarded so a concurrent first reply's earlier timestamp is never overwritten.
   await db.ticket.updateMany({
@@ -306,7 +391,8 @@ export async function approveDraft(
     ticketNumber: draft.ticket.number,
     draftId,
     emailed,
-    decidedBy: decider.name,
+    decidedBy: automatic ? "Servo Drafter (auto-delivered)" : (decider as User).name,
+    autoDelivered: automatic,
   });
   return updated;
 }
