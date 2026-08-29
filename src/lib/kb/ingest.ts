@@ -13,11 +13,18 @@
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { chunkMarkdown } from "@/lib/kb/chunk";
+import { extractHardened } from "@/lib/kb/extract";
 import { keywordPass } from "@/lib/kb/keywords";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
 
 /** Stored-byte cap, enforced before anything touches the database. */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+/** Zip-shaped containers go through the hardened path even when their
+ *  content type is unknown — the caps do not trust the declared type. */
+function isZipShaped(bytes: Buffer): boolean {
+  return bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+}
 
 export const TEXT_CONTENT_TYPES = new Set([
   "text/markdown",
@@ -99,7 +106,7 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       documentId = created.id;
     }
 
-    if (!TEXT_CONTENT_TYPES.has(input.contentType)) {
+    if (!TEXT_CONTENT_TYPES.has(input.contentType) && !isZipShaped(input.bytes)) {
       await tx.document.update({
         where: { id: documentId },
         data: {
@@ -115,7 +122,23 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       return { documentId, textStatus: "UNSUPPORTED", chunkCount: 0 };
     }
 
-    const text = input.bytes.toString("utf8");
+    // kb-05: extraction runs in the HARDENED forked worker — off this
+    // transaction and off the event loop, with the zip/XXE/wall-clock/heap
+    // caps enforced BEFORE any parse. The transaction commits the row in
+    // EXTRACTING; the worker's outcome lands right after.
+    const outcome = await extractHardened(input.bytes, input.contentType);
+    if (outcome.status !== "EXTRACTED") {
+      await tx.document.update({
+        where: { id: documentId },
+        data: {
+          textStatus: outcome.status,
+          textError: outcome.error ?? "Extraction failed.",
+        },
+      });
+      return { documentId, textStatus: outcome.status, chunkCount: 0 };
+    }
+
+    const text = outcome.text;
     const chunks = chunkMarkdown(text);
     if (chunks.length > 0) {
       // The deterministic keyword/entity pass rides along per chunk (kb-08);
