@@ -1,0 +1,64 @@
+{
+  "rows": [
+    {
+      "schema_name": "dbo",
+      "table_name": "orders",
+      "tbl_description": "Sales orders (MS_Description captured verbatim)",
+      "column_name": "order_id",
+      "data_type": "int",
+      "max_length": 4,
+      "is_nullable": 0,
+      "is_identity": 1,
+      "is_primary_key": 1,
+      "fk_ref": null,
+      "col_description": null,
+      "distinct_count": 4021,
+      "null_fraction": 0.0
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "orders",
+      "tbl_description": "Sales orders (MS_Description captured verbatim)",
+      "column_name": "customer_code",
+      "data_type": "nvarchar",
+      "max_length": 16,
+      "is_nullable": 0,
+      "is_identity": 0,
+      "is_primary_key": 0,
+      "fk_ref": "dbo.customer.customer_code",
+      "col_description": "The ordering customer (FK)",
+      "distinct_count": 612,
+      "null_fraction": 0.0
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "orders",
+      "tbl_description": "Sales orders (MS_Description captured verbatim)",
+      "column_name": "status",
+      "data_type": "nvarchar",
+      "max_length": 20,
+      "is_nullable": 0,
+      "is_identity": 0,
+      "is_primary_key": 0,
+      "fk_ref": null,
+      "col_description": null,
+      "distinct_count": 4,
+      "null_fraction": 0.0
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "orders",
+      "tbl_description": "Sales orders (MS_Description captured verbatim)",
+      "column_name": "notes",
+      "data_type": "nvarchar",
+      "max_length": -1,
+      "is_nullable": 1,
+      "is_identity": 0,
+      "is_primary_key": 0,
+      "fk_ref": null,
+      "col_description": null,
+      "distinct_count": null,
+      "null_fraction": 0.12
+    }
+  ]
+}

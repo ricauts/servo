@@ -398,13 +398,13 @@ paths-exempt:
       built.
   - target:
       - src/lib/ai/tools/federation.ts
-      - tests/fixtures/catalog
     paths:
       - docs/design/data-fabric.md
     until: fed-06
     reason: the data-fabric document names the router, the federation tools and
-      the two-silo fixtures that cat-* and fed-* create. Phase 8 has not
-      started.
+      the two-silo fixtures that cat-* and fed-* create. cat-03 delivered
+      tests/fixtures/catalog, so that target left this list; the federation
+      tools wait for Phase 8.
   - target:
       - tests/fixtures/kb/docling/*
       - scripts/record-docling-fixture.mjs
