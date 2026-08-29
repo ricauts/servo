@@ -92,6 +92,14 @@ const putSchema = z.object({
   authAllowedDomains: z.string().optional(), // empty string = any domain may sign in
   mcpToken: z.string().optional(), // empty string disables the MCP endpoint
   egressAllowlist: z.string().optional(), // empty string = any public host may be opened
+  // Knowledge base (kb-17). Embeddings are optional: keyword-only is the
+  // shipped default and the private mode.
+  kbEmbedBaseUrl: z.string().optional(),
+  kbEmbedApiKey: z.string().optional(), // empty string clears the stored key
+  kbEmbedModel: z.string().optional(),
+  kbEmbedDimensions: z.string().optional(), // "", "0", or "1".."1536"
+  kbAutodeliverCategories: z.string().optional(), // comma-separated Category values
+  kbAutodeliverDailyCap: z.string().optional(), // digits; "" = default 20
 });
 
 /** PUT /api/settings — upsert any subset of the AI settings (admin only). */
@@ -162,6 +170,36 @@ export async function PUT(req: NextRequest) {
     updates.push({ key: AUTH_SETTING_KEYS.allowedDomains, value: data.authAllowedDomains });
   }
   if (data.mcpToken !== undefined) updates.push({ key: MCP_SETTING_KEYS.token, value: data.mcpToken });
+  if (data.kbEmbedBaseUrl !== undefined) {
+    updates.push({ key: "kb.embed.baseUrl", value: data.kbEmbedBaseUrl });
+  }
+  if (data.kbEmbedApiKey !== undefined) {
+    updates.push({ key: "kb.embed.apiKey", value: data.kbEmbedApiKey });
+  }
+  if (data.kbEmbedModel !== undefined) {
+    updates.push({ key: "kb.embed.model", value: data.kbEmbedModel });
+  }
+  if (data.kbEmbedDimensions !== undefined) {
+    updates.push({ key: "kb.embed.dimensions", value: data.kbEmbedDimensions });
+  }
+  if (data.kbAutodeliverCategories !== undefined) {
+    // Remove every per-category key, then set the requested ones — the
+    // canonical form of "absent = OFF".
+    const keep = new Set(data.kbAutodeliverCategories.split(",").map((c) => c.trim()).filter(Boolean));
+    const existing = await db.setting.findMany({ where: { key: { startsWith: "kb.autodeliver." } } });
+    for (const row of existing) {
+      const category = row.key.slice("kb.autodeliver.".length);
+      if (category !== "dailyCap" && !keep.has(category)) {
+        await db.setting.delete({ where: { key: row.key } });
+      }
+    }
+    for (const category of keep) {
+      updates.push({ key: `kb.autodeliver.${category}`, value: "true" });
+    }
+  }
+  if (data.kbAutodeliverDailyCap !== undefined) {
+    updates.push({ key: "kb.autodeliver.dailyCap", value: data.kbAutodeliverDailyCap });
+  }
   if (data.egressAllowlist !== undefined) {
     updates.push({ key: EGRESS_SETTING_KEYS.allowlist, value: data.egressAllowlist });
   }
