@@ -8,6 +8,7 @@
 import {
   Bot,
   BookOpen,
+  Database,
   Inbox,
   LayoutDashboard,
   Plug,
@@ -39,6 +40,9 @@ export const NAV_ENTRIES: NavEntry[] = [
   { href: "/groups", label: "Groups", icon: Users2, section: "work", action: "group.view" },
   { href: "/agents", label: "Agents", icon: Bot, section: "fleet", action: "agents.view" },
   { href: "/skills", label: "Skills", icon: BookOpen, section: "fleet", action: "skills.view" },
+  // The Knowledge entry (kb-16): kb.view excludes REQUESTER and AI_AGENT, so
+  // the entry is absent from their nav — they meet the KB as cited answers.
+  { href: "/kb", label: "Knowledge", icon: Database, section: "fleet", action: "kb.view" },
   { href: "/integrations", label: "Integrations", icon: Plug, section: "admin", adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings2, section: "admin", adminOnly: true },
 ];
