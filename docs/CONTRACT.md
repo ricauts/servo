@@ -16,15 +16,16 @@ a deterministic **mock provider** makes the entire demo work offline.
 
 ## Stack & hard rules
 
-- Next.js 15 (App Router) + React 19 + TypeScript strict. Prisma 6 + SQLite.
+- Next.js 15 (App Router) + React 19 + TypeScript strict. Prisma 6 + PostgreSQL (pgvector).
   Tailwind 3.4. zod **v4** (basic `z.object/z.string/z.enum` usage only).
   `@anthropic-ai/sdk` 0.115. `lucide-react` for icons. `clsx` via `cn()`.
 - **Do NOT** edit: `package.json`, `prisma/schema.prisma`, `prisma/seed.ts`,
   anything under `src/lib/` or `src/components/` that already exists,
   `src/app/layout.tsx`, `src/app/globals.css`, `tailwind.config.ts`. Do not
   add dependencies. If you need a helper, create it inside your own files.
-- SQLite has no enums: enum-like values are strings; the unions in
-  `src/lib/types.ts` are the source of truth. Always import types from there.
+- Enum-like values are strings by choice, not by dialect — extensibility wants
+  them to be data. The unions in `src/lib/types.ts` are the source of truth.
+  Always import types from there.
 - **Next 15 gotchas:** `params` is a Promise in pages and route handlers —
   `const { id } = await params;` with signature
   `{ params }: { params: Promise<{ id: string }> }`. `cookies()` is async.

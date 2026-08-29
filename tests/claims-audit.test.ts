@@ -105,11 +105,10 @@ describe("parseCanonBlock — the fence is the whole policy", () => {
   });
 
   it("folds a multi-line reason and keeps the following key separate", () => {
-    const transitional: any = canon().exempt.find((e: any) => e.until === "db-01");
+    const transitional: any = canon().exempt.find((e: any) => e.until === "db-05");
     expect(transitional).toBeDefined();
-    expect(transitional.reason).toContain("db-01 rewrites the present-tense storage claim in");
-    expect(transitional.reason).toContain("every file below");
-    expect(transitional.paths).toContain("docs/PORTING-LEDGER.md");
+    expect(transitional.reason).toContain("ops SANDBOX is still a SQLite file until db-05");
+    expect(transitional.paths).toEqual(["docs/ARCHITECTURE.md", "docs/CONTRACT.md"]);
     expect(transitional.sections).toEqual([]);
   });
 
@@ -347,10 +346,11 @@ describe("exemptions — path, section, count and inert entries", () => {
 
   it("surfaces a transitional exemption as a note naming the item that retires it", () => {
     const c = canon();
-    const found = scanFile("ROADMAP.md", readFileSync("ROADMAP.md", "utf8"), c);
+    const found = scanFile("docs/ARCHITECTURE.md", readFileSync("docs/ARCHITECTURE.md", "utf8"), c);
+    expect(found.length).toBeGreaterThan(0); // the sandbox file reference
     const { reported, notes } = applyExemptions(found, c);
     expect(reported).toEqual([]);
-    expect(notes.join(" ")).toMatch(/transitional until db-01/);
+    expect(notes.join(" ")).toMatch(/transitional until db-05/);
   });
 });
 
@@ -1208,7 +1208,8 @@ describe("hyg-03 — exemption liveness is tracked PER TARGET, not per entry", (
     expect(applyPathExemptions(findings as any, canon).notes).toEqual([]);
   });
 
-  it("the REAL canon carries no dead exemption entry and no dead target", () => {
+  it("the REAL canon carries no dead exemption entry and no dead target", async () => {
+    const { execFileSync } = await import("node:child_process");
     const listEntries = (dir: string) => {
       try {
         return readdirSync(dir === "" ? "." : dir, { withFileTypes: true }).map((e) => ({
@@ -1219,7 +1220,22 @@ describe("hyg-03 — exemption liveness is tracked PER TARGET, not per entry", (
         return [];
       }
     };
-    const tree = collectTree(listEntries);
+    // The audit resolves paths against TRACKED files; gitignored runtime
+    // artefacts (prisma/*.db) exist on an operator's machine and in no
+    // checkout, so a working-tree walk must drop them or liveness goes
+    // machine-dependent (it did: the entry looked dead on the dev machine).
+    const ignored = execFileSync(
+      "git",
+      ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    )
+      .split(/\r?\n/)
+      .filter(Boolean);
+    // --directory groups ignored trees (node_modules/) into one entry each;
+    // match tree paths by prefix so the grouping still filters everything.
+    const isIgnored = (p: string) =>
+      ignored.some((entry: string) => p === entry || p.startsWith(entry + "/"));
+    const tree = new Set([...collectTree(listEntries)].filter((p: string) => !isIgnored(p)));
     const c = canon();
     const found = new Set<string>();
     for (const pattern of c.pathsScan) {
@@ -1369,7 +1385,8 @@ describe("hyg-03 — the resolved counter is independent of deduplication", () =
     expect(r.checked - r.unresolved).toBe(1); // ...but not for counting
   });
 
-  it("the real tree's counters add up exactly, with nothing unaccounted for", () => {
+  it("the real tree's counters add up exactly, with nothing unaccounted for", async () => {
+    const { execFileSync } = await import("node:child_process");
     const listEntries = (dir: string) => {
       try {
         return readdirSync(dir === "" ? "." : dir, { withFileTypes: true }).map((e) => ({
@@ -1380,7 +1397,22 @@ describe("hyg-03 — the resolved counter is independent of deduplication", () =
         return [];
       }
     };
-    const tree = collectTree(listEntries);
+    // The audit resolves paths against TRACKED files; gitignored runtime
+    // artefacts (prisma/*.db) exist on an operator's machine and in no
+    // checkout, so a working-tree walk must drop them or liveness goes
+    // machine-dependent (it did: the entry looked dead on the dev machine).
+    const ignored = execFileSync(
+      "git",
+      ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    )
+      .split(/\r?\n/)
+      .filter(Boolean);
+    // --directory groups ignored trees (node_modules/) into one entry each;
+    // match tree paths by prefix so the grouping still filters everything.
+    const isIgnored = (p: string) =>
+      ignored.some((entry: string) => p === entry || p.startsWith(entry + "/"));
+    const tree = new Set([...collectTree(listEntries)].filter((p: string) => !isIgnored(p)));
     const c = canon();
     const found = new Set<string>();
     for (const pattern of c.pathsScan) {
@@ -1586,7 +1618,8 @@ describe("hyg-03 follow-up — defects an adjudicator found after the merge", ()
     ).toEqual([]);
   });
 
-  it("the printed arithmetic reconciles: checked = resolved + exempt + missing", () => {
+  it("the printed arithmetic reconciles: checked = resolved + exempt + missing", async () => {
+    const { execFileSync } = await import("node:child_process");
     const listEntries = (dir: string) => {
       try {
         return readdirSync(dir === "" ? "." : dir, { withFileTypes: true }).map((e) => ({
@@ -1597,7 +1630,22 @@ describe("hyg-03 follow-up — defects an adjudicator found after the merge", ()
         return [];
       }
     };
-    const tree = collectTree(listEntries);
+    // The audit resolves paths against TRACKED files; gitignored runtime
+    // artefacts (prisma/*.db) exist on an operator's machine and in no
+    // checkout, so a working-tree walk must drop them or liveness goes
+    // machine-dependent (it did: the entry looked dead on the dev machine).
+    const ignored = execFileSync(
+      "git",
+      ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    )
+      .split(/\r?\n/)
+      .filter(Boolean);
+    // --directory groups ignored trees (node_modules/) into one entry each;
+    // match tree paths by prefix so the grouping still filters everything.
+    const isIgnored = (p: string) =>
+      ignored.some((entry: string) => p === entry || p.startsWith(entry + "/"));
+    const tree = new Set([...collectTree(listEntries)].filter((p: string) => !isIgnored(p)));
     const c = canon();
     const found = new Set<string>();
     for (const pattern of c.pathsScan) {

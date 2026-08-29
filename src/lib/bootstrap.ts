@@ -8,7 +8,7 @@
 import fs from "fs";
 import path from "path";
 import { db } from "./db";
-import { opsDb } from "./opsdb";
+import { opsExecute } from "./opsdb";
 import { parseProfileMarkdown, slugify } from "./agent-profile-format";
 import { parseSkillMarkdown } from "./skill-format";
 
@@ -133,6 +133,6 @@ export async function ensureOpsSchema(): Promise<void> {
     );`,
   ];
   for (const sql of statements) {
-    await opsDb.$executeRawUnsafe(sql);
+    await opsExecute(sql);
   }
 }

@@ -1,5 +1,7 @@
 # Continuous integration: every push and PR must typecheck, pass the unit
-# tests, and produce a production build. SQLite means no services are needed;
+# tests, and produce a production build. Unit tests run against mocked
+# databases, so no service containers are needed yet — the throwaway-Postgres
+# test harness (db-02) adds one.
 # every page is force-dynamic, so `next build` never touches a database.
 name: CI
 

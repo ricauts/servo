@@ -48,6 +48,9 @@ describe("migration-guard", () => {
     'CREATE UNIQUE INDEX "KbGrant_subject" ON "KbGrant"("subjectId");', // table created above
     "CREATE EXTENSION IF NOT EXISTS vector;",
     'CREATE TYPE "ticket_status" AS ENUM (\'OPEN\');',
+    'CREATE SCHEMA IF NOT EXISTS "public";', // prisma migrate diff emits this
+    // Prisma emits same-file FK constraints after each CREATE TABLE:
+    'ALTER TABLE "KbGrant" ADD CONSTRAINT "KbGrant_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "Document"("id") ON DELETE CASCADE ON UPDATE CASCADE;',
     'ALTER TABLE "Ticket" ADD COLUMN "channel" TEXT;', // nullable
     'ALTER TABLE "Ticket" ADD COLUMN "pinned" BOOLEAN NOT NULL DEFAULT false;', // defaulted
     "-- a comment line is not a statement",

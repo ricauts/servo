@@ -32,11 +32,13 @@ mock of itself. Have an opinion on priorities? Open an issue.
   into a knowledge base, embed them into a vector store, and give every
   agent retrieval so triage, drafts and resolutions cite *your* docs instead
   of guessing. Design goals: BYO embedding model (same BYOK philosophy),
-  SQLite-first vector storage so self-hosting stays a one-liner, citations
+  pgvector storage inside the app's own PostgreSQL so self-hosting stays a
+  one-liner, citations
   rendered in replies, and per-source access control.
 - WhatsApp & Telegram intake — chat conversations become tickets with the
   same draft-approve loop
-- Postgres & MySQL connectors for the ops tools (beyond the SQLite sandbox)
+- MySQL connector for the ops tools (the ops sandbox moves onto the main
+  PostgreSQL server as its own database in `db-05`)
 
 ## Next
 

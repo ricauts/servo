@@ -11,7 +11,7 @@ For the build contract that module authors follow, see
 |---|---|
 | Framework | Next.js 15 (App Router), React 19, server components by default |
 | Language | TypeScript (strict) |
-| Database | Prisma 6 + SQLite (app DB `prisma/dev.db`, sandbox ops DB `prisma/ops.db`) |
+| Database | Prisma 6 + PostgreSQL (pgvector image; app DB `servo`, numbered migrations in `prisma/migrations/`) |
 | Styling | Tailwind CSS 3.4 with design tokens (no raw hex in markup) |
 | Validation | zod v4 |
 | AI SDK | `@anthropic-ai/sdk` (only used when a key is configured) |
@@ -22,8 +22,9 @@ call the JSON API routes under `src/app/api/*` and refresh via
 
 ## Data model
 
-SQLite has no enums, so enum-like columns are strings constrained by the union
-types in `src/lib/types.ts` — that file is the single source of truth for
+Enum-like columns are strings by choice, not by dialect — a Prisma enum would
+turn every new status or role into a migration. The union types in
+`src/lib/types.ts` are the single source of truth for
 values like `TicketStatus`, `Priority`, `RiskLevel`, and `RunStatus`.
 
 - **User** — humans (`ADMIN` / `AGENT` / `REQUESTER`) and AI agents
@@ -88,7 +89,9 @@ values like `TicketStatus`, `Priority`, `RiskLevel`, and `RunStatus`.
   (`ai.provider`, `ai.apiKey`, `ai.baseUrl`, `ai.model`, `ai.autoTriage`,
   `ai.qaEnabled`).
 
-A second SQLite database (`prisma/ops.db`) is the **sandbox ops database** the
+The ops sandbox is still a separate SQLite file (`prisma/ops.db`) — it moves to
+its own database on the Postgres server in db-05 — and is the **sandbox ops
+database** the
 agent operates on: `devices`, `employees`, `employees_backup`,
 `software_licenses`, `campaign_tracking`. It stands in for the real systems a
 production deployment would integrate with.
@@ -356,5 +359,5 @@ and the pause/resume protocol unchanged, and swap tool implementations:
 Each tool's `execute()` is the only thing that changes — risk levels,
 approval gates, QA review, and the run trace all apply to real integrations
 exactly as they do to the simulations. You would also replace the demo
-cookie auth with SSO, encrypt stored secrets, and move from SQLite to a
-server database, per the security disclaimer in the README.
+cookie auth with SSO and encrypt stored secrets (the move from SQLite to
+PostgreSQL is done, db-01), per the security disclaimer in the README.

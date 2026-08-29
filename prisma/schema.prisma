@@ -1,12 +1,15 @@
-// Servo data model. SQLite does not support Prisma enums, so enum-like fields
-// are strings constrained by the union types in src/lib/types.ts.
+// Servo data model. Enum-like fields are strings BY CHOICE, not by dialect:
+// a Prisma enum turns "add a status / a role / a category" into a migration
+// plus a deploy, and the extensibility story (installed packs contributing
+// categories, custom roles) depends on those values being data. The union
+// types in src/lib/types.ts are the single source of truth for the values.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

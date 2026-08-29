@@ -54,7 +54,7 @@ is the outer bound of what "correcting a citation" is allowed to reach.
   with the upstream path. Reimplementing an observed *design* needs no
   attribution — but say so here.
 - Nothing lands that assumes Paperclip's pnpm monorepo, its Node+React split
-  or its database. Servo is one Next.js app on Prisma + SQLite.
+  or its database. Servo is one Next.js app on Prisma + PostgreSQL.
 - No new mandatory environment variables. Anything configurable is
   configurable from the existing Settings/Integrations UI, with defaults that
   work on a fresh install, and documented in `docs/USER-GUIDE.md`.
@@ -237,7 +237,7 @@ rendered in a real browser at 1400×1000.
   value in Servo is already served by custom HTTP tools plus the MCP server.
   Infrastructure, not breadth.
 - **Paperclip `packages/db`.** Its own schema and migration story; Servo is
-  Prisma + SQLite with string unions in `src/lib/types.ts` as the source of
+  Prisma + PostgreSQL with string unions in `src/lib/types.ts` as the source of
   truth.
 - **Paperclip's pnpm monorepo, its Node+React split and its `PAPERCLIP_*`
   env-var contract.** Servo is one Next.js app configured from its own UI.

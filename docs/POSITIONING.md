@@ -93,7 +93,7 @@ earlier.
 | An admin-managed egress allowlist constrains outbound tool traffic. The web tools (`fetch_url`, `take_screenshot`) and admin-defined HTTP integrations resolve the host first, refuse loopback, private, CGNAT and link-local addresses, and re-check each redirect. | `src/lib/egress.ts`, `src/lib/ai/tools/web.ts`, `src/app/api/settings/route.ts` |
 | Self-hostable and MIT-licensed. Bring your own key (Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint), or run entirely offline on the deterministic mock provider, which is the default when no key is configured. SSO against any OIDC provider. | `LICENSE`, `src/lib/ai/settings.ts`, `src/lib/ai/provider.ts`, `src/lib/ai/mock.ts`, `src/lib/authjs.ts` |
 | Secrets stored through Settings are encrypted at rest with AES-256-GCM **when `SERVO_ENCRYPTION_KEY` is set**. Without that variable they are stored in plain text, and the docs say so. | `src/lib/secret-store.ts`, `SECURITY.md` |
-| One container and one volume, holding two embedded databases: the application database and a separate sandboxed ops database that the AI SQL tools operate on. *(Transitional — `db-01` replaces this row in the same commit as the PostgreSQL cutover.)* | `docker-compose.yml`, `scripts/docker-entrypoint.sh`, `Dockerfile` |
+| One `docker compose up`: the app and its Postgres (pgvector) container, both on local volumes; the schema arrives as numbered migrations applied on boot. (The ops sandbox keeps its own separate database file until `db-05`.) | `docker-compose.yml`, `scripts/docker-entrypoint.sh`, `Dockerfile` |
 
 ### ROADMAP
 
@@ -223,16 +223,14 @@ exempt:
       - "12. Roadmap — explicitly out of v1"
     enforced: false
   - phrase: sqlite
-    until: db-01
-    reason: transitional - db-01 rewrites the present-tense storage claim in
-      every file below, including this ledger's own preamble
+    until: db-05
+    reason: transitional - the ops SANDBOX is still a SQLite file until db-05
+      moves it to its own Postgres database; these two files describe that
+      sandbox truthfully. Every present-tense MAIN-database claim was already
+      rewritten by db-01.
     paths:
-      - README.md
-      - SECURITY.md
-      - ROADMAP.md
       - docs/ARCHITECTURE.md
       - docs/CONTRACT.md
-      - docs/PORTING-LEDGER.md
   # Permanent, and scoped to sections rather than whole files: the porting
   # ledger's dated history is exempt, its present-tense preamble and its
   # forward-looking Candidates section are NOT - those are covered above and
@@ -380,9 +378,6 @@ paths-exempt:
     reason: db-07 writes the migration guide. Until then the path matches
       nothing, which this canon already says in prose two screens above.
   - target:
-      - prisma/migrations
-      - prisma/migrations/*/migration.sql
-      - scripts/postgres-init.sql
       - scripts/migrate-sqlite-to-postgres.mjs
       - tests/setup/postgres.ts
       - tests/helpers/tmp-db.ts
@@ -394,9 +389,11 @@ paths-exempt:
     paths:
       - docs/design/postgres.md
     until: db-10
-    reason: the Postgres design document names the migrations, harness and
-      tests that db-01 through db-08 create. db-01 is blocked on the runner
-      (owner question 40), so none of them exists yet.
+    reason: the Postgres design document names the one-shot import, the
+      throwaway-database harness and the tests that db-02 through db-08
+      create. db-01 delivered prisma/migrations/ and scripts/postgres-init.sql
+      on the owner's machine (question 40's runner could not pull images), so
+      those two targets left this list.
   - target:
       - src/lib/kb/*
       - src/lib/kb/*/*
@@ -459,7 +456,6 @@ paths-exempt:
   - target:
       - docs/hygiene
       - scripts/media
-      - prisma/migrations
       - tests/dockerignore.test.ts
     paths:
       - docs/design/hygiene.md
@@ -550,7 +546,13 @@ Humans and AI agents work one ticket queue. Gated actions wait for a named human
 Humans and AI agents work one queue. The actions you gate wait for a named human, and every resolved ticket can become a skill your AI runs next time.
 ```
 
-*Pending drop-ins: none.* `db-01` will ship the replacement for the landing
-page's infrastructure line ("two containers — the app and its PostgreSQL — on
-one volume") together with a dated owner action in `spec.md` §14; it stays
-`review` until the owner has applied it.
+**Infrastructure line** — ships with db-01, OWNER-APPLIED (2026-08-28):
+
+```
+One `docker compose up`: the app and a Postgres (pgvector) container, both on
+local volumes.
+```
+
+*Pending owner action, 2026-08-28 (db-01): apply the infrastructure drop-in
+above to the servoai-site landing page's container line, replacing the
+one-container claim. The item stays `review` until it is applied.*
