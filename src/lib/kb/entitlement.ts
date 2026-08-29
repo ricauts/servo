@@ -45,6 +45,21 @@ function entitledCteSql(
   // principals resolved server-side, never caller text), keeping the CTE a
   // plain composable string for kb-10's search statement.
   const lit = (v: string) => `'${v.replace(/'/g, "''")}'`;
+
+  // Catalog cards (cat-01): DERIVED, never mirrored. The datasource
+  // relations are the fixture contract surface (src/lib/catalog/
+  // datasource-contract.ts) — revoking the DataSource makes every one of
+  // its cards dark IN THE SAME STATEMENT, with no reconciler to forget.
+  // UNREADABLE sources contribute nothing: a card for a source the
+  // profiler could not read is not evidence anyone should retrieve.
+  const catalogBranch = (principalLit: string, relation: string, principalCol: string) => `
+    UNION
+    SELECT d.id
+      FROM "Document" d
+      JOIN "CatalogEntry" ce ON ce.id = d."catalogEntryId"
+      JOIN ${relation} s ON s."dataSourceId" = ce."dataSourceId" AND s."${principalCol}" = ${principalLit}
+     WHERE d.kind = 'CATALOG' AND ce."profileStatus" <> 'UNREADABLE'`;
+
   return `WITH human_docs AS (
     SELECT d.id FROM "Document" d WHERE d."ownerId" = ${lit(humanId)}
     UNION
@@ -56,6 +71,7 @@ function entitledCteSql(
      WHERE (g."subjectType" = 'USER' AND g."subjectId" = ${lit(humanId)})
         OR (g."subjectType" = 'GROUP' AND g."subjectId" IN
               (SELECT "groupId" FROM "GroupMember" WHERE "userId" = ${lit(humanId)}))
+    ${catalogBranch(lit(humanId), "datasource_readable_by_human", "userId")}
   )
 ${
   intersect && agentId
@@ -63,6 +79,7 @@ ${
     SELECT COALESCE(g."documentId", d.id) AS id FROM "KbGrant" g
       LEFT JOIN "Document" d ON d."collectionId" = g."collectionId"
      WHERE g."subjectType" = 'AGENT' AND g."subjectId" = ${lit(agentId)}
+    ${catalogBranch(lit(agentId), "datasource_readable_by_agent", "agentId")}
   ), entitled AS (
     SELECT id FROM human_docs
     INTERSECT

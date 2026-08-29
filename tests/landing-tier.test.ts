@@ -85,6 +85,46 @@ describe("migration-guard", () => {
     expect(literal.reasons[0]).toMatch(/non-additive/);
   });
 
+  it("classifies RLS hardening and fixture views as additive (cat-01)", () => {
+    // The kb-15/cat-01 statement class: ENABLE/FORCE + POLICY + VIEW.
+    const sql = [
+      'ALTER TABLE "CatalogEntry" ENABLE ROW LEVEL SECURITY;',
+      'ALTER TABLE "CatalogEntry" FORCE ROW LEVEL SECURITY;',
+      'CREATE POLICY catalog_entry_floor ON "CatalogEntry" USING (true);',
+      "CREATE VIEW datasource_readable_by_human AS SELECT ''::text AS \"dataSourceId\", ''::text AS \"userId\" WHERE false;",
+    ].join("\n\n");
+    expect(classifyMigration(sql)).toEqual({ verdict: "additive", reasons: [] });
+    // Reversing a safety property is NOT additive:
+    const drop = classifyMigration('DROP POLICY catalog_entry_floor ON "CatalogEntry";');
+    expect(drop.verdict).toBe("destructive");
+  });
+
+  it("a pure LOOSENING — DROP NOT NULL — is additive; tightening is not (cat-01)", () => {
+    const loose = classifyMigration('ALTER TABLE "Document" ALTER COLUMN "data" DROP NOT NULL;');
+    expect(loose).toEqual({ verdict: "additive", reasons: [] });
+    const tighten = classifyMigration('ALTER TABLE "Document" ALTER COLUMN "data" SET NOT NULL;');
+    expect(tighten.verdict).toBe("destructive");
+    const retype = classifyMigration('ALTER TABLE "Document" ALTER COLUMN "data" SET DATA TYPE bytea;');
+    expect(retype.verdict).toBe("destructive");
+  });
+
+  it("unique index and CHECK over a column the migration adds cannot reject old rows (cat-01)", () => {
+    const sql = [
+      'ALTER TABLE "Document" ADD COLUMN "kind" TEXT NOT NULL DEFAULT \'FILE\';',
+      'CREATE UNIQUE INDEX "Document_catalogEntryId_key" ON "Document"("kind");',
+      'ALTER TABLE "Document" ADD CONSTRAINT ck CHECK ("kind" <> \'CATALOG\' OR "visibility" = \'PRIVATE\');',
+    ].join("\n\n");
+    expect(classifyMigration(sql)).toEqual({ verdict: "additive", reasons: [] });
+    // The same statements over PRE-EXISTING columns stay Tier-C: a unique
+    // index (or CHECK) on old data can reject rows that already exist.
+    const uniqueOld = classifyMigration('CREATE UNIQUE INDEX bad ON "Document"("ownerId");');
+    expect(uniqueOld.verdict).toBe("destructive");
+    const checkOld = classifyMigration(
+      'ALTER TABLE "Document" ADD CONSTRAINT ck2 CHECK ("ownerId" IS NOT NULL);',
+    );
+    expect(checkOld.verdict).toBe("destructive");
+  });
+
   it("rejects DROP, ALTER COLUMN, RENAME and data mutation", () => {
     for (const sql of [
       'DROP TABLE "Old";',
