@@ -261,7 +261,7 @@ The full model lives in [SECURITY.md](SECURITY.md). The short version:
 
 - **Real sign-in** via any OIDC IdP, with a server-side domain allowlist; requesters only ever see their own tickets. Demo mode (the user switcher) exists for offline evaluation only — never expose it to a network you don't trust.
 - **Secrets are encrypted at rest** (AES-256-GCM via `SERVO_ENCRYPTION_KEY`) and never returned by any API.
-- **Risky agent actions sit behind human-approval gates**, read-only SQL is enforced at the driver, and unmet objectives escalate to a human instead of being marked resolved.
+- **Risky agent actions sit behind human-approval gates**, read-only SQL runs inside a read-only PostgreSQL transaction against a separate sandbox database (and through a SELECT-only role when you configure one), and unmet objectives escalate to a human instead of being marked resolved.
 - Honest residuals: custom HTTP tools are SSRF-by-design for admins (restrict who is an admin; the egress allowlist ships in Integrations — `src/lib/egress.ts`), and there is no built-in rate limiting yet — front a public install with a proxy/WAF.
 
 ## License

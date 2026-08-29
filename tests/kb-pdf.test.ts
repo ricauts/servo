@@ -123,7 +123,12 @@ describe("ingest keeps a scanned PDF downloadable and shareable", () => {
     // The file remains downloadable and shareable: bytes intact, id stable.
     const doc = await db.document.findUniqueOrThrow({ where: { id: result.documentId } });
     expect(doc.textError).toBe(SCANNED_PDF_ERROR);
-    expect(Buffer.from(doc.data ?? new Uint8Array()).equals(scanned())).toBe(true);
+    // Document.data is Bytes? in the schema (a catalog-profile document
+    // carries NULL there), so the null has to be ruled out before the buffer
+    // comparison — asserting it is half the point: an ingest that dropped the
+    // bytes would otherwise reach Buffer.from(null) instead of failing here.
+    expect(doc.data).not.toBeNull();
+    expect(Buffer.from(doc.data!).equals(scanned())).toBe(true);
     const grants = await db.kbGrant.create({
       data: { documentId: doc.id, subjectType: "USER", subjectId: admin.id, grantedById: admin.id },
     });
