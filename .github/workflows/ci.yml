@@ -1,8 +1,10 @@
 # Continuous integration: every push and PR must typecheck, pass the unit
 # tests, and produce a production build. The throwaway-Postgres harness
-# (db-02) runs DB-touching tests against a real pgvector service container;
-# the rest of the suite still mocks the database.
-# every page is force-dynamic, so `next build` never touches a database.
+# (db-02) runs DB-touching tests against a real pgvector service container —
+# the same image docker-compose.test.yml runs locally, on the same port — and
+# the rest of the suite still mocks the database. The build step needs no
+# service of its own: every page is force-dynamic, so `next build` never
+# touches a database.
 name: CI
 
 on:
