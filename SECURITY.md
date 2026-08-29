@@ -61,8 +61,14 @@ Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
 - Every tool carries a risk level and an optional **human-approval gate**
   (defaults in `src/lib/ai/tool-policies.ts`, editable per install); HIGH-risk
   approvals are admin-only, and QA reviews risky runs.
-- Read-only SQL is enforced at the driver (`PRAGMA query_only`), not just by
-  keyword filtering; mutating SQL defaults to requiring approval.
+- Read-only SQL is enforced by PostgreSQL, not just by keyword filtering:
+  every read runs inside a read-only transaction, and with
+  `OPS_DATABASE_READONLY_URL` set it runs as `servo_ops_ro`, a role granted
+  `SELECT` and nothing else. Without that variable the transaction is the
+  whole enforcement — set it. Mutating SQL defaults to requiring approval.
+  The sandbox is its own database (`servo_ops`) whose roles have `CONNECT` on
+  the desk database revoked, so a query that escapes the read path still
+  cannot reach ticket data.
 - Agents that cannot complete an objective **escalate to a human** — an
   unmet objective is never marked resolved.
 - The MCP endpoint and the inbound-email webhook are disabled until you set
@@ -93,8 +99,8 @@ Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
 - The PostgreSQL volume (`servo-db` in Docker) holds your tickets and sealed
   secrets — restrict access to it, and back it up with `pg_dump` against the
   `db` service, covering **both** databases the app uses: `servo` (everything)
-  and `servo_ops` (the sandbox the agent's SQL tools operate on, once db-05
-  moves it to Postgres). Restore with `pg_restore`/`psql` into a fresh
+  and `servo_ops` (the sandbox the agent's SQL tools operate on). Restore
+  with `pg_restore`/`psql` into a fresh
   database — the procedure is proven by `tests/backup-restore.test.ts`. A
   dump contains sealed secrets and is only as safe as your
   `SERVO_ENCRYPTION_KEY`: the dump is ciphertext for those values, so treat

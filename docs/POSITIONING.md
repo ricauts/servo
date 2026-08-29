@@ -93,7 +93,7 @@ earlier.
 | An admin-managed egress allowlist constrains outbound tool traffic. The web tools (`fetch_url`, `take_screenshot`) and admin-defined HTTP integrations resolve the host first, refuse loopback, private, CGNAT and link-local addresses, and re-check each redirect. | `src/lib/egress.ts`, `src/lib/ai/tools/web.ts`, `src/app/api/settings/route.ts` |
 | Self-hostable and MIT-licensed. Bring your own key (Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint), or run entirely offline on the deterministic mock provider, which is the default when no key is configured. SSO against any OIDC provider. | `LICENSE`, `src/lib/ai/settings.ts`, `src/lib/ai/provider.ts`, `src/lib/ai/mock.ts`, `src/lib/authjs.ts` |
 | Secrets stored through Settings are encrypted at rest with AES-256-GCM **when `SERVO_ENCRYPTION_KEY` is set**. Without that variable they are stored in plain text, and the docs say so. | `src/lib/secret-store.ts`, `SECURITY.md` |
-| One `docker compose up`: the app and its Postgres (pgvector) container, both on local volumes; the schema arrives as numbered migrations applied on boot. (The ops sandbox keeps its own separate database file until `db-05`.) | `docker-compose.yml`, `scripts/docker-entrypoint.sh`, `Dockerfile` |
+| One `docker compose up`: the app and its Postgres (pgvector) container, both on local volumes; the schema arrives as numbered migrations applied on boot. The agent's SQL sandbox is a second database on that same server, `servo_ops`, whose two login roles have `CONNECT` on the desk database revoked. | `docker-compose.yml`, `scripts/docker-entrypoint.sh`, `Dockerfile`, `scripts/postgres-init.sql` |
 
 ### ROADMAP
 
@@ -222,15 +222,6 @@ exempt:
     sections:
       - "12. Roadmap — explicitly out of v1"
     enforced: false
-  - phrase: sqlite
-    until: db-05
-    reason: transitional - the ops SANDBOX is still a SQLite file until db-05
-      moves it to its own Postgres database; these two files describe that
-      sandbox truthfully. Every present-tense MAIN-database claim was already
-      rewritten by db-01.
-    paths:
-      - docs/ARCHITECTURE.md
-      - docs/CONTRACT.md
   # Permanent, and scoped to sections rather than whole files: the porting
   # ledger's dated history is exempt, its present-tense preamble and its
   # forward-looking Candidates section are NOT - those are covered above and

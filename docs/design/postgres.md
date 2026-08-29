@@ -79,7 +79,7 @@ The app container becomes **stateless** — attachments are `bytea` rows, not fi
 
 ### The ops sandbox: a separate database, not a separate schema
 
-`execute_ops_sql` and `query_ops_database` (`src/lib/ai/tools/ops-db.ts`) operate on a sandbox that must stay isolated from ticket data. Today that is a second SQLite file (`src/lib/opsdb.ts:9`, `OPS_DATABASE_URL`).
+`execute_ops_sql` and `query_ops_database` (`src/lib/ai/tools/ops-db.ts`) operate on a sandbox that must stay isolated from ticket data. When this section was written that was a second SQLite file behind `OPS_DATABASE_URL`; **db-05 shipped the recommendation below, so it is now `servo_ops` on PostgreSQL** and the rest of this section reads as the record of that decision rather than as a description of a pending one.
 
 **Recommendation: a separate database `servo_ops` on the same Postgres server, with two dedicated login roles.** Not a separate schema.
 
@@ -89,14 +89,14 @@ Why the database boundary wins:
 - A schema split, by contrast, depends on GRANT hygiene forever: `public` sits on the default `search_path`, `PUBLIC` keeps `USAGE` on it, and one future migration with a broad `GRANT SELECT ON ALL TABLES` re-opens the desk to the sandbox. A database boundary cannot be re-opened by a forgotten grant.
 - It preserves the existing shape: `OPS_DATABASE_URL` stays a separate URL, `src/lib/opsdb.ts` keeps two clients, and `execute_ops_sql` still gets a real DDL playground where `DROP TABLE employees_backup` is harmless and `ensureOpsSchema()` (`src/lib/bootstrap.ts:118`) recreates the tables on the next boot.
 
-**Why the read path gets strictly stronger than SQLite ever gave.** `PRAGMA query_only = ON` is a *session* setting on a connection that otherwise has full write access to the file — enforcement depends on that one statement landing on the right connection, which is precisely why `opsdb.ts:30` has to pin `?connection_limit=1`. Replace it with:
+**Why the read path gets strictly stronger than SQLite ever gave.** `PRAGMA query_only = ON` is a *session* setting on a connection that otherwise has full write access to the file — enforcement depends on that one statement landing on the right connection, which is why this document proposed pinning `?connection_limit=1`. *(Correction recorded when db-05 shipped: `?connection_limit=1` was real while the sandbox ran on Prisma-over-SQLite, but **db-01 already removed it** — the file db-05 inherited opened a fresh `node:sqlite` handle per call, which had the same effect. So db-05 deleted `PRAGMA query_only`, not a pin that was already gone. The line references throughout this section predate the cutover and are not current.)* Replace it with:
 
-1. A login role `servo_ops_ro` with `CONNECT` on `servo_ops`, `USAGE` on its schema, `SELECT` on its tables, and nothing else, plus `ALTER ROLE servo_ops_ro SET default_transaction_read_only = on`. The server enforces this on every connection whether or not the app remembers to run anything.
+1. A login role `servo_ops_ro` with `CONNECT` on `servo_ops`, `USAGE` on its schema, `SELECT` on its tables, and nothing else, plus `ALTER ROLE servo_ops_ro SET default_transaction_read_only = on`. *(Correction recorded when db-05 shipped: the SELECT-only grants are what make the role read-only. `default_transaction_read_only` is a session **default**, and a statement may clear it for its own session with `set_config`, so it is a convenience rather than the enforcement. Point 2 below is the guarantee, on every install rather than only on those without the second URL.)*
 2. Belt and braces for installs that do not configure the second URL: `opsSelect()` runs its statement inside `BEGIN … SET TRANSACTION READ ONLY`, so a smuggled `WITH x AS (…) DELETE …` fails even on the read-write role.
 3. `REVOKE CONNECT ON DATABASE servo FROM PUBLIC, servo_ops_rw, servo_ops_ro;` — the load-bearing line. Neither sandbox role can open the desk database at all.
 4. `REVOKE ALL ON SCHEMA public FROM PUBLIC;` and `REVOKE TEMPORARY ON DATABASE servo_ops FROM PUBLIC;` inside `servo_ops`, so the read role cannot create temp objects to stage a write.
 
-With the role in place the `connection_limit=1` hack is deleted and pooling is restored.
+With the role in place there is no per-call connection pinning of any kind, and pooling is restored.
 
 **Known caveat, stated in the item.** `/docker-entrypoint-initdb.d` runs only on an empty data directory, so an upgraded volume never sees `postgres-init.sql`. The migration guide includes the same SQL to run by hand, and `ensureOpsSchema()` applies the idempotent parts at boot.
 
@@ -122,13 +122,12 @@ A **documented one-shot script**, not an automatic import.
 
 ### Dev & test story
 
-**Dev.** `docker compose up -d db`, then `npm run dev`. `.env.example` ships:
+**Dev.** `docker compose up -d db`, then `npm run dev`. `.env.example` ships all three URLs, `OPS_DATABASE_READONLY_URL` among them — the sketch below is what this document proposed; read the file for what shipped:
 
 ```
 DATABASE_URL="postgresql://servo:servo@localhost:5432/servo?schema=public"
 OPS_DATABASE_URL="postgresql://servo_ops_rw:servo_ops@localhost:5432/servo_ops"
-# Optional but recommended: a read-only role for query_ops_database.
-# OPS_DATABASE_READONLY_URL="postgresql://servo_ops_ro:servo_ops@localhost:5432/servo_ops"
+OPS_DATABASE_READONLY_URL="postgresql://servo_ops_ro:servo_ops@localhost:5432/servo_ops"
 ```
 
 **Test: one throwaway database per run, cloned from a template.**
@@ -211,7 +210,7 @@ The rebrand area's claims linter gains `sqlite` as a banned word outside `docs/m
 
 **db-05 — Ops sandbox on Postgres, behind a read-only role** · two-ticks · depends-on: db-01
 - `scripts/postgres-init.sql` creates `servo_ops`, roles `servo_ops_rw`/`servo_ops_ro`, `ALTER ROLE servo_ops_ro SET default_transaction_read_only = on`, and the four revokes listed above (`CONNECT` on `servo` revoked from both ops roles is mandatory).
-- `src/lib/opsdb.ts`: `PRAGMA query_only` and `?connection_limit=1` deleted; `opsSelect()` uses `OPS_DATABASE_READONLY_URL` when set and always wraps the statement in a read-only transaction; `opsExecute()` uses the rw role.
+- `src/lib/opsdb.ts`: `PRAGMA query_only` gone (the `?connection_limit=1` pin was already gone — db-01 removed it; see the correction above); `opsSelect()` uses `OPS_DATABASE_READONLY_URL` when set and always wraps the statement in a read-only transaction; `opsExecute()` uses the rw role.
 - `get_device_info` (`src/lib/ai/tools/ops-db.ts:95`) uses `$1`, not `?`; `singleStatement`/`looksMutating` keep working and `pragma` leaves the keyword list.
 - Portable DDL: `ensureOpsSchema()` (`src/lib/bootstrap.ts:118`) and `prisma/seed-demo.ts:265-360` use Postgres types (`GENERATED BY DEFAULT AS IDENTITY`, not `AUTOINCREMENT`) and `$1…$n` placeholders.
 - The canned SQL in the deterministic mock provider (`src/lib/ai/mock.ts:250`), the fixture step in `prisma/seed-demo.ts:584`, the example in `docs/CONTRACT.md:171`, `agents/analytics-agent.md:14` and `skills/production-database-change/SKILL.md:18` all move off `sqlite_master` to `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`.

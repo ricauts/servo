@@ -42,7 +42,7 @@ a deterministic **mock provider** makes the entire demo work offline.
 | Module | Exports |
 |---|---|
 | `@/lib/db` | `db` (PrismaClient) |
-| `@/lib/opsdb` | `opsDb`, `opsSelect(sql)`, `opsExecute(sql)` — sandbox ops database (devices, employees, employees_backup, software_licenses, campaign_tracking) |
+| `@/lib/opsdb` | `OPS_SCHEMA_QUERY`, `opsSelect(sql, params?)`, `opsExecute(sql, params?)`, `opsDisconnect()` — the sandbox ops database, a separate PostgreSQL database behind its own roles. `ensureOpsSchema()` creates devices, employees and software_licenses; employees_backup and campaign_tracking arrive with `npm run demo` |
 | `@/lib/auth` | `getCurrentUser(): Promise<User>` (cookie-based demo auth), `USER_COOKIE` |
 | `@/lib/permissions` | `can(user, action)`, `canDecideApproval(user, riskLevel)`, `forbid(user, action)` → `Response \| null`, `Action` type |
 | `@/lib/types` | All unions (`TicketStatus`, `Priority`, `Category`, `RiskLevel`, `RunStatus`, `StepType`, `ApprovalStatus`…), `ContentBlock`, `ConversationMessage`, `SETTING_KEYS`, `KpiResponse`, `TICKET_STATUSES`, `PRIORITIES`, `CATEGORIES` |
@@ -169,7 +169,9 @@ export function getProvider(settings: AiSettings, ctx: MockContext): ChatProvide
   - /device|laptop|monitor|asset|warranty|phone/i → `get_device_info
     {assetTag: first /[A-Z]{2}-\d{3,4}/ match in text, else "LT-2043"}`
   - /table|database|sql|schema|query|report|license/i →
-    `query_ops_database {sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"}`
+    `query_ops_database {sql: OPS_SCHEMA_QUERY}` — the schema-listing statement
+    exported by `src/lib/opsdb.ts`: `SELECT table_name FROM
+    information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;`
     then, if /create|add|drop|delete|update|insert|alter/i,
     `execute_ops_sql {sql: derived: "DROP TABLE employees_backup;" if /drop/i
     else a CREATE TABLE derived from slugified title}`

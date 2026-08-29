@@ -8,8 +8,10 @@ services:
       POSTGRES_DB: servo
     volumes:
       - servo-db:/var/lib/postgresql/data
-      # Idempotent setup for the ops sandbox; filled by db-05, and only
-      # ever runs on an EMPTY data directory.
+      # Idempotent setup for the ops sandbox — the servo_ops database, its
+      # two login roles and the revokes. Only ever runs on an EMPTY data
+      # directory: docs/migrating-to-postgres.md carries the same SQL for
+      # volumes that already exist.
       - ./scripts/postgres-init.sql:/docker-entrypoint-initdb.d/10-servo.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U servo -d servo"]
@@ -27,9 +29,12 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: "postgresql://servo:servo@db:5432/servo?schema=public"
-      # The ops sandbox stays SQLite until db-05 moves it to its own Postgres
-      # database — explicitly out of scope for the cutover (spec §3.3).
-      OPS_DATABASE_URL: "file:/data/ops.db"
+      # The ops sandbox: its own database and its own roles, created by
+      # scripts/postgres-init.sql. The read URL is the role whose grants are
+      # SELECT and nothing else; change both passwords alongside
+      # POSTGRES_PASSWORD in production.
+      OPS_DATABASE_URL: "postgresql://servo_ops_rw:servo_ops@db:5432/servo_ops"
+      OPS_DATABASE_READONLY_URL: "postgresql://servo_ops_ro:servo_ops@db:5432/servo_ops"
       # Production checklist (see SECURITY.md):
       # AUTH_SECRET: "any-long-random-string"            # session signing
       # SERVO_ENCRYPTION_KEY: "64-hex-or-passphrase"     # secrets encrypted at rest

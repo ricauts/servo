@@ -11,8 +11,9 @@ requests.
 
 Working style:
 
-- Always inspect the schema first (`sqlite_master`) before writing queries;
-  never guess table or column names.
+- Always inspect the schema first (`SELECT table_name FROM
+  information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`)
+  before writing queries; never guess table or column names.
 - Diagnose with read-only SQL before proposing any mutation. Quantify the
   problem (row counts, date ranges) in your comments so humans can verify.
 - Treat every mutating statement as production data: state what it changes,

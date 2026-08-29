@@ -15,8 +15,9 @@ correcting rows, backfilling data, cleaning up, or dropping anything.
 before you ask for it:
 
 1. `query_ops_database` for the current shape — the table, its columns, and
-   the rows the change would touch. `SELECT name FROM sqlite_master` when you
-   do not know the schema yet.
+   the rows the change would touch. `SELECT table_name FROM
+   information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`
+   when you do not know the schema yet.
 2. Run the **`SELECT` twin** of your mutation first: the same `WHERE` clause
    as a `SELECT COUNT(*)`. If that count is not what you expected, your
    `WHERE` clause is wrong, and you have just found that out for free.

@@ -18,9 +18,12 @@ function singleStatement(sql: string): string | null {
 }
 
 // Courtesy pre-check for the read-only tool so the model gets an actionable
-// error message. Real enforcement is the query_only connection in opsdb.ts.
+// error message. Real enforcement is server-side in opsdb.ts: the read-only
+// transaction every statement runs inside, plus the SELECT-only role when
+// OPS_DATABASE_READONLY_URL names one.
+// `pragma` left the list with SQLite — it is not a PostgreSQL keyword.
 const MUTATING_KEYWORD =
-  /\b(insert|update|delete|drop|alter|create|replace|attach|detach|pragma|vacuum|reindex)\b/i;
+  /\b(insert|update|delete|drop|alter|create|replace|attach|detach|vacuum|reindex)\b/i;
 
 function looksMutating(sql: string): boolean {
   const withoutLiterals = sql.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, "");
@@ -92,9 +95,10 @@ export const opsDbTools: Record<string, ToolDef> = {
       const assetTag = str(input.assetTag).trim();
       if (!assetTag) return "Error: assetTag is required.";
       try {
-        const rows = await opsSelect(
-          "SELECT * FROM devices WHERE asset_tag = '" + assetTag.replace(/'/g, "''") + "'",
-        );
+        // Bound as $1, never interpolated: the asset tag arrives from model
+        // output, so quote-doubling was the only thing standing between a
+        // crafted tag and the rest of the sandbox.
+        const rows = await opsSelect("SELECT * FROM devices WHERE asset_tag = $1", [assetTag]);
         if (rows.length === 0) return `No device found with asset tag ${assetTag}.`;
         return jsonSafe(rows[0]);
       } catch (err) {

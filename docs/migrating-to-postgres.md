@@ -45,10 +45,63 @@ real binary blobs (byte-identical); ticket numbers move to the
 
 **The ops sandbox (`ops.db`) is not migrated.** It is disposable fixture
 data — devices, employees, licences — that exists so the agent's sandboxed
-SQL tools have something to operate on. The container entrypoint recreates
-it on an empty directory, and db-05 moves it to its own Postgres database
-with fresh fixtures. Carrying fictional HR rows across a migration would be
-work with no reader.
+SQL tools have something to operate on. It now lives in its own PostgreSQL
+database with its own roles (see below); `ensureOpsSchema()` recreates the
+empty tables at boot and `npm run demo` refills the showcase rows. Carrying
+fictional HR rows across a migration would be work with no reader.
+
+## Create the ops sandbox by hand (upgraded volumes only)
+
+`scripts/postgres-init.sql` is mounted into `/docker-entrypoint-initdb.d`,
+and **Postgres runs that directory only on an EMPTY data directory.** A
+volume that already holds a database — which is every install that followed
+the procedure above — therefore never sees it. The compose file ships both
+sandbox URLs set, so the symptom is not "not configured": `query_ops_database`
+comes back with a connection error naming `servo_ops_ro`, because neither the
+database nor the roles those URLs name exist yet.
+
+Apply the same file by hand, once, as a superuser:
+
+```bash
+docker compose cp scripts/postgres-init.sql db:/tmp/postgres-init.sql
+docker compose exec -T db \
+  psql -U servo -d servo -v ON_ERROR_STOP=1 -f /tmp/postgres-init.sql
+```
+
+It is idempotent — every statement re-runs safely — and it creates:
+
+- the `servo_ops` database, owned by `servo_ops_rw`;
+- login roles `servo_ops_rw` and `servo_ops_ro`, the latter granted `SELECT`
+  and nothing else, with `ALTER ROLE … SET default_transaction_read_only = on`
+  as its session default (the binding guarantee is the read-only transaction
+  `src/lib/opsdb.ts` opens around every statement);
+- the revokes that make the boundary real, above all **`REVOKE CONNECT ON
+  DATABASE servo FROM PUBLIC, servo_ops_rw, servo_ops_ro`** — neither sandbox
+  role can open the desk database at all.
+
+Then set both URLs on the `servo` service (docker-compose.yml already ships
+them) and restart it:
+
+```
+OPS_DATABASE_URL="postgresql://servo_ops_rw:servo_ops@db:5432/servo_ops"
+OPS_DATABASE_READONLY_URL="postgresql://servo_ops_ro:servo_ops@db:5432/servo_ops"
+```
+
+**Change `servo_ops` from the default password** the same way you change
+`POSTGRES_PASSWORD`: `ALTER ROLE servo_ops_rw PASSWORD '…';` and the same for
+`servo_ops_ro`, then update both URLs.
+
+On the next boot `ensureOpsSchema()` re-applies the parts that need no
+superuser — the three revokes inside `servo_ops` and the read role's grants —
+so those stay correct without anyone re-running the file. Creating the
+database and the two roles is the part that still needs this file.
+
+**Point `OPS_DATABASE_URL` at a database of its own.** Servo refuses one that
+names the same database as `DATABASE_URL`, but it cannot know that some other
+shared database is not yours to change: on every boot `ensureOpsSchema()`
+revokes `CONNECT`, `TEMPORARY` and schema rights from `PUBLIC` on whatever
+database that URL names, and creates its three fixture tables there. Give the
+sandbox an empty database.
 
 ## If you skip this guide
 

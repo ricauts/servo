@@ -18,9 +18,15 @@ RUN npm run build
 
 # The app container is stateless: the database is the `db` service; see
 # docker-compose.yml. Prisma migrations ride in the image (COPY prisma ./prisma).
+# OPS_DATABASE_URL carries no default: the ops sandbox is a PostgreSQL
+# database now (db-05), and an image-level `file:` path would only be a
+# backend the code no longer speaks. docker-compose.yml sets it; an install
+# that does not gets a message naming the variable and the migration guide,
+# and — because the entrypoint runs under `set -e` — a SERVO_DEMO=1 first boot
+# stops there rather than seeding. That is deliberate: the demo seed wipes the
+# desk, so refusing before it starts beats half-seeding one.
 ENV NODE_ENV=production \
     DATABASE_URL="file:/data/servo.db" \
-    OPS_DATABASE_URL="file:/data/ops.db" \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 

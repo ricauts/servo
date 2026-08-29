@@ -37,8 +37,8 @@ mock of itself. Have an opinion on priorities? Open an issue.
   rendered in replies, and per-source access control.
 - WhatsApp & Telegram intake — chat conversations become tickets with the
   same draft-approve loop
-- MySQL connector for the ops tools (the ops sandbox moves onto the main
-  PostgreSQL server as its own database in `db-05`)
+- MySQL connector for the ops tools (the ops sandbox is already its own
+  database on the main PostgreSQL server, `db-05`)
 
 ## Next
 
