@@ -5,26 +5,16 @@
 // depends-on: ux-01). The registry is a plain shared module so server
 // components can compute the filtered list and pass it down as props.
 
-import {
-  Bot,
-  BookOpen,
-  Database,
-  Inbox,
-  LayoutDashboard,
-  Plug,
-  Plus,
-  Settings2,
-  ShieldCheck,
-  Users2,
-  type LucideIcon,
-} from "lucide-react";
 import { can, type Action } from "@/lib/permissions";
+import type { NavIconName } from "@/components/shell/nav-icons";
 import type { User } from "@prisma/client";
 
 export interface NavEntry {
   href: string;
   label: string;
-  icon: LucideIcon;
+  /** A NAV_ICONS key, never a component: entries cross the server/client
+   * boundary as props, and functions are not serializable. */
+  icon: NavIconName;
   section: "work" | "fleet" | "admin";
   /** Omitted = visible to every signed-in human role. */
   action?: Action;
@@ -33,18 +23,18 @@ export interface NavEntry {
 }
 
 export const NAV_ENTRIES: NavEntry[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "work", action: "kpi.view" },
-  { href: "/tickets", label: "Tickets", icon: Inbox, section: "work" },
-  { href: "/tickets/new", label: "New request", icon: Plus, section: "work" },
-  { href: "/approvals", label: "Approvals", icon: ShieldCheck, section: "work", action: "approval.view" },
-  { href: "/groups", label: "Groups", icon: Users2, section: "work", action: "group.view" },
-  { href: "/agents", label: "Agents", icon: Bot, section: "fleet", action: "agents.view" },
-  { href: "/skills", label: "Skills", icon: BookOpen, section: "fleet", action: "skills.view" },
+  { href: "/dashboard", label: "Dashboard", icon: "dashboard", section: "work", action: "kpi.view" },
+  { href: "/tickets", label: "Tickets", icon: "tickets", section: "work" },
+  { href: "/tickets/new", label: "New request", icon: "new-ticket", section: "work" },
+  { href: "/approvals", label: "Approvals", icon: "approvals", section: "work", action: "approval.view" },
+  { href: "/groups", label: "Groups", icon: "groups", section: "work", action: "group.view" },
+  { href: "/agents", label: "Agents", icon: "agents", section: "fleet", action: "agents.view" },
+  { href: "/skills", label: "Skills", icon: "skills", section: "fleet", action: "skills.view" },
   // The Knowledge entry (kb-16): kb.view excludes REQUESTER and AI_AGENT, so
   // the entry is absent from their nav — they meet the KB as cited answers.
-  { href: "/kb", label: "Knowledge", icon: Database, section: "fleet", action: "kb.view" },
-  { href: "/integrations", label: "Integrations", icon: Plug, section: "admin", adminOnly: true },
-  { href: "/settings", label: "Settings", icon: Settings2, section: "admin", adminOnly: true },
+  { href: "/kb", label: "Knowledge", icon: "knowledge", section: "fleet", action: "kb.view" },
+  { href: "/integrations", label: "Integrations", icon: "integrations", section: "admin", adminOnly: true },
+  { href: "/settings", label: "Settings", icon: "settings", section: "admin", adminOnly: true },
 ];
 
 /**

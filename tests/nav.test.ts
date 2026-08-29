@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { NAV_ENTRIES, navForUser } from "@/components/shell/nav-items";
+import { NAV_ICONS } from "@/components/shell/nav-icons";
 
 const role = (r: "ADMIN" | "AGENT" | "REQUESTER" | "AI_AGENT") => ({ role: r });
 const hrefs = (entries: ReturnType<typeof navForUser>) => entries.map((e) => e.href);
@@ -47,6 +48,26 @@ describe("the registry itself", () => {
     // a strict subset. If a page is added without a NavEntry, this count is
     // where the drift shows first.
     expect(NAV_ENTRIES).toHaveLength(10); // + Knowledge (kb-16)
+  });
+
+  it("addresses icons by name — entries cross the server/client boundary", () => {
+    // Regression rail for a production crash: NavEntry.icon once held the
+    // lucide component itself, and React cannot serialize functions, so the
+    // server layout handing entries to the client SidebarNav/CommandPalette
+    // killed every authenticated page with "Functions cannot be passed
+    // directly to Client Components". Icons must stay names, resolved to
+    // components only where they are rendered (nav-icons.ts).
+    for (const entry of NAV_ENTRIES) {
+      expect(
+        typeof entry.icon,
+        `${entry.href} carries a component instead of an icon name`,
+      ).toBe("string");
+      expect(entry.icon in NAV_ICONS, `NAV_ICONS is missing "${entry.icon}"`).toBe(true);
+    }
+    // And the map carries no dead icons.
+    expect(new Set(NAV_ENTRIES.map((e) => e.icon)).size).toBe(
+      Object.keys(NAV_ICONS).length,
+    );
   });
 });
 
