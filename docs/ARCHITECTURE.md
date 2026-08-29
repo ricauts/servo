@@ -89,12 +89,13 @@ values like `TicketStatus`, `Priority`, `RiskLevel`, and `RunStatus`.
   (`ai.provider`, `ai.apiKey`, `ai.baseUrl`, `ai.model`, `ai.autoTriage`,
   `ai.qaEnabled`).
 
-The ops sandbox is still a separate SQLite file (`prisma/ops.db`) — it moves to
-its own database on the Postgres server in db-05 — and is the **sandbox ops
-database** the
-agent operates on: `devices`, `employees`, `employees_backup`,
-`software_licenses`, `campaign_tracking`. It stands in for the real systems a
-production deployment would integrate with.
+The **sandbox ops database** is `servo_ops`, its own database on the same
+Postgres server, reached through two dedicated login roles (`servo_ops_rw`,
+`servo_ops_ro`) whose `CONNECT` on the desk database is revoked
+(`scripts/postgres-init.sql`, db-05). It holds what the agent operates on:
+`devices`, `employees`, `employees_backup`, `software_licenses`,
+`campaign_tracking`. It stands in for the real systems a production deployment
+would integrate with.
 
 ### What the database guarantees (db-08)
 
@@ -384,5 +385,5 @@ and the pause/resume protocol unchanged, and swap tool implementations:
 Each tool's `execute()` is the only thing that changes — risk levels,
 approval gates, QA review, and the run trace all apply to real integrations
 exactly as they do to the simulations. You would also replace the demo
-cookie auth with SSO and encrypt stored secrets (the move from SQLite to
-PostgreSQL is done, db-01), per the security disclaimer in the README.
+cookie auth with SSO and encrypt stored secrets (the database is already
+PostgreSQL, db-01), per the security disclaimer in the README.

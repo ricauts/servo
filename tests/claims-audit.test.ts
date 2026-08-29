@@ -94,7 +94,7 @@ describe("parseCanonBlock — the fence is the whole policy", () => {
     expect(c.banned).toContain("control plane");
     expect(c.banned).toContain("never leaves your network");
     expect(c.allow).toContain("Self-host it");
-    expect(c.exempt.length).toBeGreaterThanOrEqual(5);
+    expect(c.exempt.length).toBeGreaterThanOrEqual(4);
   });
 
   it("keeps every phrase a string — no scalar coercion of policy data", () => {
@@ -105,10 +105,31 @@ describe("parseCanonBlock — the fence is the whole policy", () => {
   });
 
   it("folds a multi-line reason and keeps the following key separate", () => {
-    const transitional: any = canon().exempt.find((e: any) => e.until === "db-05");
+    // A fixture, not the live canon: this asserts the PARSER folds a wrapped
+    // `reason:` and still sees `paths:` as its own key. Pinning it to
+    // whichever transitional exemption happens to be open made the test fail
+    // the day that item shipped and retired the entry (db-05 was the last
+    // one), which told nobody anything about the parser.
+    const c = parseCanonBlock(
+      [
+        "```banned-phrases",
+        "exempt:",
+        "  - phrase: sqlite",
+        "    until: some-item",
+        "    reason: transitional - the first line of a reason that wraps",
+        "      onto a second line and then a third, none of which may be",
+        "      mistaken for a key",
+        "    paths:",
+        "      - docs/ONE.md",
+        "      - docs/TWO.md",
+        "```",
+      ].join("\n"),
+    );
+    const transitional: any = c.exempt.find((e: any) => e.until === "some-item");
     expect(transitional).toBeDefined();
-    expect(transitional.reason).toContain("ops SANDBOX is still a SQLite file until db-05");
-    expect(transitional.paths).toEqual(["docs/ARCHITECTURE.md", "docs/CONTRACT.md"]);
+    expect(transitional.reason).toContain("a reason that wraps onto a second line");
+    expect(transitional.reason).toContain("mistaken for a key");
+    expect(transitional.paths).toEqual(["docs/ONE.md", "docs/TWO.md"]);
     expect(transitional.sections).toEqual([]);
   });
 
@@ -345,12 +366,29 @@ describe("exemptions — path, section, count and inert entries", () => {
   });
 
   it("surfaces a transitional exemption as a note naming the item that retires it", () => {
-    const c = canon();
-    const found = scanFile("docs/ARCHITECTURE.md", readFileSync("docs/ARCHITECTURE.md", "utf8"), c);
-    expect(found.length).toBeGreaterThan(0); // the sandbox file reference
+    // Also a fixture. The live canon carried exactly one `until:` exemption
+    // and db-05 retired it; the behaviour under test — an exempted hit is
+    // reported as a NOTE naming its retiring item, never silently dropped —
+    // outlives any particular entry.
+    const c = fixtureCanon({
+      scan: ["docs/FIXTURE.md"],
+      pathsScan: ["docs/FIXTURE.md"],
+      banned: ["sqlite"],
+      exempt: [
+        {
+          phrase: "sqlite",
+          until: "some-item",
+          reason: "transitional",
+          paths: ["docs/FIXTURE.md"],
+          sections: [],
+        },
+      ],
+    });
+    const found = scanFile("docs/FIXTURE.md", "The store is still SQLite today.", c);
+    expect(found.length).toBeGreaterThan(0);
     const { reported, notes } = applyExemptions(found, c);
     expect(reported).toEqual([]);
-    expect(notes.join(" ")).toMatch(/transitional until db-05/);
+    expect(notes.join(" ")).toMatch(/transitional until some-item/);
   });
 });
 
