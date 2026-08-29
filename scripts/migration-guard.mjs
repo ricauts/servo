@@ -62,6 +62,11 @@ export function classifyMigration(sql) {
   const reasons = [];
   const createdTables = new Set();
   const createdSequences = new Set();
+  /** table → columns this migration ADDs (nullable or defaulted). A UNIQUE
+   *  index or a CHECK over only-such columns cannot reject a pre-existing
+   *  row — the column did not exist — so both are additive on a table this
+   *  migration merely extends (cat-01's Document.kind checks). */
+  const addedColumns = new Map();
   const statements = splitStatements(sql);
 
   // First pass: tables created here. Indexes on them — unique or not — are
@@ -69,6 +74,15 @@ export function classifyMigration(sql) {
   for (const s of statements) {
     const m = s.match(CREATE_TABLE_RE);
     if (m) createdTables.add(normIdent(m[1]));
+    const alter = s.match(ALTER_ADD_COLUMN_RE);
+    if (alter && alter[3]) {
+      const table = normIdent(alter[1]);
+      const col = normIdent(alter[3].trim().split(/\s+/)[0]);
+      if (col) {
+        if (!addedColumns.has(table)) addedColumns.set(table, new Set());
+        addedColumns.get(table).add(col);
+      }
+    }
   }
 
   for (const s of statements) {
@@ -78,12 +92,30 @@ export function classifyMigration(sql) {
       const m = s.match(CREATE_INDEX_RE);
       const isUnique = /^CREATE\s+UNIQUE\s+INDEX\b/i.test(s);
       const table = m ? normIdent(m[2]) : "(unknown)";
-      if (isUnique && !createdTables.has(table)) {
+      const indexCols = s.match(/\(([^)]*)\)\s*;?\s*$/);
+      const cols = indexCols
+        ? indexCols[1].split(",").map((c) => normIdent(c.trim().split(/\s+/)[0]))
+        : [];
+      const fresh = cols.length > 0 && addedColumns.get(table) && cols.every((c) => addedColumns.get(table).has(c));
+      if (isUnique && !createdTables.has(table) && !fresh) {
         reasons.push(`unique index on pre-existing table "${table}": ${head}`);
       }
       continue;
     }
     if (/^CREATE\s+EXTENSION\b/i.test(s)) continue;
+    // A view creates a queryable object and destroys nothing (cat-01's
+    // datasource-contract fixture views); DROP VIEW would be destructive.
+    if (/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\b/i.test(s)) continue;
+    // RLS hardening (kb-15, cat-01): ENABLE/FORCE adds a property and
+    // constrains nothing; a POLICY is the same class of addition as an
+    // index — a rule the planner applies. DROP POLICY or DISABLE ROW LEVEL
+    // SECURITY would reverse a safety property and stays non-additive.
+    if (/^ALTER\s+TABLE\s+(?:ONLY\s+)?["\w.]+\s+(?:ENABLE|FORCE)\s+ROW\s+LEVEL\s+SECURITY\b/i.test(s)) continue;
+    if (/^CREATE\s+POLICY\s+\w+\s+ON\b/i.test(s)) continue;
+    // A pure LOOSENING (cat-01): DROP NOT NULL validates every row that
+    // already exists. ADD NOT NULL or any type change is the reverse and
+    // stays non-additive.
+    if (/^ALTER\s+TABLE\s+(?:ONLY\s+)?["\w.]+\s+ALTER\s+COLUMN\s+["\w.]+\s+DROP\s+NOT\s+NULL\b/i.test(s)) continue;
     if (/^CREATE\s+SCHEMA\b/i.test(s)) continue; // namespaces create, destroy nothing
     if (/^CREATE\s+TYPE\b/i.test(s)) continue;
     // A sequence is an object this migration creates; nothing existing is
@@ -118,7 +150,15 @@ export function classifyMigration(sql) {
     if (addConstraint) {
       const table = normIdent(addConstraint[1]);
       if (!createdTables.has(table)) {
-        reasons.push(`ADD CONSTRAINT on pre-existing table "${table}": ${head}`);
+        // A CHECK over a column this migration added cannot reject a row
+        // that predates the column (cat-01's kind='CATALOG' guards).
+        const check = s.match(/CHECK\s*\(([^)]*)\)/i);
+        const overFresh =
+          check && addedColumns.get(table) &&
+          [...addedColumns.get(table)].some((c) => new RegExp(`"${c}"`, "i").test(check[1]));
+        if (!overFresh) {
+          reasons.push(`ADD CONSTRAINT on pre-existing table "${table}": ${head}`);
+        }
       }
       continue;
     }

@@ -84,6 +84,7 @@ describe("tmpDb()", () => {
     await seedCore(a.url);
     const agents = await a.client.user.findMany({ where: { role: "AI_AGENT" } });
     expect(agents.map((u) => u.email).sort()).toEqual([
+      "catalog@servo.ai", // cat-01: the catalog's system agent
       "drafter@servo.ai", // kb-14: the auto-delivery timeline author
       "qa@servo.ai",
       "resolver@servo.ai",
