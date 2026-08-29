@@ -1,0 +1,5 @@
+The invoice is dated 2026-01-31 and was paid on 31/01/2026.
+Renewal due 01/02/2026 per the DMY desk convention.
+Payment window opens January 15, 2026 and closes 15 January 2026.
+The contract covers January 2026 through Q3 2026.
+Yesterday the backup ran; tomorrow the audit starts.

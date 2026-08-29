@@ -1,0 +1,14 @@
+{
+  "USD": { "symbol": "$", "exponent": 2 },
+  "EUR": { "symbol": "€", "exponent": 2 },
+  "GBP": { "symbol": "£", "exponent": 2 },
+  "JPY": { "symbol": "¥", "exponent": 0 },
+  "CHF": { "symbol": "CHF", "exponent": 2 },
+  "CLP": { "symbol": "CLP$", "exponent": 0 },
+  "COP": { "symbol": "COL$", "exponent": 2 },
+  "MXN": { "symbol": "MX$", "exponent": 2 },
+  "BRL": { "symbol": "R$", "exponent": 2 },
+  "CAD": { "symbol": "CA$", "exponent": 2 },
+  "INR": { "symbol": "INR", "exponent": 2 },
+  "SEK": { "symbol": "SEK", "exponent": 2 }
+}
