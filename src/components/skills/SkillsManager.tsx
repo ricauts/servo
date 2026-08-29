@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BookOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   Card,
@@ -40,6 +41,9 @@ export interface SkillView {
   categories: string[];
   markdown: string;
   enabled: boolean;
+  /** Provenance (reb-05): the ticket this skill was distilled from. */
+  sourceTicketId?: string | null;
+  sourceTicketNumber?: number | null;
 }
 
 const NEW_SKILL_TEMPLATE = `---
@@ -185,7 +189,18 @@ function SkillCard({ skill, canManage }: { skill: SkillView; canManage: boolean 
           <BookOpen size={16} className="text-primary-strong" />
           {skill.name}
         </CardTitle>
-        <CardDescription>{skill.description}</CardDescription>
+        <CardDescription>
+          {skill.description}
+          {skill.sourceTicketId && (
+            <Link
+              href={`/tickets/${skill.sourceTicketId}`}
+              className="ml-1.5 font-mono text-[10.5px] uppercase tracking-wide text-primary-strong hover:underline"
+              title="The ticket this skill was distilled from"
+            >
+              from #{skill.sourceTicketNumber ?? "?"}
+            </Link>
+          )}
+        </CardDescription>
         {canManage && (
           <CardAction>
             <Switch
@@ -291,12 +306,17 @@ function SkillCard({ skill, canManage }: { skill: SkillView; canManage: boolean 
 export default function SkillsManager({
   skills,
   canManage,
+  prefillMarkdown = null,
+  prefillSourceTicketId = null,
 }: {
   skills: SkillView[];
   canManage: boolean;
+  /** From /skills?distill=<id>: the deterministic prefill (reb-05). */
+  prefillMarkdown?: string | null;
+  prefillSourceTicketId?: string | null;
 }) {
   const router = useRouter();
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(prefillMarkdown !== null);
 
   return (
     <div className="space-y-4">
@@ -328,12 +348,17 @@ export default function SkillsManager({
       )}
 
       <EditorDialog
-        title="New desk skill"
-        initial={NEW_SKILL_TEMPLATE}
+        title={prefillMarkdown ? "Distill into skill" : "New desk skill"}
+        initial={prefillMarkdown ?? NEW_SKILL_TEMPLATE}
         open={creating}
         onOpenChange={setCreating}
         onSave={async (markdown) => {
-          const res = await api("/api/skills", "POST", { markdown });
+          const res = await api("/api/skills", "POST", {
+            markdown,
+            // Provenance rides the create when the editor was prefilled
+            // from a ticket (reb-05); the server creates it DISABLED.
+            ...(prefillSourceTicketId ? { sourceTicketId: prefillSourceTicketId } : {}),
+          });
           if (res.ok) router.refresh();
           return res.ok ? null : (res.error ?? "Save failed.");
         }}

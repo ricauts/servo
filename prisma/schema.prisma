@@ -209,6 +209,10 @@ model Skill {
   body        String // the procedure, loaded by read_skill
   markdown    String // raw SKILL.md source (frontmatter + body)
   enabled     Boolean  @default(true)
+  // The ticket this skill was distilled from (reb-05), when it was: the
+  // KPIs count the COLUMN (reb-06), never the frontmatter. Bare FK by
+  // design, like AgentRun.agentUserId — nothing navigates the reverse edge.
+  sourceTicketId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
