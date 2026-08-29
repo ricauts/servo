@@ -80,6 +80,31 @@ a permissive code licence says nothing about what ships beside it.
   shipping the dependency: its licence travels inside `node_modules` to
   every install. Nothing of it is copied into this tree.
 
+### validator + libphonenumber-js (cat-02)
+
+- **Upstream:** <https://github.com/validatorjs/validator.js> and
+  <https://github.com/catamphetamine/libphonenumber-js>
+- **Licence:** both MIT — validator verified from `node_modules/validator/LICENSE`
+  (`Copyright (c) 2018 Chris O'Hara <cohara87@gmail.com>`) and
+  libphonenumber-js from `node_modules/libphonenumber-js/LICENSE`
+  (`Copyright (c) 2016 @catamphetamine`), on 2026-08-28. libphonenumber-js's
+  phone metadata derives from Google's libphonenumber (Apache-2.0); the
+  project ships a copy of that licence as `LICENSE.Apache`, recorded here so
+  the data's provenance travels with the code's.
+- **What we use:** ordinary npm dependencies supplying four PREDICATES for
+  the catalog's deterministic recogniser registry
+  (`src/lib/catalog/classify.ts`): isEmail, isCreditCard, isIBAN, isDate
+  from validator; isValidPhoneNumber from libphonenumber-js. They run over
+  the k-floored top-K list only — never a raw row.
+- **Adopt-first verdict:** both ADOPTED. Worth recording because the
+  alternative this item REJECTS is the whole idea they might stand in for:
+  **no credible off-the-shelf semantic-type inference library exists for
+  Node**, and the classifier's module header says so plainly rather than
+  pretending one was adopted. These two packages are predicates, not
+  inference.
+- **Obligations:** attribution only, discharged by `package.json`; their
+  licences travel inside `node_modules` to every install.
+
 ### shadcn/ui
 
 - **Upstream:** <https://github.com/shadcn-ui/ui> — two layers of its component
