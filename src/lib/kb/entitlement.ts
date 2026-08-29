@@ -12,7 +12,10 @@
 //                   that invents one.
 //   human chain   — a person browsing the Knowledge area: the human alone.
 
-import type { PrismaClient } from "@prisma/client";
+/** Structural: accepts both the raw client and the $extends-wrapped one. */
+export interface RawQueryClient {
+  $queryRawUnsafe<T>(query: string): Promise<T>;
+}
 
 /**
  * The entitlement CTE for the AGENT chain: effective = human ∩ agent.
@@ -84,7 +87,7 @@ export interface EntitlementChain {
  * Composes the CTE and selects from `entitled` in ONE statement.
  */
 export async function entitledDocumentIds(
-  db: PrismaClient,
+  db: RawQueryClient,
   chain: EntitlementChain,
 ): Promise<string[]> {
   const cte =
