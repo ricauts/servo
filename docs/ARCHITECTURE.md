@@ -96,6 +96,31 @@ agent operates on: `devices`, `employees`, `employees_backup`,
 `software_licenses`, `campaign_tracking`. It stands in for the real systems a
 production deployment would integrate with.
 
+### What the database guarantees (db-08)
+
+Four platform contracts the knowledge base builds on, proven against the real
+engine by `tests/pgvector-platform.test.ts` — cite this block instead of
+rediscovering them:
+
+1. **Vector nearest-neighbour.** A `vector(N)` column under an HNSW index
+   (`vector_cosine_ops`) returns the true nearest neighbour by `<=>` cosine
+   distance. `kbSearch` blends this with keyword rank on the same page.
+2. **Full-text matching.** A GIN index over `to_tsvector('simple', …)` is
+   matched by `websearch_to_tsquery` — plain words and quoted phrases, and
+   nothing the query did not name.
+3. **RLS is only a backstop WITH `FORCE`.** `ENABLE ROW LEVEL SECURITY` alone
+   does **not** bind the table's owner — and the app connects as the role
+   that owns the tables. Only `FORCE ROW LEVEL SECURITY` makes the policy
+   apply to the owner too. The entitlement CTE remains the primary gate;
+   RLS is the belt under those braces, and it is a belt only when forced.
+   (Superusers bypass RLS even with `FORCE` — the smoke test demonstrates
+   the owner/force trap through a non-superuser role, which is the
+   production shape.)
+4. **Entitlement policies fail closed.** A policy keyed on
+   `current_setting('app.human_id', true)` returns **zero rows** when the
+   setting is absent — never all rows. A missing identity reads as "see
+   nothing", which is the only safe default.
+
 ## The agent engine
 
 The engine lives in `src/lib/ai/` and exposes three entry points from
