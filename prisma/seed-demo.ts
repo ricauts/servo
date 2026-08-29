@@ -45,6 +45,13 @@ function minutesAfter(date: Date, minutes: number): Date {
 async function main() {
   console.log("Seeding Servo…");
 
+  // q48(a), owner-authorised 2026-08-28: prove the ops sandbox is reachable
+  // BEFORE the first delete. A wrong or absent OPS_DATABASE_URL used to
+  // wipe the desk and THEN fail — data loss with nothing seeded. Now the
+  // probe comes first: an unreachable sandbox costs nothing.
+  await opsRun("SELECT 1");
+  console.log("ops sandbox reachable");
+
   // -- wipe (FK-safe order) -------------------------------------------------
   await db.approval.deleteMany();
   await db.agentStep.deleteMany();
