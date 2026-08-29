@@ -2631,6 +2631,8 @@ To let a dependent proceed against an unmerged Tier-C PR, write `proceed-on-bran
 
 46. **2026-08-28 — kb-07 is implemented but its Tier-C PR waits on the one-review-slot rule; two ways to unblock.** kb-07 (PDF extraction via unpdf) is complete and green on branch `feat/kb-07` (built on `feat/kb-06`, since the two items touch the same worker/parent/ingest files). §0.6 binds the loop to at most one item in `review`, and kb-06 currently occupies that slot as PR #12. Either (a) merge PR #12 — the slot frees and the loop opens kb-07's PR next tick, retargeting its branch on main — or (b) write `proceed-on-branch: kb-06` here, which lets the loop open kb-07's PR stacked on #12 immediately. Without an answer the anti-stall skip rule applies and the loop works the next unblocked item. (This question is recorded in both this branch's spec.md and, spec-only, on main per §0.7 — drop the duplicate when kb-07 lands.)
 
+    **OWNER ANSWER, 2026-08-28: option (a) taken.** PR #12 (kb-06) and PR #11 (kb-15) were merged as owner-directed; the review slot is free and kb-07's PR opens this tick. The duplicate question copy on the kb-07 branch retires when that PR merges.
+
 ## 15. Changelog
 
 Append-only. One line per tick, including no-op ticks. The adopt-first note is **step 0 of every tick**: either the adopted OSS component and its licence, or one sentence on why nothing cleared the gate.
