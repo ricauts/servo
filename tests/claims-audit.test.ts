@@ -17,18 +17,31 @@ import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   applyExemptions,
+  applyPathExemptions,
   audit,
+  auditPaths,
+  classifyPathRef,
+  collectTree,
   compilePhrase,
+  expandPathScanSet,
   expandScanSet,
   extractFence,
   findSpans,
   globToRegExp,
   headingPathsByLine,
+  normalizePathRef,
+  openFenceErrors,
   parseCanonBlock,
+  pathCandidates,
+  pathScanSetErrors,
+  resolvePathRef,
   scanFile,
+  scanFilePaths,
   scanSetErrors,
   selfExcludedLines,
   stripTrailingComment,
+  topLevelNames,
+  treeResolves,
   unterminatedFences,
   validateCanon,
   validateSections,
@@ -61,6 +74,12 @@ function fixtureCanon(over: Record<string, unknown> = {}): any {
     banned: ["hosted"],
     allow: ["self-hosted"],
     exempt: [],
+    // hyg-03 added a second half to the policy; a minimal canon carries a
+    // valid one so a phrase-rule test is not also asserting a path error.
+    pathsScan: ["a.md"],
+    pathsUnscanned: [],
+    pathsMatching: { separatorRequired: true, anchored: true },
+    pathsExempt: [],
     ...over,
   };
 }
@@ -575,5 +594,922 @@ describe("the CLI — exit codes and file:line output, end to end", () => {
     expect(stderr).toContain('README.md:4:5: banned phrase "hosted"');
     // The canon here declares no matching block, so it must ALSO complain.
     expect(stderr).toMatch(/matching\.wordBoundary/);
+  });
+});
+
+/* ==================================================================== *
+ * hyg-03 — the dead-path check
+ *
+ * A claim can be false by saying something untrue, which the block above
+ * covers, or by pointing at a file that is not there, which is this one.
+ * These tests drive the acceptance criteria: the three MANDATORY fixtures
+ * (a seeded dangling path reported with the right file and line; an
+ * illustrative path covered by the exemption list passing clean; an empty
+ * glob failing), plus a negative control for every recognition rule — a rule
+ * nothing can break is not a rule that was tested.
+ * ==================================================================== */
+
+const fixture = (name: string) => readFileSync(`tests/fixtures/claims/${name}`, "utf8");
+
+/** A synthetic tree, so recognition can be tested without the real repo. */
+const FIXTURE_TREE = new Set<string>([
+  "src",
+  "src/lib",
+  "src/lib/ai",
+  "src/lib/ai/engine.ts",
+  "src/lib/ai/tools",
+  "src/lib/ai/tools/index.ts",
+  "src/lib/ai/tools/history.ts",
+  "docs",
+  "docs/CONTRACT.md",
+  "docs/design",
+  "prisma",
+  "tests",
+  "README.md",
+]);
+const FIXTURE_TOP = topLevelNames(FIXTURE_TREE);
+
+/** The `paths-exempt` shape, minimal, so one entry can be tested at a time. */
+const pathCanon = (over: Record<string, unknown> = {}): any => ({
+  pathsScan: ["docs/**/*.md"],
+  pathsUnscanned: [],
+  pathsMatching: { separatorRequired: true, anchored: true },
+  pathsExempt: [],
+  ...over,
+});
+
+describe("hyg-03 — a seeded dangling path is reported with the right file and line", () => {
+  const scan = () =>
+    scanFilePaths("docs/dangling.md", fixture("dangling.md"), FIXTURE_TREE, FIXTURE_TOP);
+
+  it("reports the dead inline-code path at its own line", () => {
+    const missing = scan().findings.filter((f: any) => f.kind === "code");
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({
+      file: "docs/dangling.md",
+      target: "src/lib/does-not-exist.ts",
+      line: 7,
+    });
+    // The column points at the path itself, not at the start of the line.
+    expect(missing[0].column).toBeGreaterThan(1);
+  });
+
+  it("reports the dead markdown link target at its own line", () => {
+    const missing = scan().findings.filter((f: any) => f.kind === "link");
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({ target: "docs/nowhere.md", line: 9 });
+  });
+
+  it("resolves a link target against its OWN directory, not the repository root", () => {
+    // `[the contract](CONTRACT.md)` inside docs/ means docs/CONTRACT.md.
+    expect(resolvePathRef("CONTRACT.md", "link", "docs/dangling.md")).toBe("docs/CONTRACT.md");
+    expect(scan().findings.map((f: any) => f.target)).not.toContain("CONTRACT.md");
+    // NEGATIVE CONTROL: read as repo-relative it would be reported as dead.
+    const asCode = scanFilePaths(
+      "docs/dangling.md",
+      "[the contract](CONTRACT.md)".replace("[the contract](", "`").replace(")", "`"),
+      FIXTURE_TREE,
+      FIXTURE_TOP,
+    );
+    expect(asCode.findings.map((f: any) => f.target)).toEqual([]); // a bare name is not a path at all
+    expect(resolvePathRef("CONTRACT.md", "code", "docs/dangling.md")).toBe("CONTRACT.md");
+  });
+
+  it("strips a trailing location suffix — the line number is a coordinate, not the name", () => {
+    expect(normalizePathRef("src/lib/ai/engine.ts:474-604")).toBe("src/lib/ai/engine.ts");
+    expect(normalizePathRef("src/lib/ai/engine.ts:190")).toBe("src/lib/ai/engine.ts");
+    expect(normalizePathRef("src/lib/bootstrap.ts:37,80")).toBe("src/lib/bootstrap.ts");
+    expect(normalizePathRef("src/lib/opsdb.ts:19/41")).toBe("src/lib/opsdb.ts");
+    expect(normalizePathRef("docs/x.md#a-heading")).toBe("docs/x.md");
+    // NEGATIVE CONTROL: without stripping, both suffixed forms would be dead.
+    expect(scan().findings.map((f: any) => f.target)).not.toContain("src/lib/ai/engine.ts:190");
+  });
+});
+
+describe("hyg-03 — an illustrative path covered by the exemption list passes clean", () => {
+  const findings = () =>
+    scanFilePaths("docs/design/exempt.md", fixture("exempt.md"), FIXTURE_TREE, FIXTURE_TOP).findings;
+
+  it("all three paths are genuinely missing, so the exemption is doing the work", () => {
+    expect(findings().map((f: any) => f.target).sort()).toEqual([
+      "apps/v4/registry/styles/x.css",
+      "docs/migrating-to-postgres.md",
+      "docs/spec/control-plane.md",
+    ]);
+  });
+
+  it("an entry whose target AND path globs both match exempts the finding", () => {
+    const canon = pathCanon({
+      pathsExempt: [
+        {
+          target: ["docs/migrating-to-postgres.md", "docs/spec/control-plane.md", "apps/**"],
+          paths: ["docs/design/*.md"],
+          reason: "forward, negative and upstream references",
+          until: "db-07",
+        },
+      ],
+    });
+    const { reported, exempted, notes } = applyPathExemptions(findings(), canon);
+    expect(reported).toEqual([]);
+    expect(exempted).toHaveLength(3);
+    expect(notes.join(" ")).toContain("db-07");
+  });
+
+  it("NEGATIVE CONTROL: the same entry scoped to another file exempts nothing", () => {
+    const canon = pathCanon({
+      pathsExempt: [
+        {
+          target: ["docs/migrating-to-postgres.md", "docs/spec/control-plane.md"],
+          paths: ["README.md"],
+          reason: "wrong scope",
+        },
+      ],
+    });
+    expect(applyPathExemptions(findings(), canon).reported).toHaveLength(3);
+  });
+
+  it("NEGATIVE CONTROL: a matching path scope with a non-matching target exempts nothing", () => {
+    const canon = pathCanon({
+      pathsExempt: [{ target: ["docs/something-else.md"], paths: ["docs/design/*.md"], reason: "x" }],
+    });
+    expect(applyPathExemptions(findings(), canon).reported).toHaveLength(3);
+  });
+
+  it("an exemption that matched nothing is reported as a note, never silently", () => {
+    const canon = pathCanon({
+      pathsExempt: [{ target: ["docs/never-referenced.md"], paths: ["docs/design/*.md"], reason: "x" }],
+    });
+    expect(applyPathExemptions([], canon).notes.join(" ")).toContain("matched nothing");
+  });
+});
+
+describe("hyg-03 — a glob is resolved by globbing, and an empty glob is a failure", () => {
+  it("a glob that matches passes and one that matches nothing fails", () => {
+    const { findings } = scanFilePaths(
+      "docs/empty-glob.md",
+      fixture("empty-glob.md"),
+      FIXTURE_TREE,
+      FIXTURE_TOP,
+    );
+    expect(findings.map((f: any) => f.target)).toEqual(["src/lib/ai/tools/*.nope"]);
+  });
+
+  it("treeResolves globs rather than testing the literal string", () => {
+    expect(treeResolves(FIXTURE_TREE, "src/lib/ai/tools/*.ts")).toBe(true);
+    expect(treeResolves(FIXTURE_TREE, "src/lib/ai/tools/*.nope")).toBe(false);
+    // A glob is never satisfied by its own literal text being absent-or-present.
+    expect(FIXTURE_TREE.has("src/lib/ai/tools/*.ts")).toBe(false);
+  });
+
+  it("resolves directories as readily as files", () => {
+    expect(treeResolves(FIXTURE_TREE, "src/lib/ai/tools")).toBe(true);
+    expect(treeResolves(FIXTURE_TREE, "src/lib/kb")).toBe(false);
+  });
+});
+
+describe("hyg-03 — what is NOT a repo-relative path, each with its own control", () => {
+  const cls = (raw: string, kind: "code" | "link" = "code") =>
+    classifyPathRef(raw, kind, FIXTURE_TOP);
+
+  it("a bare basename is a name, not a location (separatorRequired)", () => {
+    for (const name of ["engine.ts", "SKILL.md", "readme.md", "tailwind.config.ts"]) {
+      expect(cls(name).path).toBeNull();
+    }
+    // CONTROL: the same name with a directory in front IS a path.
+    expect(cls("src/lib/ai/engine.ts").path).toBe("src/lib/ai/engine.ts");
+  });
+
+  it("an unanchored, extension-less first segment is skipped, and COUNTED rather than hidden", () => {
+    // These are a GitHub coordinate, a container image, a JSON-RPC method and
+    // an upstream package dir — indistinguishable from a directory by shape.
+    for (const raw of [
+      "paperclipai/paperclip",
+      "pgvector/pgvector",
+      "tools/call",
+      "apps/v4/registry/bases/radix",
+    ]) {
+      const r = cls(raw);
+      expect(r.path).toBeNull();
+      expect(r.skip).toBe("unanchored");
+    }
+    const { skippedUnanchored } = scanFilePaths(
+      "docs/not-paths.md",
+      fixture("not-paths.md"),
+      FIXTURE_TREE,
+      FIXTURE_TOP,
+    );
+    expect(skippedUnanchored).toBeGreaterThan(0);
+  });
+
+  it("an UNANCHORED path naming a FILE by extension is still checked — the anchor alone is a hole", () => {
+    // The anchor rule on its own would skip this, and it is the exact shape
+    // the check exists to catch: a reference to a file that is not there.
+    const r = cls("neverexisted/some/file.ts");
+    expect(r.path).toBe("neverexisted/some/file.ts");
+    expect(r.skip).toBeNull();
+    expect(treeResolves(FIXTURE_TREE, "neverexisted/some/file.ts")).toBe(false);
+    // ...and it reaches the findings, not the skip counter.
+    const scanned = scanFilePaths(
+      "docs/x.md",
+      "a dead one: `neverexisted/some/file.ts`",
+      FIXTURE_TREE,
+      FIXTURE_TOP,
+    );
+    expect(scanned.findings.map((f: any) => f.target)).toEqual(["neverexisted/some/file.ts"]);
+    expect(scanned.skippedUnanchored).toBe(0);
+    // A glob in the FIRST segment is admitted by the same route.
+    expect(cls("*/ai/tools/*.ts").path).toBe("*/ai/tools/*.ts");
+  });
+
+  it("DISCLOSED RESIDUE: an unanchored DIRECTORY reference is not checked, and says so", () => {
+    // Documented, not accidental: an extension-less unanchored reference is
+    // shape-identical to `paperclipai/paperclip`. It is counted, never hidden.
+    const r = cls("neverexisted/adir");
+    expect(r.path).toBeNull();
+    expect(r.skip).toBe("unanchored");
+  });
+
+  it("a URI scheme is read on the FIRST segment only, so a line suffix is not one", () => {
+    for (const raw of ["node:sqlite", "https://example.com/x", "mailto:a@b.c", "C:/Desarrollos/servo"]) {
+      expect(cls(raw).path).toBeNull();
+    }
+    // CONTROL: a colon deeper in the string is a line reference, not a scheme.
+    expect(cls("src/lib/ai/engine.ts:474").path).toBe("src/lib/ai/engine.ts");
+  });
+
+  it("npm scopes, absolute paths, anchors and placeholders are all skipped", () => {
+    expect(cls("@modelcontextprotocol/sdk").path).toBeNull();
+    expect(cls("/api/inbound/email").path).toBeNull();
+    expect(cls("#a-heading").path).toBeNull();
+    expect(cls("skills/<slug>/SKILL.md").path).toBeNull();
+    expect(cls("src/lib/{a,b}.ts").path).toBeNull();
+  });
+
+  it("a fenced block is a sample, not an assertion", () => {
+    const raws = pathCandidates(fixture("not-paths.md")).map((c: any) => c.raw);
+    expect(raws).not.toContain("src/lib/nor-here.ts");
+    // CONTROL: the identical span outside a fence IS picked up.
+    expect(pathCandidates("see `src/lib/nor-here.ts`").map((c: any) => c.raw)).toContain(
+      "src/lib/nor-here.ts",
+    );
+  });
+
+  it("the whole not-paths fixture yields no finding at all", () => {
+    expect(
+      scanFilePaths("docs/not-paths.md", fixture("not-paths.md"), FIXTURE_TREE, FIXTURE_TOP).findings,
+    ).toEqual([]);
+  });
+});
+
+describe("hyg-03 — globToRegExp gains ** without widening a single *", () => {
+  it("** spans zero or more segments", () => {
+    const re = globToRegExp("docs/**/*.md");
+    expect(re.test("docs/ARCHITECTURE.md")).toBe(true);
+    expect(re.test("docs/design/postgres.md")).toBe(true);
+    expect(re.test("README.md")).toBe(false);
+  });
+
+  it("NEGATIVE CONTROL: a single * still matches one segment, as docs/*.md relies on", () => {
+    const re = globToRegExp("docs/*.md");
+    expect(re.test("docs/ARCHITECTURE.md")).toBe(true);
+    expect(re.test("docs/design/postgres.md")).toBe(false);
+  });
+});
+
+describe("hyg-03 — the canon carries the dead-path policy, and a silent one fails", () => {
+  it("parses the three new keys out of the real canon", () => {
+    const c = canon();
+    expect(c.pathsScan).toEqual([
+      "README.md",
+      "SECURITY.md",
+      "ROADMAP.md",
+      "THIRD_PARTY.md",
+      "docs/**/*.md",
+    ]);
+    expect(c.pathsUnscanned).toEqual(["spec.md"]);
+    expect(c.pathsMatching).toEqual({ separatorRequired: true, anchored: true });
+    expect(c.pathsExempt.length).toBeGreaterThanOrEqual(5);
+    for (const e of c.pathsExempt) {
+      expect(e.target.length).toBeGreaterThan(0);
+      expect(e.paths.length).toBeGreaterThan(0);
+      expect(e.reason).not.toBe("");
+    }
+  });
+
+  it("the canon states WHY spec.md is not scanned — it names paths it plans to create", () => {
+    const fence = extractFence(CANON_TEXT)!.body.join("\n");
+    const entry = fence.slice(fence.indexOf("paths-unscanned:"));
+    expect(entry).toMatch(/spec\.md/);
+    expect(entry.toLowerCase()).toMatch(/plans? to create/);
+  });
+
+  it("an empty paths-scan, or a mode this scanner does not implement, is a canon error", () => {
+    expect(validateCanon({ ...fixtureCanon(), ...pathCanon({ pathsScan: [] }) }).join(" ")).toContain(
+      "`paths-scan:` is empty",
+    );
+    expect(
+      validateCanon({
+        ...fixtureCanon(),
+        ...pathCanon({ pathsMatching: { separatorRequired: true, anchored: false } }),
+      }).join(" "),
+    ).toContain("paths-matching.anchored");
+    expect(
+      validateCanon({
+        ...fixtureCanon(),
+        ...pathCanon({ pathsMatching: { separatorRequired: false, anchored: true } }),
+      }).join(" "),
+    ).toContain("paths-matching.separatorRequired");
+  });
+
+  it("an exemption missing a target, a scope or a reason is a canon error", () => {
+    const errs = validateCanon({
+      ...fixtureCanon(),
+      ...pathCanon({ pathsExempt: [{ target: [], paths: [], reason: "" }] }),
+    }).join(" ");
+    expect(errs).toContain("paths-exempt[0] has no target");
+    expect(errs).toContain("has no paths");
+    expect(errs).toContain("has no reason");
+  });
+
+  it("NEGATIVE CONTROL: the real canon produces no error at all", () => {
+    expect(validateCanon(canon())).toEqual([]);
+  });
+
+  it("a declared dead-path surface that has gone missing fails loudly", () => {
+    const c = pathCanon({ pathsScan: ["README.md", "docs/**/*.md"] });
+    expect(pathScanSetErrors(c, ["docs/x.md"]).join(" ")).toContain("`README.md` matched no file");
+    expect(pathScanSetErrors(c, ["README.md"]).join(" ")).toContain("`docs/**/*.md` matched no file");
+    expect(pathScanSetErrors(c, ["README.md", "docs/x.md"])).toEqual([]);
+    expect(pathScanSetErrors(c, []).join(" ")).toContain("scan set is empty");
+  });
+});
+
+describe("hyg-03 — collectTree", () => {
+  it("collects files AND directories, and skips the worktree copies in .claude", () => {
+    const listing: Record<string, { name: string; isDir: boolean }[]> = {
+      "": [
+        { name: "src", isDir: true },
+        { name: ".claude", isDir: true },
+        { name: "node_modules", isDir: true },
+        { name: "README.md", isDir: false },
+      ],
+      src: [{ name: "lib", isDir: true }],
+      "src/lib": [{ name: "db.ts", isDir: false }],
+      ".claude": [{ name: "ghost.ts", isDir: false }],
+      node_modules: [{ name: "pkg", isDir: true }],
+    };
+    const tree = collectTree((d: string) => listing[d] ?? []);
+    expect([...tree].sort()).toEqual(["README.md", "src", "src/lib", "src/lib/db.ts"]);
+    // A stale worktree copy must never make a deleted file look present.
+    expect(tree.has(".claude/ghost.ts")).toBe(false);
+  });
+});
+
+describe("hyg-03 — against the real tree", () => {
+  const listEntries = (dir: string) => {
+    try {
+      return readdirSync(dir === "" ? "." : dir, { withFileTypes: true }).map((e) => ({
+        name: e.name,
+        isDir: e.isDirectory(),
+      }));
+    } catch {
+      return [];
+    }
+  };
+  const realTree = () => collectTree(listEntries);
+
+  /** The dead-path scan set the CLI builds, read from the real tree. */
+  function pathScanFiles() {
+    const c = canon();
+    const tree = realTree();
+    const found = new Set<string>();
+    for (const pattern of c.pathsScan) {
+      if (!pattern.includes("*")) {
+        if (tree.has(pattern)) found.add(pattern);
+        continue;
+      }
+      const re = globToRegExp(pattern);
+      for (const p of tree) if (re.test(p)) found.add(p);
+    }
+    return [...found]
+      .filter((f) => !c.pathsUnscanned.some((u: string) => globToRegExp(u).test(f)))
+      .sort()
+      .map((p) => ({ path: p, text: readFileSync(p, "utf8") }));
+  }
+
+  it("every declared surface resolves, and docs/**/*.md really does recurse", () => {
+    const files = pathScanFiles().map((f) => f.path);
+    expect(files).toContain("THIRD_PARTY.md");
+    expect(files).toContain("docs/ARCHITECTURE.md");
+    expect(files).toContain("docs/design/postgres.md");
+    expect(files).not.toContain("spec.md");
+  });
+
+  it("the tree has NO unexempted dangling path — hyg-02's repairs are proven gone", () => {
+    const result = auditPaths(pathScanFiles(), canon(), realTree());
+    expect(result.errors).toEqual([]);
+    expect(
+      result.missing.map((m: any) => `${m.file}:${m.line}: ${m.target}`),
+    ).toEqual([]);
+  });
+
+  it("the check is not vacuous: it resolved a real corpus of references", () => {
+    const result = auditPaths(pathScanFiles(), canon(), realTree());
+    expect(result.checked).toBeGreaterThan(200);
+    // `resolved` is the honest number: `checked` includes the exempted ones,
+    // and reporting it as "resolved" would overstate a clean run by the size
+    // of the exemption list. It is derived from `unresolved`, never from the
+    // DEDUPED finding list — see the dedup block below for why.
+    expect(result.resolved).toBe(result.checked - result.unresolved);
+    expect(result.resolved).toBeGreaterThan(200);
+  });
+
+  it("EVERY skip class is counted, so no drop is invisible", () => {
+    const result = auditPaths(pathScanFiles(), canon(), realTree());
+    // The unanchored skips are the interesting ones, but the much larger
+    // not-path-shaped class is disclosed too: an uncounted skip class is how a
+    // lint looks thorough while doing very little.
+    expect(result.skippedUnanchored).toBeGreaterThan(0);
+    expect(result.skippedNotPathShaped).toBeGreaterThan(result.skippedUnanchored);
+  });
+
+  it("the four references hyg-02 repaired now resolve", () => {
+    const tree = realTree();
+    expect(treeResolves(tree, "THIRD_PARTY.md")).toBe(true);
+    expect(treeResolves(tree, "prisma/seed-core.ts")).toBe(true);
+    expect(treeResolves(tree, "prisma/seed-demo.ts")).toBe(true);
+    // ...and the spellings they replaced still do not.
+    expect(treeResolves(tree, "THIRD-PARTY.md")).toBe(false);
+    expect(treeResolves(tree, "prisma/seed.ts")).toBe(false);
+  });
+});
+
+describe("hyg-03 — the CLI reports a missing path with file:line and exits 1", () => {
+  it("runs under the SAME npm script, and fails on a seeded dangling path", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync, mkdirSync, writeFileSync, copyFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const root = mkdtempSync(join(tmpdir(), "claims-paths-"));
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "docs"));
+    copyFileSync("scripts/claims-audit.mjs", join(root, "scripts/claims-audit.mjs"));
+    writeFileSync(
+      join(root, "docs/POSITIONING.md"),
+      [
+        "```banned-phrases",
+        "scan:",
+        "  - README.md",
+        "matching:",
+        "  wordBoundary: true",
+        "  caseInsensitive: true",
+        "selfExclude:",
+        "  fence: banned-phrases",
+        "  appliesTo: all-scanned-files",
+        "banned:",
+        "  - hosted",
+        "paths-scan:",
+        "  - README.md",
+        "paths-matching:",
+        "  separatorRequired: true",
+        "  anchored: true",
+        "paths-exempt:",
+        "  - target:",
+        "      - docs/planned.md",
+        "    paths:",
+        "      - README.md",
+        "    reason: a forward reference",
+        "```",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(root, "README.md"),
+      ["# T", "fine", "the engine is `docs/POSITIONING.md`", "dead: `docs/gone.md`", "ok: `docs/planned.md`"].join(
+        "\n",
+      ),
+    );
+
+    let status = 0;
+    let stderr = "";
+    try {
+      execFileSync("node", [join(root, "scripts/claims-audit.mjs")], { encoding: "utf8" });
+    } catch (err: any) {
+      status = err.status;
+      stderr = String(err.stderr);
+    }
+    expect(status).toBe(1);
+    expect(stderr).toContain('README.md:4:8: missing path "docs/gone.md"');
+    // The exempted forward reference is NOT reported...
+    expect(stderr).not.toContain("docs/planned.md");
+    // ...and the path that really exists is not reported either.
+    expect(stderr).not.toContain("docs/POSITIONING.md\"");
+    expect(stderr).toMatch(/1 missing path\(s\)/);
+  });
+});
+
+describe("hyg-03 — reference forms an adversarial pass found missing", () => {
+  it("an HTML <img src> is a reference — README ships six of them", () => {
+    const raws = pathCandidates('<img src="docs/assets/banner.svg" alt="x" />').map((c: any) => c.raw);
+    expect(raws).toContain("docs/assets/banner.svg");
+    // ...and the real README's six are actually checked against the tree.
+    const readme = readFileSync("README.md", "utf8");
+    const imgs = pathCandidates(readme)
+      .map((c: any) => c.raw)
+      .filter((r: string) => r.startsWith("docs/assets/"));
+    expect(imgs.length).toBeGreaterThanOrEqual(6);
+    // NEGATIVE CONTROL: without this, deleting a shipped screenshot is silent.
+    const tree = new Set(["docs", "docs/assets"]);
+    expect(
+      scanFilePaths("README.md", '<img src="docs/assets/gone.png" />', tree, topLevelNames(tree))
+        .findings.map((f: any) => f.target),
+    ).toEqual(["docs/assets/gone.png"]);
+  });
+
+  it("an <a href> is a reference too", () => {
+    expect(pathCandidates('<a href="docs/USER-GUIDE.md">guide</a>').map((c: any) => c.raw)).toContain(
+      "docs/USER-GUIDE.md",
+    );
+  });
+
+  it("a reference-style link definition is read at its definition line", () => {
+    const cands = pathCandidates("see [the guide][g]\n\n[g]: docs/gone.md");
+    const def: any = cands.find((c: any) => c.raw === "docs/gone.md");
+    expect(def).toBeDefined();
+    expect(def.line).toBe(3);
+    expect(def.kind).toBe("link");
+  });
+
+  it("markdown link syntax INSIDE inline code is a sample, not a link", () => {
+    // False positives are the worst kind: `[x](y.md)` written as code is
+    // documentation of syntax, and reading it as a link invents a finding.
+    const cands = pathCandidates("write it as `[label](docs/target.md)` in prose");
+    expect(cands.filter((c: any) => c.kind === "link")).toEqual([]);
+    // The code span itself is still a candidate; it is simply not path-shaped.
+    expect(cands.map((c: any) => c.kind)).toEqual(["code"]);
+    // CONTROL: the same construct outside backticks IS a link.
+    expect(pathCandidates("write it as [label](docs/target.md) in prose").map((c: any) => c.kind)).toContain(
+      "link",
+    );
+  });
+
+  it("a ./-prefixed path normalizes rather than being dropped uncounted", () => {
+    expect(normalizePathRef("./docs/x.md")).toBe("docs/x.md");
+    expect(normalizePathRef("./././docs/x.md")).toBe("docs/x.md");
+    const tree = new Set(["docs"]);
+    const r = scanFilePaths("README.md", "see `./docs/gone.md`", tree, topLevelNames(tree));
+    expect(r.findings.map((f: any) => f.target)).toEqual(["docs/gone.md"]);
+  });
+});
+
+describe("hyg-03 — exemption liveness is tracked PER TARGET, not per entry", () => {
+  const findings = [{ file: "docs/a.md", line: 1, column: 1, target: "docs/live.md", kind: "code" }];
+
+  it("a live entry still reports the targets inside it that matched nothing", () => {
+    // Without this, eleven dead targets hide inside one entry that still has
+    // a twelfth live one, and the exemption list rots invisibly.
+    const canon = pathCanon({
+      pathsExempt: [
+        { target: ["docs/live.md", "docs/dead-one.md", "docs/dead-two.md"], paths: ["docs/*.md"], reason: "x" },
+      ],
+    });
+    const { reported, notes } = applyPathExemptions(findings as any, canon);
+    expect(reported).toEqual([]);
+    expect(notes.join(" ")).toContain("docs/dead-one.md");
+    expect(notes.join(" ")).toContain("docs/dead-two.md");
+  });
+
+  it("NEGATIVE CONTROL: an entry whose targets all matched reports nothing", () => {
+    const canon = pathCanon({
+      pathsExempt: [{ target: ["docs/live.md"], paths: ["docs/*.md"], reason: "x" }],
+    });
+    expect(applyPathExemptions(findings as any, canon).notes).toEqual([]);
+  });
+
+  it("the REAL canon carries no dead exemption entry and no dead target", () => {
+    const listEntries = (dir: string) => {
+      try {
+        return readdirSync(dir === "" ? "." : dir, { withFileTypes: true }).map((e) => ({
+          name: e.name,
+          isDir: e.isDirectory(),
+        }));
+      } catch {
+        return [];
+      }
+    };
+    const tree = collectTree(listEntries);
+    const c = canon();
+    const found = new Set<string>();
+    for (const pattern of c.pathsScan) {
+      const re = globToRegExp(pattern);
+      for (const p of tree) if (re.test(p)) found.add(p);
+    }
+    const files = [...found]
+      .filter((f) => !c.pathsUnscanned.some((u: string) => globToRegExp(u).test(f)))
+      .map((p) => ({ path: p, text: readFileSync(p, "utf8") }));
+    const notes = auditPaths(files, c, tree).notes.filter((n: string) => n.includes("matched nothing"));
+    expect(notes).toEqual([]);
+  });
+});
+
+describe("hyg-03 — silent-pass guards on the dead-path half", () => {
+  it("CRITICAL: an unterminated fence does NOT un-scan the rest of the file", () => {
+    // Reproduced before the fix: a stray ``` ran to EOF, every later reference
+    // vanished from the check, the counters did not move and the run exited 0.
+    const text = ["# T", "```", "an unbalanced fence", "", "dead: `docs/gone.md`"].join("\n");
+    const tree = new Set(["docs"]);
+    const raws = pathCandidates(text).map((c: any) => c.raw);
+    expect(raws).toContain("docs/gone.md");
+    expect(scanFilePaths("docs/a.md", text, tree, topLevelNames(tree)).findings).toHaveLength(1);
+    // NEGATIVE CONTROL: a properly CLOSED fence really does mask its contents.
+    const closed = ["# T", "```", "dead: `docs/gone.md`", "```"].join("\n");
+    expect(pathCandidates(closed).map((c: any) => c.raw)).not.toContain("docs/gone.md");
+  });
+
+  it("...and the unterminated fence is reported loudly, so the cause is named", () => {
+    const errs = openFenceErrors("docs/a.md", ["# T", "```", "never closed"].join("\n"));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain("docs/a.md:2");
+    expect(errs[0]).toContain("unterminated");
+    // NEGATIVE CONTROL: a balanced document reports nothing.
+    expect(openFenceErrors("docs/a.md", ["```", "x", "```"].join("\n"))).toEqual([]);
+  });
+
+  it("auditPaths wires the open-fence check in, not just pathCandidates", () => {
+    const c = pathCanon({ pathsScan: ["docs/a.md"] });
+    const files = [{ path: "docs/a.md", text: "# T\n```\nnever closed" }];
+    const result = auditPaths(files, c, new Set(["docs", "docs/a.md"]));
+    expect(result.errors.join(" ")).toContain("unterminated");
+  });
+
+  it("a misspelled paths-matching mode is a canon error, not a silent default", () => {
+    const errs = validateCanon({
+      ...fixtureCanon(),
+      pathsMatching: { separatorRequired: true, anchored: true, anchorred: true },
+    });
+    expect(errs.join(" ")).toContain("`paths-matching.anchorred` is not a mode");
+  });
+
+  it("an unexplained paths-unscanned entry is a canon error", () => {
+    // Removing a file from the check is the edit nobody should make quietly.
+    const errs = validateCanon({
+      ...fixtureCanon(),
+      pathsUnscannedEntries: [{ path: "THIRD_PARTY.md", reason: "" }],
+    });
+    expect(errs.join(" ")).toContain("`THIRD_PARTY.md` has no reason");
+    // NEGATIVE CONTROL: with a reason it passes.
+    expect(
+      validateCanon({
+        ...fixtureCanon(),
+        pathsUnscannedEntries: [{ path: "THIRD_PARTY.md", reason: "because" }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("a paths-exempt entry that is not a map is counted and reported, not dropped", () => {
+    const c = parseCanonBlock(
+      [
+        "```banned-phrases",
+        "paths-exempt:",
+        "  - just-a-string",
+        "  - target: docs/x.md",
+        "    paths: README.md",
+        "    reason: fine",
+        "```",
+      ].join("\n"),
+    );
+    expect(c.pathsExemptMalformed).toBe(1);
+    expect(validateCanon({ ...fixtureCanon(), pathsExemptMalformed: 1 }).join(" ")).toContain(
+      "are not maps and were dropped",
+    );
+  });
+
+  it("the REAL canon carries a reason on every paths-unscanned entry", () => {
+    for (const e of canon().pathsUnscannedEntries) {
+      expect(e.path).not.toBe("");
+      expect(e.reason).not.toBe("");
+    }
+  });
+
+  it("a reference that escapes the repository is counted, never lost", () => {
+    const tree = new Set(["docs", "README.md"]);
+    const r = scanFilePaths(
+      "docs/a.md",
+      "[up and out](../../elsewhere/x.md)",
+      tree,
+      topLevelNames(tree),
+    );
+    expect(r.findings).toEqual([]);
+    expect(r.skippedOutsideRepo).toBe(1);
+  });
+});
+
+describe("hyg-03 — deleting the canon's closing fence cannot pass quietly", () => {
+  it("a canon whose fence is left open makes the whole run fail loudly", () => {
+    // The fence re-pairs with a later delimiter, which would otherwise swallow
+    // prose into the policy and still exit 0. The open-fence check is what
+    // turns that into a named error instead of a silent acceptance.
+    const doc = [
+      "# Canon",
+      "```banned-phrases",
+      "banned:",
+      "  - hosted",
+      "```",
+      "prose",
+      "```",
+      "a later block",
+      "```",
+    ].join("\n");
+    expect(openFenceErrors("docs/POSITIONING.md", doc)).toEqual([]);
+    const broken = doc.split("\n");
+    broken.splice(4, 1); // delete the canon's closing ```
+    const errs = openFenceErrors("docs/POSITIONING.md", broken.join("\n"));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain("unterminated");
+  });
+});
+
+describe("hyg-03 — the resolved counter is independent of deduplication", () => {
+  it("two dead references to the same target on one line are TWO failures", () => {
+    // docs/design/postgres.md:242 writes `prisma/*.db` twice on one line.
+    // Deriving `resolved` from the deduped finding list reported the second
+    // dead reference as healthy — an overstatement that grows with the file.
+    const tree = new Set(["src", "src/lib", "src/lib/db.ts", "prisma"]);
+    const r = scanFilePaths(
+      "docs/a.md",
+      "both dead: `prisma/gone.db` and again `prisma/gone.db`, one live: `src/lib/db.ts`",
+      tree,
+      topLevelNames(tree),
+    );
+    expect(r.checked).toBe(3);
+    expect(r.unresolved).toBe(2);
+    expect(r.findings).toHaveLength(1); // deduped for reporting...
+    expect(r.checked - r.unresolved).toBe(1); // ...but not for counting
+  });
+
+  it("the real tree's counters add up exactly, with nothing unaccounted for", () => {
+    const listEntries = (dir: string) => {
+      try {
+        return readdirSync(dir === "" ? "." : dir, { withFileTypes: true }).map((e) => ({
+          name: e.name,
+          isDir: e.isDirectory(),
+        }));
+      } catch {
+        return [];
+      }
+    };
+    const tree = collectTree(listEntries);
+    const c = canon();
+    const found = new Set<string>();
+    for (const pattern of c.pathsScan) {
+      const re = globToRegExp(pattern);
+      for (const p of tree) if (re.test(p)) found.add(p);
+    }
+    const files = [...found]
+      .filter((f) => !c.pathsUnscanned.some((u: string) => globToRegExp(u).test(f)))
+      .map((p) => ({ path: p, text: readFileSync(p, "utf8") }));
+    const r = auditPaths(files, c, tree);
+    // resolved is derived from unresolved, never from the deduped list.
+    expect(r.resolved).toBe(r.checked - r.unresolved);
+    // and every unresolved reference is either reported or exempted, with the
+    // difference being exactly the duplicates deduplication removed.
+    expect(r.unresolved).toBeGreaterThanOrEqual(r.missing.length + r.exempted.length);
+  });
+});
+
+/* ==================================================================== *
+ * hyg-03 — mutation-proven gaps.
+ *
+ * An adversarial pass applied 48 mutations to the dead-path implementation
+ * and found 8 that left the suite fully green. It could not make the checker
+ * produce a wrong ANSWER on any input; every one of these was a rule the
+ * tests did not hold down. Each mutation now fails a test.
+ * ==================================================================== */
+
+describe("hyg-03 — rules a mutation could delete with the suite still green", () => {
+  it("auditPaths WIRES pathScanSetErrors in — a vanished surface is not silent", () => {
+    // Mutation: delete the pathScanSetErrors call from auditPaths.
+    const c = pathCanon({ pathsScan: ["README.md", "docs/**/*.md"] });
+    const files = [{ path: "docs/a.md", text: "# ok" }];
+    const result = auditPaths(files, c, new Set(["docs", "docs/a.md"]));
+    expect(result.errors.join(" ")).toContain("`README.md` matched no file");
+  });
+
+  it("expandPathScanSet drops DIRECTORIES a glob matched — the EISDIR guard", () => {
+    // Mutation: delete the isFile filter. The CLI then reads a directory and
+    // dies with an uncaught EISDIR instead of reporting anything.
+    const tree = new Set(["docs", "docs/design", "docs/a.md", "docs/design/b.md"]);
+    const isFile = (rel: string) => rel.endsWith(".md");
+    const c = pathCanon({ pathsScan: ["docs/**"] });
+    expect(expandPathScanSet(c, tree, isFile)).toEqual(["docs/a.md", "docs/design/b.md"]);
+    // NEGATIVE CONTROL: without the filter the directories come back.
+    expect(expandPathScanSet(c, tree, () => true)).toContain("docs/design");
+  });
+
+  it("expandPathScanSet HONOURS paths-unscanned — the canon's one exclusion works", () => {
+    // Mutation: drop the paths-unscanned filter. spec.md would be scanned and
+    // every unbuilt item in it would read as a dangling reference.
+    const tree = new Set(["docs", "docs/a.md", "docs/b.md"]);
+    const c = pathCanon({ pathsScan: ["docs/**/*.md"], pathsUnscanned: ["docs/b.md"] });
+    expect(expandPathScanSet(c, tree, () => true)).toEqual(["docs/a.md"]);
+  });
+
+  it("a paths-unscanned entry with a reason but NO path is a canon error", () => {
+    // Mutation: delete the `has no path` branch.
+    expect(
+      validateCanon({
+        ...fixtureCanon(),
+        pathsUnscannedEntries: [{ path: "", reason: "because" }],
+      }).join(" "),
+    ).toContain("`paths-unscanned` entry has no path");
+  });
+
+  it("normalizePathRef strips trailing sentence punctuation", () => {
+    // Mutation: delete the trailing-punctuation strip. A healthy reference at
+    // the end of a sentence then reads as dead.
+    expect(normalizePathRef("docs/ARCHITECTURE.md.")).toBe("docs/ARCHITECTURE.md");
+    expect(normalizePathRef("docs/ARCHITECTURE.md,")).toBe("docs/ARCHITECTURE.md");
+    const tree = new Set(["docs", "docs/a.md"]);
+    expect(
+      scanFilePaths("README.md", "see `docs/a.md`.", tree, topLevelNames(tree)).findings,
+    ).toEqual([]);
+  });
+
+  it("findings come back ordered by file, then line, then COLUMN", () => {
+    // Mutation: remove the sort in auditPaths. Two findings on one line then
+    // return code-before-link rather than in reading order.
+    const tree = new Set(["docs"]);
+    const files = [
+      { path: "docs/b.md", text: "x" },
+      { path: "docs/a.md", text: "[l](gone-link.md) then `docs/gone-code.md`" },
+    ];
+    const c = pathCanon({ pathsScan: ["docs/**/*.md"] });
+    const r = auditPaths(files, c, tree);
+    // The link is doc-relative (docs/gone-link.md), the code span is not.
+    expect(r.missing.map((m: any) => m.target)).toEqual(["docs/gone-link.md", "docs/gone-code.md"]);
+    expect(r.missing[0].column).toBeLessThan(r.missing[1].column);
+  });
+
+  it("a `.` or `..` first segment in INLINE CODE is not a repo-relative path", () => {
+    // Mutation: delete the guard. The reference is then booked to a different
+    // counter and resolved from the wrong base.
+    const r = classifyPathRef("../outside/x.md", "code", FIXTURE_TOP);
+    expect(r.path).toBeNull();
+    expect(r.skip).toBeNull();
+    // A LINK target may legitimately climb: docs/USER-GUIDE.md links ../README.md.
+    expect(classifyPathRef("../README.md", "link", FIXTURE_TOP).path).toBe("../README.md");
+    expect(resolvePathRef("../README.md", "link", "docs/USER-GUIDE.md")).toBe("README.md");
+  });
+});
+
+describe("hyg-03 — the CLI fails on a dead-path CANON error, not only on a missing path", () => {
+  it("a declared dead-path surface that has vanished exits 1", async () => {
+    // Mutation: drop paths.errors from main()'s failure count. Canon errors
+    // are then printed and ignored, and the run exits 0 anyway.
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync, mkdirSync, writeFileSync, copyFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const root = mkdtempSync(join(tmpdir(), "claims-canonerr-"));
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "docs"));
+    copyFileSync("scripts/claims-audit.mjs", join(root, "scripts/claims-audit.mjs"));
+    writeFileSync(
+      join(root, "docs/POSITIONING.md"),
+      [
+        "```banned-phrases",
+        "scan:",
+        "  - README.md",
+        "matching:",
+        "  wordBoundary: true",
+        "  caseInsensitive: true",
+        "selfExclude:",
+        "  fence: banned-phrases",
+        "  appliesTo: all-scanned-files",
+        "banned:",
+        "  - hosted",
+        "paths-scan:",
+        "  - README.md",
+        "  - THIRD_PARTY.md", // declared, but absent from this tree
+        "paths-matching:",
+        "  separatorRequired: true",
+        "  anchored: true",
+        "```",
+      ].join("\n"),
+    );
+    writeFileSync(join(root, "README.md"), "# T\nnothing dangling here\n");
+
+    let status = 0;
+    let stderr = "";
+    try {
+      execFileSync("node", [join(root, "scripts/claims-audit.mjs")], { encoding: "utf8" });
+    } catch (err: any) {
+      status = err.status;
+      stderr = String(err.stderr);
+    }
+    expect(status).toBe(1);
+    expect(stderr).toContain("`THIRD_PARTY.md` matched no file");
+    expect(stderr).toMatch(/0 missing path\(s\)/); // the FAILURE is the canon error alone
   });
 });

@@ -249,6 +249,250 @@ exempt:
     sections:
       - "Shipped"
       - "Rejected"
+
+# ---------------------------------------------------------------------------
+# THE DEAD-PATH CHECK (hyg-03). A claim can be false by saying something
+# untrue, or by pointing at a file that is not there. The keys above govern the
+# first; the three below govern the second.
+# ---------------------------------------------------------------------------
+
+# The files the dead-path check is enforced against. This set is NOT the same
+# as scan: above, and the difference is deliberate. It adds THIRD_PARTY.md,
+# whose whole job is citing paths. It RECURSES into docs/design/, because a
+# design document naming a path no item will ever create is exactly the drift
+# this check exists to catch. It drops package.json, which carries prose paths
+# nowhere.
+paths-scan:
+  - README.md
+  - SECURITY.md
+  - ROADMAP.md
+  - THIRD_PARTY.md
+  - docs/**/*.md
+
+# Files deliberately outside the dead-path check, and why.
+paths-unscanned:
+  - path: spec.md
+    reason: the work order - it names the paths it PLANS TO CREATE, so every
+      unbuilt item in it would read as a dangling reference. This is the same
+      exclusion, for the same reason, that scripts/repo-refs.mjs makes when it
+      refuses to count spec.md as a referencing source.
+
+# How a path reference is recognised. Both modes are described in the header of
+# scripts/claims-audit.mjs; the scanner implements exactly these and fails if
+# this block asks for another.
+paths-matching:
+  separatorRequired: true # a bare basename in backticks (`engine.ts`,
+                          # `SKILL.md`) is a NAME, not a location - reading it
+                          # as repo-root-relative reported nine false
+                          # positives on this tree
+  anchored: true          # an inline-code path is repo-relative when its first
+                          # segment really is at the repository root, OR when
+                          # it ends in a file extension this repo uses. The
+                          # anchor alone would skip neverexisted/some/file.ts,
+                          # which is the shape the check exists for; the
+                          # extension escape catches it. The anchor still does
+                          # the work for extension-less references, where a
+                          # GitHub coordinate (paperclipai/paperclip), an image
+                          # (pgvector/pgvector:pg17) and a JSON-RPC method
+                          # (tools/call) cannot be told from a directory by
+                          # shape. Residue: a reference to a DIRECTORY that was
+                          # never created, whose first segment is also absent,
+                          # goes unseen - counted and printed, never hidden.
+
+# Referenced paths that need not exist. Each is either retired by a named item
+# (until:) or permanent with a stated reason. Two classes recur:
+#   NEGATIVE REFERENCE - prose that names a path in order to say it is absent,
+#     or must never exist. A document is allowed to say "there is no X".
+#   FORWARD REFERENCE - a path a named backlog item creates.
+paths-exempt:
+  # --- Negative references -------------------------------------------------
+  - target:
+      - docs/spec/control-plane.md
+      - docs/integrations.md
+      - docs/marketplace.md
+    paths:
+      - docs/design/hygiene.md
+      - docs/design/ecosystem.md
+      - docs/design/marketplace.md
+    reason: negative references - each is named in prose asserting that the
+      path does not exist and must not be created. A design document that
+      records a refusal has to be able to write what it refused.
+  - target:
+      - prisma/seed.ts
+      - src/lib/ai/tools.ts
+    paths:
+      - docs/design/hygiene.md
+      - docs/design/postgres.md
+    reason: negative references - the hygiene design document lists these BY
+      NAME as the broken references it exists to catalogue, and the Postgres
+      one names the stale prisma.seed pointer hyg-02 corrected. If they
+      resolved, both documents would be wrong.
+  - target:
+      - prisma/seed.ts
+      - src/lib/ai/tools.ts
+    paths:
+      - docs/CONTRACT.md
+    until: hyg-08
+    reason: a superseded build order. hyg-08 moves it to docs/history/ with a
+      header naming these as files that no longer exist; the header is what
+      turns them from stale references into recorded history.
+  # --- Written relative to a directory the surrounding prose names ---------
+  - target:
+      - tokens/*.css
+      - guidelines/*.card.html
+      - components/*.jsx
+      - tickets/page.tsx
+      - api/tickets/route.ts
+      - legacy/Badge.tsx
+      - tools/index.ts
+      - 0001_pgvector/migration.sql
+    paths:
+      - README.md
+      - THIRD_PARTY.md
+      - docs/design/*.md
+    reason: directory-relative fragments - each is written against a directory
+      the surrounding sentence names (servo_design_system/, src/app/,
+      src/lib/ai/, src/components/, prisma/migrations/) rather than against the
+      repository root, so resolving one would mean inferring its base from
+      prose. They are real paths; only their base is unwritten.
+  # --- Not this repository -------------------------------------------------
+  - target:
+      - servoai-site/index.html
+      - apps/**
+      - doc/MCP-ACCESS-GOVERNANCE.md
+      - .claude-plugin/plugin.json
+      - tools/*.tool.json
+    paths:
+      - THIRD_PARTY.md
+      - docs/design/*.md
+    reason: paths in someone else's tree, or in a format this repository does
+      not hold. The landing page lives in the separate servoai-site repository
+      the loop may never commit to; apps/v4/... is shadcn's own tree, cited so
+      the attribution register can say what was copied; MCP-ACCESS-GOVERNANCE
+      is another project's document; .claude-plugin/plugin.json is the bundle
+      layout cnp-06 reads from a plugin directory, never from this root; and
+      tools/*.tool.json is a NEGATIVE reference to a second bundle format the
+      spec refuses to have.
+  # --- Untracked by design -------------------------------------------------
+  - target:
+      - prisma/*.db
+      - prisma/*.db*
+    paths:
+      - docs/ARCHITECTURE.md
+      - docs/design/hygiene.md
+      - docs/design/postgres.md
+    until: db-10
+    reason: gitignored runtime artefacts. They exist on an operator's machine
+      and in no checkout; db-10 removes both the ignore rules and the files.
+  # --- Forward references, by the item that creates the target -------------
+  - target:
+      - docs/migrating-to-postgres.md
+    paths:
+      - docs/POSITIONING.md
+      - docs/design/postgres.md
+    until: db-07
+    reason: db-07 writes the migration guide. Until then the path matches
+      nothing, which this canon already says in prose two screens above.
+  - target:
+      - prisma/migrations
+      - prisma/migrations/*/migration.sql
+      - scripts/postgres-init.sql
+      - scripts/migrate-sqlite-to-postgres.mjs
+      - tests/setup/postgres.ts
+      - tests/helpers/tmp-db.ts
+      - tests/tmp-db.test.ts
+      - tests/search-case.test.ts
+      - tests/ticket-number.test.ts
+      - tests/ops-isolation.test.ts
+      - tests/pgvector-platform.test.ts
+    paths:
+      - docs/design/postgres.md
+    until: db-10
+    reason: the Postgres design document names the migrations, harness and
+      tests that db-01 through db-08 create. db-01 is blocked on the runner
+      (owner question 40), so none of them exists yet.
+  - target:
+      - src/lib/kb/*
+      - src/lib/kb/*/*
+      - src/lib/ai/tools/kb.ts
+      - tests/setup/postgres.ts
+    paths:
+      - docs/design/knowledge-base.md
+      - docs/design/extraction.md
+      - docs/design/data-fabric.md
+      - docs/design/docling.md
+    until: kb-11
+    reason: the knowledge-base and facts design documents name the modules the
+      kb-* and ext-* items create, and the data-fabric and Docling documents
+      compose the same entitlement module. Nothing in the KB area has been
+      built.
+  - target:
+      - src/lib/ai/tools/federation.ts
+      - tests/fixtures/catalog
+    paths:
+      - docs/design/data-fabric.md
+    until: fed-06
+    reason: the data-fabric document names the router, the federation tools and
+      the two-silo fixtures that cat-* and fed-* create. Phase 8 has not
+      started.
+  - target:
+      - tests/fixtures/kb/docling/*
+      - scripts/record-docling-fixture.mjs
+      - tests/live
+      - tests/live/*
+      - tests/docling-compose.test.ts
+    paths:
+      - docs/design/docling.md
+    until: dcl-07
+    reason: the Docling document names the fixtures, the recorder and the
+      opt-in live lane that dcl-03 and dcl-07 create. The sidecar area has not
+      started, and it is optional even when it does.
+  - target:
+      - tests/fixtures/facts/*.txt
+    paths:
+      - docs/design/extraction.md
+    until: ext-02
+    reason: ext-02 writes the golden fact corpora.
+  - target:
+      - scripts/migrate-roles.ts
+      - src/lib/ai/tools/delegate.ts
+      - src/lib/ai/tools/admin.ts
+      - agents/servo-admin.md
+    paths:
+      - docs/design/identity.md
+    reason: permanent - the identity design document is Roadmap in full
+      (idn-01 to idn-08 are deferred in the spec's Roadmap section), so these
+      paths have no item to retire them and are not expected to appear.
+  - target:
+      - src/lib/board.ts
+      - src/lib/approval-views.ts
+    paths:
+      - docs/design/ux.md
+    reason: permanent - the kanban board and the runs console are Roadmap
+      (ux-02, ux-05), so nothing in v1 creates either module.
+  - target:
+      - docs/hygiene
+      - scripts/media
+      - prisma/migrations
+      - tests/dockerignore.test.ts
+    paths:
+      - docs/design/hygiene.md
+    until: hyg-09
+    reason: the hygiene design document names the evidence directory (hyg-05),
+      the archived media rig (hyg-09) and the dockerignore test (hyg-07).
+  - target:
+      - docs/integrations
+      - docs/integrations/*
+    paths:
+      - docs/design/ecosystem.md
+    until: loop-07
+    reason: loop-07 creates the one mining procedure at docs/integrations/.
+  - target:
+      - docs/KB-DOCLING.md
+    paths:
+      - docs/design/docling.md
+    until: dcl-06
+    reason: dcl-06 writes the sidecar operator guide.
 ```
 
 Why the block is shaped that way:
