@@ -140,4 +140,11 @@ export interface KpiResponse {
   // sentAsIs vs edited is the AI acceptance signal for drafted replies.
   draftStats: { pending: number; sentAsIs: number; edited: number; discarded: number };
   topRequesters: { name: string; count: number }[]; // last 30d, top 5
+  // Skill KPIs (reb-06). null = "not applicable" (no runs / no enabled
+  // skills), rendered "n/a" - never NaN.
+  skills: {
+    skillInformedRunRate: number | null; // share of completed resolver runs (30d) with >=1 read_skill step
+    skillsDistilledThisMonth: number; // Skill rows with sourceTicketId created this calendar month
+    skillCoverage: number | null; // share of ticket categories claimed by >=1 enabled skill
+  };
 }
