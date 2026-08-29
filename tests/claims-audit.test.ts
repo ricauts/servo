@@ -1033,14 +1033,36 @@ describe("hyg-03 — against the real tree", () => {
     expect(result.skippedNotPathShaped).toBeGreaterThan(result.skippedUnanchored);
   });
 
-  it("the four references hyg-02 repaired now resolve", () => {
+  it("the four references hyg-02 repaired are repaired IN THE DOCUMENTS, not just on disk", () => {
+    // A tree-membership assertion is not a proof: it passes just as happily on
+    // a tree where every document was reverted to the old spelling. The proof
+    // has to be about the REFERENCING TEXT, so these read the documents.
     const tree = realTree();
+    const ledger = readFileSync("docs/PORTING-LEDGER.md", "utf8");
+    const readme = readFileSync("README.md", "utf8");
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+
+    // 1+2. The ledger cites the underscore spelling, and the file is there.
+    expect(ledger).toContain("THIRD_PARTY.md");
     expect(treeResolves(tree, "THIRD_PARTY.md")).toBe(true);
-    expect(treeResolves(tree, "prisma/seed-core.ts")).toBe(true);
-    expect(treeResolves(tree, "prisma/seed-demo.ts")).toBe(true);
-    // ...and the spellings they replaced still do not.
+    // The old spelling survives ONLY as the correction note describing the
+    // rename, never as a live citation of a file that does not exist.
+    for (const line of ledger.split(/\r?\n/)) {
+      if (!line.includes("THIRD-PARTY.md")) continue;
+      expect(line).toMatch(/→|->|corrected|spelling/);
+    }
     expect(treeResolves(tree, "THIRD-PARTY.md")).toBe(false);
+
+    // 3. package.json's prisma.seed points at a file that exists.
+    expect(pkg.prisma.seed).toContain("prisma/seed-core.ts");
+    expect(treeResolves(tree, "prisma/seed-core.ts")).toBe(true);
     expect(treeResolves(tree, "prisma/seed.ts")).toBe(false);
+
+    // 4. README's project-structure block names both real seeds, not the ghost.
+    expect(readme).toContain("seed-core.ts");
+    expect(readme).toContain("seed-demo.ts");
+    expect(treeResolves(tree, "prisma/seed-demo.ts")).toBe(true);
+    expect(readme).not.toMatch(/`prisma\/seed\.ts`/);
   });
 });
 
@@ -1511,5 +1533,82 @@ describe("hyg-03 — the CLI fails on a dead-path CANON error, not only on a mis
     expect(status).toBe(1);
     expect(stderr).toContain("`THIRD_PARTY.md` matched no file");
     expect(stderr).toMatch(/0 missing path\(s\)/); // the FAILURE is the canon error alone
+  });
+});
+
+describe("hyg-03 follow-up — defects an adjudicator found after the merge", () => {
+  it("BLOCKING: a 4-space-indented fence is NOT a fence, so it cannot un-scan a region", () => {
+    // Reproduced on main: two 4-space-indented ``` lines around a paragraph
+    // made its dead link vanish with the counters byte-identical and exit 0,
+    // while every markdown renderer still showed the link as live.
+    const text = ["# T", "    ```", "    indented", "", "[x](zz-dangle.md)", "", "    ```"].join("\n");
+    expect(pathCandidates(text).map((c: any) => c.raw)).toContain("zz-dangle.md");
+    // CommonMark allows up to THREE spaces, and that still masks.
+    const three = ["# T", "   ```", "[x](zz-dangle.md)", "   ```"].join("\n");
+    expect(pathCandidates(three).map((c: any) => c.raw)).not.toContain("zz-dangle.md");
+    // NEGATIVE CONTROL: an unindented fence masks, as it always did.
+    expect(
+      pathCandidates(["```", "[x](zz-dangle.md)", "```"].join("\n")).map((c: any) => c.raw),
+    ).not.toContain("zz-dangle.md");
+  });
+
+  it("a link title in single quotes or parentheses does not hide the target", () => {
+    for (const form of ["[x](docs/gone.md 'title')", "[x](docs/gone.md (title))", '[x](docs/gone.md "t")']) {
+      expect(pathCandidates(form).map((c: any) => c.raw)).toContain("docs/gone.md");
+    }
+  });
+
+  it("an HTML attribute value may be unquoted or single-quoted", () => {
+    expect(pathCandidates("<img src=docs/gone.png >").map((c: any) => c.raw)).toContain("docs/gone.png");
+    expect(pathCandidates("<img src='docs/gone.png'>").map((c: any) => c.raw)).toContain("docs/gone.png");
+    expect(pathCandidates('<img alt="a>b" src="docs/gone.png">').map((c: any) => c.raw)).toContain(
+      "docs/gone.png",
+    );
+  });
+
+  it("a catch-all paths-exempt target is a canon error, not a silencer", () => {
+    // Appended last, `*` exempts every finding while only the exempt counter
+    // moves — the one malformed shape every other validator let through.
+    for (const t of ["*", "**", "**/*"]) {
+      expect(
+        validateCanon({
+          ...fixtureCanon(),
+          pathsExempt: [{ target: [t], paths: ["docs/*.md"], reason: "x" }],
+        }).join(" "),
+      ).toContain("is a catch-all");
+    }
+    // NEGATIVE CONTROL: a scoped glob is fine.
+    expect(
+      validateCanon({
+        ...fixtureCanon(),
+        pathsExempt: [{ target: ["apps/**"], paths: ["docs/*.md"], reason: "x" }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("the printed arithmetic reconciles: checked = resolved + exempt + missing", () => {
+    const listEntries = (dir: string) => {
+      try {
+        return readdirSync(dir === "" ? "." : dir, { withFileTypes: true }).map((e) => ({
+          name: e.name,
+          isDir: e.isDirectory(),
+        }));
+      } catch {
+        return [];
+      }
+    };
+    const tree = collectTree(listEntries);
+    const c = canon();
+    const found = new Set<string>();
+    for (const pattern of c.pathsScan) {
+      const re = globToRegExp(pattern);
+      for (const p of tree) if (re.test(p)) found.add(p);
+    }
+    const files = [...found]
+      .filter((f) => !c.pathsUnscanned.some((u: string) => globToRegExp(u).test(f)))
+      .map((p) => ({ path: p, text: readFileSync(p, "utf8") }));
+    const r = auditPaths(files, c, tree);
+    // Deduped findings would leave this short by the duplicate count.
+    expect(r.resolved + r.exemptedOccurrences + r.missing.length).toBe(r.checked);
   });
 });

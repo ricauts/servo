@@ -137,7 +137,13 @@ export function fencedBlocks(text) {
   const blocks = [];
   let open = null;
   lines.forEach((line, i) => {
-    const m = /^\s*(`{3,}|~{3,})\s*(.*)$/.exec(line);
+    // CommonMark: a fence marker may be indented at most THREE spaces. At four
+    // it is an indented code block, not a fence. `^\s*` accepted any depth,
+    // which let a pair of 4-space-indented ``` lines silently un-scan whatever
+    // sat between them — exit 0, counters unmoved — while every markdown
+    // renderer still showed the content as live prose. The tree contains no
+    // indented fence at all, so this rule costs nothing here.
+    const m = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/.exec(line);
     if (!m) return;
     if (!open) {
       open = { fence: m[1][0], len: m[1].length, info: m[2].trim(), start: i + 1, body: [] };
@@ -449,6 +455,13 @@ export function validateCanon(canon) {
   }
   (canon.pathsExempt ?? []).forEach((e, n) => {
     if (!e.target.length) errors.push(`canon: paths-exempt[${n}] has no target`);
+    // A root-level catch-all silences the whole check while only the exempt
+    // counter moves — the one malformed shape every other validator missed.
+    for (const t of e.target) {
+      if (t === "*" || t === "**" || t === "**/*") {
+        errors.push(`canon: paths-exempt[${n}] target \`${t}\` is a catch-all — it would exempt everything`);
+      }
+    }
     if (!e.paths.length) errors.push(`canon: paths-exempt[${n}] (${e.target.join(", ")}) has no paths`);
     if (!e.reason) errors.push(`canon: paths-exempt[${n}] (${e.target.join(", ")}) has no reason`);
   });
@@ -828,10 +841,18 @@ export function validateSections(canon, files) {
  *     reference to an untracked or gitignored file resolves on a working
  *     checkout and would fail in CI. The direction is safe — CI is the strict
  *     one — but the two are not identical.
- *   - An unanchored, extension-less DIRECTORY reference is skipped (rule 6).
+ *   - An unanchored, extension-less DIRECTORY reference is skipped (rule 6),
+ *     as is an unanchored path carrying an extension this repository does not
+ *     use (`.rb`, `.py`). Both land in the printed unanchored counter.
+ *   - Wrapping a region in a BALANCED pair of unindented fences still masks
+ *     it. That is what a fence is for, and unlike the indented form it is a
+ *     visible edit; `openFenceErrors` only catches an unbalanced one.
  *   - Only the five surfaces in `paths-scan` are covered. Source comments, UI
  *     copy and `package.json` are not, and `package.json`'s `prisma.seed` is a
  *     JSON value rather than prose, so no prose scanner would reach it.
+ *
+ * The per-line limit is the only one of these that is SILENT — it moves no
+ * counter — and it is the one to close first if this check is ever widened.
  */
 
 /** Directories never walked when building the tree the check resolves against. */
@@ -918,7 +939,9 @@ export function pathCandidates(text) {
     };
 
     // Inline links and images, with an optional <target> and a "title".
-    for (const m of line.matchAll(/!?\[[^\]\n]*\]\(\s*<?([^)>\s]+)>?\s*(?:"[^"]*")?\s*\)/g)) {
+    for (const m of line.matchAll(
+      /!?\[[^\]\n]*\]\(\s*<?([^)>\s]+)>?\s*(?:"[^"]*"|'[^']*'|\([^)]*\))?\s*\)/g,
+    )) {
       push(m[1], m.index);
     }
     // Reference-style definitions: `[ref]: path "title"`. The definition line
@@ -927,8 +950,13 @@ export function pathCandidates(text) {
     if (def) push(def[1], 0);
     // HTML in markdown. README ships six <img src> screenshots, and without
     // this a deleted screenshot keeps the lint green.
-    for (const m of line.matchAll(/<(?:img[^>]*?\ssrc|a[^>]*?\shref)\s*=\s*["']([^"']+)["']/gi)) {
-      push(m[1], m.index);
+    for (const m of line.matchAll(
+      // Attributes before src/href are skipped as either bare characters or
+      // whole quoted values, so a `>` inside an earlier value (alt="a>b")
+      // does not end the tag early and hide the reference.
+      /<(?:img|a)\s(?:[^>"']|"[^"]*"|'[^']*')*?\b(?:src|href)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s"'>]+))/gi,
+    )) {
+      push(m[1] ?? m[2] ?? m[3], m.index);
     }
   });
   return out;
@@ -1076,7 +1104,7 @@ export function pathExemptionCovers(entry, finding) {
  * @param {Canon} canon
  * @returns {{ reported: PathFinding[], exempted: PathFinding[], notes: string[] }}
  */
-export function applyPathExemptions(findings, canon) {
+export function applyPathExemptions(findings, canon, duplicatesDropped = 0) {
   const reported = [];
   const exempted = [];
   const used = new Set();
@@ -1096,6 +1124,7 @@ export function applyPathExemptions(findings, canon) {
     }
     exempted.push({ ...f, exemptIndex: idx });
   }
+  const exemptedOccurrences = exempted.length + duplicatesDropped;
   const notes = canon.pathsExempt.flatMap((e, i) => {
     if (!used.has(i)) return [`paths-exempt entry ${i} (${e.target.join(", ")}) matched nothing`];
     const dead = e.target.filter((t) => !usedTargets.has(`${i}:${t}`));
@@ -1107,7 +1136,7 @@ export function applyPathExemptions(findings, canon) {
   const transitional = items.length
     ? [`paths-exempt: ${items.length} exemption group(s) transitional until ${items.join(", ")}`]
     : [];
-  return { reported, exempted, notes: [...new Set([...transitional, ...notes])] };
+  return { reported, exempted, exemptedOccurrences, notes: [...new Set([...transitional, ...notes])] };
 }
 
 /**
@@ -1157,9 +1186,18 @@ export function auditPaths(files, canon, tree) {
     checked += r.checked;
   }
   raw.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column);
-  const { reported, exempted, notes } = applyPathExemptions(raw, canon);
+  // `checked` counts references; `raw` counts DEDUPED findings. The gap is
+  // real — docs/design/postgres.md:242 writes `prisma/*.db` twice on one line
+  // — and it is booked to the exempt column so the printed arithmetic
+  // reconciles: checked = resolved + exempt occurrences + missing.
+  const { reported, exempted, exemptedOccurrences, notes } = applyPathExemptions(
+    raw,
+    canon,
+    unresolved - raw.length,
+  );
   return {
     missing: reported,
+    exemptedOccurrences,
     exempted,
     notes,
     errors,
@@ -1324,7 +1362,7 @@ function main() {
   );
   console.log(
     `claims-audit: OK (${pathFiles.length} files, ${paths.checked} path reference(s) checked, ` +
-      `${paths.resolved} resolved, ${paths.exempted.length} exempt, ` +
+      `${paths.resolved} resolved, ${paths.exemptedOccurrences} exempt, ` +
       `${paths.skippedUnanchored} skipped as not repo-relative, ` +
       `${paths.skippedOutsideRepo} outside the repository, ` +
       `${paths.skippedNotPathShaped} spans that are not path-shaped)`,
