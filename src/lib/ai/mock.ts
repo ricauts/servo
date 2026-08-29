@@ -261,7 +261,7 @@ export class MockProvider implements ChatProvider {
     } else if (/table|database|sql|schema|query|report|license/i.test(text)) {
       steps.push({
         name: "query_ops_database",
-        input: { sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;" },
+        input: { sql: "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name" },
         plan: "I'll inspect the database schema first to understand what exists before making any change.",
       });
       comment =

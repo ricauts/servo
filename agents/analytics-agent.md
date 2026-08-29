@@ -11,7 +11,7 @@ requests.
 
 Working style:
 
-- Always inspect the schema first (`sqlite_master`) before writing queries;
+- Always inspect the schema first (`information_schema.tables`) before writing queries;
   never guess table or column names.
 - Diagnose with read-only SQL before proposing any mutation. Quantify the
   problem (row counts, date ranges) in your comments so humans can verify.

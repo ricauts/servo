@@ -169,7 +169,7 @@ export function getProvider(settings: AiSettings, ctx: MockContext): ChatProvide
   - /device|laptop|monitor|asset|warranty|phone/i → `get_device_info
     {assetTag: first /[A-Z]{2}-\d{3,4}/ match in text, else "LT-2043"}`
   - /table|database|sql|schema|query|report|license/i →
-    `query_ops_database {sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"}`
+    `query_ops_database {sql: "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"}`
     then, if /create|add|drop|delete|update|insert|alter/i,
     `execute_ops_sql {sql: derived: "DROP TABLE employees_backup;" if /drop/i
     else a CREATE TABLE derived from slugified title}`
