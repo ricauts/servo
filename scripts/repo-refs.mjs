@@ -5,10 +5,24 @@
 //
 //   node scripts/repo-refs.mjs                       # human-readable summary
 //   node scripts/repo-refs.mjs --evidence docs/hygiene/<item-id>-evidence.md
+//   node scripts/repo-refs.mjs --check               # hyg-04: the baseline gate
 //
-// It DELETES NOTHING and it never exits nonzero on findings: the deletion rule
-// (§13.1) is "evidence or no deletion", and this script is only the evidence.
-// hyg-04 adds the baseline check that can fail.
+// It DELETES NOTHING. Without --check it never exits nonzero on findings: the
+// deletion rule (§13.1) is "evidence or no deletion", and the report is only
+// the evidence. --check (hyg-04) is the one mode that fails, and it fails on
+// exactly three things, none of them a deletion:
+//
+//   1. a file became unreferenced and no baseline row excuses it;
+//   2. a declared dependency became unused;
+//   3. an imported module appears in no manifest.
+//
+// A malformed baseline is a fourth failure, because a row with no reason and
+// no owner excuses nothing — "never fails for a baseline row" has to mean a
+// real row. A STALE row (one whose file is gone) is reported by --check and
+// FAILED by tests/repo-refs-baseline.test.ts, which is where hyg-04 puts that
+// rule: the baseline is a keep-list, so a row for something that no longer
+// exists is a lie about the tree, but it is not one of the three regressions
+// this gate stands in front of.
 //
 // Node builtins only, pure functions plus a thin CLI, in the same shape as
 // loop-guard.mjs and spec-lint.mjs. Every trap below was hit by hand during
@@ -62,9 +76,16 @@ export const EXCLUDED_PATTERNS = [/^prisma\/[^/]*\.db.*$/];
 
 /**
  * Files that are scanned (they get a verdict) but never counted as a source of
- * references. spec.md is the whole list, and the comment above says why.
+ * references. spec.md is the first, and the header comment says why.
+ *
+ * The baseline is the second, and it is not optional (hyg-04). Its rows name
+ * the very files they excuse, `.json` is in MENTION_EXT, and a path written in
+ * a scanned .json file is an edge — so a baseline counted as a source would
+ * make every file it lists read as `referenced`, the finding would vanish, and
+ * the gate would pass because it had stopped looking. The baseline would
+ * launder its own rows. Excluding it here is what keeps `--check` honest.
  */
-export const NON_REFERENCING_SOURCES = new Set(["spec.md"]);
+export const NON_REFERENCING_SOURCES = new Set(["spec.md", "tests/fixtures/repo-refs-baseline.json"]);
 
 /**
  * Never in scope for any hygiene deletion, at any time (§13.1). These are
@@ -1182,6 +1203,217 @@ export function analyze({
   };
 }
 
+// ---------------------------------------------------------------------------
+// hyg-04: the baseline, and the check that reads it.
+// ---------------------------------------------------------------------------
+
+/** The keep-list. Excluded as a referencing source — see NON_REFERENCING_SOURCES. */
+export const BASELINE_PATH = "tests/fixtures/repo-refs-baseline.json";
+
+/**
+ * The media-tooling allowlist. hyg-09 writes this file; until it does, its
+ * absence is NOT a failure and every media finding sits in the baseline
+ * instead. The block is a markdown fence whose info string is the value of
+ * MEDIA_ALLOWLIST_FENCE below, and its entries are module names — `- sharp` or
+ * `- module: sharp` both read.
+ *
+ * The fence and quote characters below are STRING constants, never characters
+ * inside a regex literal, and that is load-bearing rather than fussy. This
+ * scanner scans its own source; maskCode() tracks quotes, backticks and
+ * comments but not regex context, so a quote or a backtick written inside a
+ * regex literal opens a string region that never closes. From that point the
+ * mask is inverted: the prose in RESOLVER_RULES reads as code, its "non-literal
+ * `import()`" sentence parses as a real dynamic import, and the whole
+ * repository is marked INDETERMINATE — every dead file silently becomes
+ * reachable and this gate passes because it has stopped looking. Writing the
+ * character class ["'] into one regex here cost exactly that, caught by
+ * diffing the report against the previous commit.
+ */
+export const MEDIA_GUIDE_PATH = "docs/MEDIA-GUIDE.md";
+export const MEDIA_ALLOWLIST_FENCE = "media-tooling";
+
+/** Markdown fence delimiters, as characters rather than regex content. */
+const FENCE_CHARS = ["`", "~"];
+/** A bare npm package name, optionally scoped. */
+const MODULE_NAME = /^@?[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)?$/;
+
+/** Strip one matching pair of surrounding quotes, if present. */
+function unquote(value) {
+  const first = value[0];
+  const last = value[value.length - 1];
+  const quotes = ['"', "'"];
+  if (value.length >= 2 && first === last && quotes.includes(first)) return value.slice(1, -1);
+  return value;
+}
+
+/**
+ * Module names a media script may import without declaring, read from the
+ * fenced block in docs/MEDIA-GUIDE.md. An absent file, an absent block or an
+ * empty block all mean "no allowance yet", never an error.
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function parseMediaAllowlist(text) {
+  if (!text) return [];
+  const names = [];
+  let inside = false;
+  for (const line of String(text).split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const head = trimmed[0];
+    if (FENCE_CHARS.includes(head) && trimmed.startsWith(head + head + head)) {
+      if (inside) break; // the block closes at its first closing delimiter
+      let i = 0;
+      while (trimmed[i] === head) i += 1;
+      if (trimmed.slice(i).trim() === MEDIA_ALLOWLIST_FENCE) inside = true;
+      continue;
+    }
+    if (!inside) continue;
+    // "- sharp", "- module: sharp", "- name: sharp" — a scoped name is one token.
+    const entry = /^\s*-\s*(?:(?:module|name)\s*:\s*)?(.+?)\s*$/.exec(line);
+    if (!entry) continue;
+    const value = unquote(entry[1].trim());
+    if (MODULE_NAME.test(value)) names.push(value);
+  }
+  return names;
+}
+
+/**
+ * Parse the baseline. Shape errors are returned, never thrown: a baseline the
+ * gate cannot read is a failure with a message, not a stack trace.
+ * @param {string} text
+ * @returns {{files: Map<string, object>, dependencies: Map<string, object>, errors: string[]}}
+ */
+export function parseBaseline(text) {
+  const errors = [];
+  const files = new Map();
+  const dependencies = new Map();
+  if (!text || !text.trim()) {
+    errors.push(`${BASELINE_PATH} is empty — the gate has no keep-list to read`);
+    return { files, dependencies, errors };
+  }
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch (err) {
+    errors.push(`${BASELINE_PATH} is not valid JSON: ${err?.message ?? err}`);
+    return { files, dependencies, errors };
+  }
+  // The package rows are keyed "packages", NOT "dependencies", and that is not
+  // cosmetic: scripts/landing-tier.mjs tracks package.json's dependency blocks
+  // across the whole staged diff by header line, so a JSON file carrying a
+  // "dependencies": key makes every commit that touches it read as a runtime
+  // dependency change and land Tier C. Renaming it back would send every
+  // future hygiene tick to a PR for no reason.
+  for (const [key, target] of [["files", files], ["packages", dependencies]]) {
+    const rows = doc?.[key];
+    if (rows === undefined) {
+      errors.push(`${BASELINE_PATH}: missing "${key}" array`);
+      continue;
+    }
+    if (!Array.isArray(rows)) {
+      errors.push(`${BASELINE_PATH}: "${key}" is not an array`);
+      continue;
+    }
+    for (const [i, row] of rows.entries()) {
+      const at = `${BASELINE_PATH}: ${key}[${i}]`;
+      if (!row || typeof row !== "object") {
+        errors.push(`${at} is not an object`);
+        continue;
+      }
+      const id = key === "files" ? row.path : row.name;
+      if (typeof id !== "string" || !id.trim()) {
+        errors.push(`${at} has no ${key === "files" ? "path" : "name"}`);
+        continue;
+      }
+      // A row with no reason and no owner excuses nothing: it is the shape the
+      // keep-list exists to prevent, a to-delete list with the labels missing.
+      if (typeof row.reason !== "string" || !row.reason.trim()) {
+        errors.push(`${at} (${id}) has no reason`);
+      }
+      if (typeof row.owner !== "string" || !row.owner.trim()) {
+        errors.push(`${at} (${id}) has no owner — name the backlog item id or the §14 question that owns it`);
+      }
+      if (target.has(id)) errors.push(`${at} (${id}) is a duplicate row`);
+      target.set(id, row);
+    }
+  }
+  return { files, dependencies, errors };
+}
+
+/**
+ * The gate. Pure: it takes a report and two file texts and returns findings.
+ *
+ * @param {{report: object, baselineText: string, mediaGuideText?: string}} args
+ * @returns {{violations: {kind: string, subject: string, message: string}[],
+ *            stale: {kind: string, subject: string, message: string}[],
+ *            excused: number, allowlist: string[]}}
+ */
+export function checkBaseline({ report, baselineText, mediaGuideText = "" }) {
+  const violations = [];
+  const stale = [];
+  const baseline = parseBaseline(baselineText ?? "");
+  for (const err of baseline.errors) violations.push({ kind: "baseline", subject: BASELINE_PATH, message: err });
+
+  const allowlist = new Set(parseMediaAllowlist(mediaGuideText));
+  let excused = 0;
+
+  // 1. A file became unreferenced and no row excuses it. `keep` files (the
+  //    never-delete list) are structurally kept and never need a row.
+  const tracked = new Set(report.files.map((f) => f.path));
+  for (const f of report.files) {
+    if (f.status !== "unreferenced" || f.keep) continue;
+    if (baseline.files.has(f.path)) {
+      excused += 1;
+      continue;
+    }
+    violations.push({
+      kind: "file",
+      subject: f.path,
+      message: `unreferenced file ${f.path} is not in the baseline — add a row with a reason and an owner, or add a reference`,
+    });
+  }
+
+  // 2 and 3. Dependencies. "unreferenced" is declared-and-unimported;
+  //    "undeclared" and "claimed-absent" are both "imported module appears in
+  //    no manifest", which is the wording the item uses.
+  for (const d of report.dependencies) {
+    const failing =
+      d.status === "unreferenced" ? `declared dependency ${d.name} (${d.declaredIn}) is imported by nothing` :
+      d.status === "undeclared" ? `${d.name} is imported by ${(d.usedBy ?? []).map((u) => `${u.file}:${u.line}`).join(", ")} and appears in no manifest` :
+      d.status === "claimed-absent" ? `${d.name} is named at ${(d.usedBy ?? []).map((u) => `${u.file}:${u.line}`).join(", ")} and appears in no manifest — npm ci never creates it` :
+      null;
+    if (!failing) continue;
+    if (baseline.dependencies.has(d.name)) {
+      excused += 1;
+      continue;
+    }
+    // hyg-09 writes the allowlist; it excuses only the no-manifest shape, never
+    // a declared-and-unused package, which no media script can explain.
+    if (d.status !== "unreferenced" && allowlist.has(d.name)) {
+      excused += 1;
+      continue;
+    }
+    violations.push({ kind: "dependency", subject: d.name, message: failing });
+  }
+
+  // Stale rows: reported here, failed by the baseline test (see the header).
+  for (const [p, row] of baseline.files) {
+    if (!tracked.has(p)) {
+      stale.push({ kind: "file", subject: p, message: `baseline row for ${p} — the file is not in the scan set (owner: ${row.owner ?? "?"})` });
+    }
+  }
+  const findingNames = new Set(
+    report.dependencies.filter((d) => ["unreferenced", "undeclared", "claimed-absent"].includes(d.status)).map((d) => d.name),
+  );
+  for (const [name, row] of baseline.dependencies) {
+    if (!findingNames.has(name)) {
+      stale.push({ kind: "dependency", subject: name, message: `baseline row for ${name} — it is no longer a finding (owner: ${row.owner ?? "?"})` });
+    }
+  }
+
+  return { violations, stale, excused, allowlist: [...allowlist] };
+}
+
 /** The resolver rules, in words, for the evidence report. */
 export const RESOLVER_RULES = [
   "scan set: `git ls-files` minus node_modules/, .next/, .git/, .claude/, .spec-build/, package-lock.json and prisma/*.db*",
@@ -1388,6 +1620,7 @@ export function analyzeRepo(root = REPO_ROOT) {
 
 function main() {
   const argv = process.argv.slice(2);
+  const checking = argv.includes("--check");
   const evidenceAt = argv.includes("--evidence") ? argv[argv.indexOf("--evidence") + 1] : null;
   if (argv.includes("--evidence") && (!evidenceAt || evidenceAt.startsWith("--"))) {
     // Silently exiting 0 here would let a deletion item believe it had evidence.
@@ -1439,8 +1672,37 @@ function main() {
     console.log(`repo-refs: evidence written to ${evidenceAt}`);
   }
 
-  // Findings are never a failure: this script is evidence, not a gate (hyg-04
-  // adds the baseline check that can fail).
+  if (checking) {
+    const { violations, stale, excused, allowlist } = checkBaseline({
+      report,
+      baselineText: readRepoFile(BASELINE_PATH),
+      mediaGuideText: readRepoFile(MEDIA_GUIDE_PATH),
+    });
+    // The one way this gate goes quiet without anyone touching it: a single
+    // non-literal import() anywhere makes every candidate INDETERMINATE rather
+    // than unreferenced, so the file clause stops finding anything. That is
+    // the scanner's never-guess rule (hyg-01) and not something to weaken —
+    // but a silent gate is worse than a noisy one, so it is said out loud.
+    if (report.indeterminate?.global) {
+      console.log(
+        "repo-refs: NOTE — a non-literal import() makes every candidate INDETERMINATE, so the unreferenced-file clause finds nothing this run",
+      );
+    }
+    for (const s of stale) console.log(`repo-refs: STALE baseline row      ${s.message}`);
+    for (const v of violations) console.error(`repo-refs: ${v.kind === "baseline" ? "BASELINE" : "NOT BASELINED"} ${v.message}`);
+    if (allowlist.length > 0) {
+      console.log(`repo-refs: media-tooling allowlist from ${MEDIA_GUIDE_PATH}: ${allowlist.join(", ")}`);
+    }
+    if (violations.length > 0) {
+      console.error(`repo-refs: FAILED — ${violations.length} finding(s) with no baseline row`);
+      process.exit(1);
+    }
+    console.log(`repo-refs: check OK — ${excused} finding(s) excused by ${BASELINE_PATH}, 0 unbaselined`);
+    return;
+  }
+
+  // Findings are never a failure outside --check: this script is evidence, not
+  // a gate (§13.1 — evidence or no deletion).
   console.log("repo-refs: report complete — nothing is deleted by this script");
 }
 

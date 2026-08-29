@@ -1,0 +1,127 @@
+{
+  "$comment": [
+    "hyg-04. This is a KEEP-LIST WITH REASONS, not a to-delete list. Every row",
+    "says why a finding is allowed to stand and names the backlog item id, or",
+    "the numbered question under spec.md section 14, that owns it. Nothing is",
+    "deleted because it is listed here; things are listed here because they are",
+    "kept.",
+    "",
+    "Rows cover only the findings `node scripts/repo-refs.mjs --check` would",
+    "otherwise fail on: a file with status `unreferenced` that the never-delete",
+    "list does not already keep, and a dependency that is declared-and-unused or",
+    "imported-with-no-manifest-entry. The 164 never-delete files (agents/,",
+    "skills/, servo_design_system/, prisma/, tests/fixtures/, docs/hygiene/ and",
+    "everything .gitignore matches) are kept by data inside the scanner and need",
+    "no row.",
+    "",
+    "This file is excluded as a REFERENCING source (NON_REFERENCING_SOURCES in",
+    "scripts/repo-refs.mjs). It has to be: .json is a mention extension, so a",
+    "baseline counted as a source would make every path it lists read as",
+    "referenced, the findings would disappear, and the gate would pass because",
+    "it had stopped looking.",
+    "",
+    "A row may only be removed in the same commit that removes the thing it",
+    "describes or adds a reference to it. tests/repo-refs-baseline.test.ts",
+    "asserts every file row still names something in the tree.",
+    "",
+    "The package rows are keyed \"packages\", not \"dependencies\":",
+    "scripts/landing-tier.mjs tracks package.json dependency blocks by header",
+    "line across the whole staged diff, so a \"dependencies\" key here would",
+    "make every commit touching this file read as a runtime dependency change",
+    "and land Tier C. Do not rename it back."
+  ],
+  "files": [
+    {
+      "path": "docs/design/connectors.md",
+      "reason": "a design document named only from spec.md (the section 0.9 table and the section 6 header), and spec.md is excluded as a referencing source because it names paths it plans to create; the document is read every tick that touches a cnp-* item",
+      "owner": "hyg-08"
+    },
+    {
+      "path": "docs/design/external-sources.md",
+      "reason": "same shape as the connectors design document: named only from spec.md (the section 0.9 table and the section 12 header), read by every xds-* tick",
+      "owner": "hyg-08"
+    },
+    {
+      "path": "scripts/make-before-after.mjs",
+      "reason": "media rig - it regenerates a committed figure; archived under scripts/media/ rather than deleted",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "scripts/record-approval.mjs",
+      "reason": "media rig - screen recording for the README stills; archived, never deleted",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "scripts/run-relay.ts",
+      "reason": "an undocumented tsx wrapper around a documented script; hyg-09 wires it up as npm run relay and documents it",
+      "owner": "q31"
+    },
+    {
+      "path": "scripts/screenshot.mjs",
+      "reason": "media rig - the still capture the README figures come from; archived, never deleted",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "scripts/shoot-og.mjs",
+      "reason": "media rig, and tooling for a different repository the loop may never commit to; hyg-09 removes its cross-repo default and keeps the script",
+      "owner": "hyg-09"
+    },
+    {
+      "path": "src/components/ui/avatar.tsx",
+      "reason": "an unused shadcn primitive whose deletion is build-safe today but which npx shadcn add can re-create; kept so the generated set stays whole",
+      "owner": "q31"
+    },
+    {
+      "path": "src/components/ui/badge.tsx",
+      "reason": "an unused shadcn primitive whose deletion is build-safe today but which npx shadcn add can re-create; kept so the generated set stays whole",
+      "owner": "q31"
+    },
+    {
+      "path": "src/components/ui/scroll-area.tsx",
+      "reason": "an unused shadcn primitive whose deletion is build-safe today but which npx shadcn add can re-create; kept so the generated set stays whole",
+      "owner": "q31"
+    },
+    {
+      "path": "src/components/ui/skeleton.tsx",
+      "reason": "an unused shadcn primitive whose deletion is build-safe today but which npx shadcn add can re-create; kept so the generated set stays whole",
+      "owner": "q31"
+    },
+    {
+      "path": "src/components/ui/tooltip.tsx",
+      "reason": "an unused shadcn primitive whose deletion is build-safe today but which npx shadcn add can re-create; kept so the generated set stays whole",
+      "owner": "q31"
+    }
+  ],
+  "packages": [
+    {
+      "name": "@modelcontextprotocol/sdk",
+      "finding": "declared, never imported",
+      "reason": "declared ahead of the item that imports it; the adopt-first gate records it ADOPT (MIT, active) and cnp-02 builds the MCP client on it, so removing it now would be undone by the next connector tick",
+      "owner": "cnp-02"
+    },
+    {
+      "name": "ffmpeg-static",
+      "finding": "named in prose, in no manifest",
+      "reason": "named as a node_modules path in a media script and present in neither package.json nor package-lock.json, so npm ci never creates it; hyg-09 turns that import into a guarded dynamic one that prints the install command instead of a stack trace",
+      "owner": "hyg-09"
+    },
+    {
+      "name": "gifenc",
+      "finding": "declared, never imported",
+      "reason": "declared and imported by nothing; it is a removal candidate, and a dependency line may only be removed with the deletion rule's evidence, which is hyg-05's job and not this item's",
+      "owner": "hyg-05"
+    },
+    {
+      "name": "react-is",
+      "finding": "declared, never imported",
+      "reason": "declared to satisfy a peer dependency, not to be imported: package-lock.json records node_modules/recharts requiring it under peerDependencies, and nothing in this repository imports it directly",
+      "owner": "q44"
+    },
+    {
+      "name": "sharp",
+      "finding": "imported, declared in no manifest",
+      "reason": "imported by a media script and declared in no manifest of ours - it is absent from package.json, and its presence in package-lock.json is only as an optional transitive of next, which npm may skip; hyg-09 makes it a guarded dynamic import and adds it to the machine-readable allowlist in docs/MEDIA-GUIDE.md, which this check reads once that file exists",
+      "owner": "hyg-09"
+    }
+  ]
+}

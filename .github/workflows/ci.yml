@@ -38,5 +38,12 @@ jobs:
       - name: Claims audit (banned phrases from docs/POSITIONING.md)
         run: npm run claims:audit
 
+      # hyg-04. Fails when a file becomes unreferenced with no baseline row,
+      # when a declared dependency becomes unused, or when an imported module
+      # is in no manifest. It deletes nothing and never fails for a baselined
+      # row — tests/fixtures/repo-refs-baseline.json carries the reasons.
+      - name: Hygiene check (unreferenced files and dependency baseline)
+        run: npm run hygiene:check
+
       - name: Production build
         run: npm run build
