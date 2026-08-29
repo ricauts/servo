@@ -13,6 +13,7 @@ import CategoryBars from "@/components/dashboard/CategoryBars";
 import PriorityBars from "@/components/dashboard/PriorityBars";
 import AiVsHumanBar from "@/components/dashboard/AiVsHumanBar";
 import ApprovalsTile from "@/components/dashboard/ApprovalsTile";
+import SkillsTile from "@/components/dashboard/SkillsTile";
 import DraftRepliesTile from "@/components/dashboard/DraftRepliesTile";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export default async function DashboardPage() {
   }
 
   const kpis: KpiResponse = await getKpis();
-  const { totals, approvalStats, draftStats } = kpis;
+  const { totals, approvalStats, draftStats, skills } = kpis;
 
   const aiResolved = kpis.aiVsHuman.find((r) => r.resolver === "AI")?.count ?? 0;
   const humanResolved =
@@ -138,6 +139,14 @@ export default async function DashboardPage() {
             rejected={approvalStats.rejected}
             pending={approvalStats.pending}
           />
+        </Card>
+
+        {/* Skills row (reb-06): informed runs, distilled skills, coverage.
+            null renders "n/a" — a zero-run or zero-skill install must never
+            show NaN. */}
+        <Card className="col-span-12 gap-2 px-5 py-4 md:col-span-6 xl:col-span-3 xl:min-h-0">
+          <CardHeading>Skills — 30d</CardHeading>
+          <SkillsTile skills={skills} />
         </Card>
       </div>
     </>
