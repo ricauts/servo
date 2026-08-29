@@ -46,7 +46,7 @@ Bring your own model — Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint 
 - **Role-based permissions** — ADMIN, AGENT, and REQUESTER roles with an enforced permission matrix (`src/lib/permissions.ts`); HIGH-risk approvals and group management are admin-only.
 - **Offline evaluation mode** — without an OIDC tenant Servo runs a demo user switcher, so you can experience every role (and the whole agent loop, on the mock provider) with no auth provider, no API key and no network.
 - **shadcn/ui frontend** — Tailwind v4 + [shadcn/ui](https://ui.shadcn.com) components and charts (Recharts), themed with Servo's green-accent OKLCH palette; light mode by default with a dark-mode toggle.
-- **Docker-ready** — one `docker compose up --build` gives you a self-contained instance with persistent SQLite volumes.
+- **Docker-ready** — one `docker compose up --build` gives you the app and its Postgres (pgvector) container, both on persistent volumes.
 
 ## A real ticket, end to end
 
@@ -85,15 +85,16 @@ The commit and the merge each stopped for a human. Approvals — tool sign-offs 
 
 ## Quickstart
 
-Requires **Node.js 20+**.
+Requires **Node.js 20+** and Docker (for the database container).
 
 ```bash
+docker compose up -d db   # the PostgreSQL database (pgvector image)
 npm install
-npm run setup   # prisma generate + db push + core bootstrap (no sample data)
+npm run setup   # prisma generate + migrate deploy + core bootstrap (no sample data)
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — the **first-run wizard** creates your admin account (and, optionally, connects your SSO tenant). You start with a clean desk: zero tickets, no sample users, nobody else's data. The database is SQLite — no external services needed.
+Open [http://localhost:3000](http://localhost:3000) — the **first-run wizard** creates your admin account (and, optionally, connects your SSO tenant). You start with a clean desk: zero tickets, no sample users, nobody else's data. The database is PostgreSQL — `docker compose up -d db` starts it, and it is the only external service.
 
 Want a populated playground instead? `npm run demo` loads a fictional showcase dataset (~28 tickets, completed AI runs, pending approvals) so every screen is meaningful instantly. It **wipes the database** — demo evaluation only, never a live install.
 
@@ -105,7 +106,7 @@ Run the unit tests with `npm test`, the RBAC matrix with `node scripts/permissio
 docker compose up --build
 ```
 
-The container bootstraps its SQLite databases on a named volume (`/data`) on first boot, then serves on [http://localhost:3000](http://localhost:3000) — visit it to run the setup wizard. Set `SERVO_DEMO=1` for the showcase dataset instead, and `ANTHROPIC_API_KEY` (or configure a key in Settings) for real model calls; without one Servo runs in mock mode.
+The container applies the database migrations on boot, then serves on [http://localhost:3000](http://localhost:3000) — visit it to run the setup wizard. Ticket and attachment data live in the `servo-db` Postgres volume. Set `SERVO_DEMO=1` for the showcase dataset instead, and `ANTHROPIC_API_KEY` (or configure a key in Settings) for real model calls; without one Servo runs in mock mode.
 
 ### Production checklist
 
@@ -149,7 +150,7 @@ Notes:
 - If the selected provider has no usable credentials, Servo falls back to mock mode (Settings shows a warning) so the app never breaks.
 - The agent loop, approval gates, and QA are provider-agnostic: tool use is translated to Anthropic `tool_use` blocks or OpenAI function `tool_calls` automatically.
 
-> **Secrets at rest:** with `SERVO_ENCRYPTION_KEY` set, every key saved through Settings (and pool credentials, custom-tool secrets, webhook secrets) is encrypted with AES-256-GCM before it touches SQLite. Without the key Servo still works but stores them in plain text — fine for a local demo, not for production. See [SECURITY.md](SECURITY.md).
+> **Secrets at rest:** with `SERVO_ENCRYPTION_KEY` set, every key saved through Settings (and pool credentials, custom-tool secrets, webhook secrets) is encrypted with AES-256-GCM before it touches the database. Without the key Servo still works but stores them in plain text — fine for a local demo, not for production. See [SECURITY.md](SECURITY.md).
 
 ## Demo users
 
@@ -193,7 +194,7 @@ agents/
 skills/
   <slug>/SKILL.md      # the procedures the AI reads before it acts
 prisma/
-  schema.prisma        # data model (SQLite; enum-likes are strings)
+  schema.prisma        # data model (PostgreSQL; enum-likes are strings by choice)
   seed-core.ts         # fresh-install bootstrap: AI users, default tool + SLA
                        #   policies, agent profiles, skills, ops schema.
                        #   No human users, no sample data. Idempotent.

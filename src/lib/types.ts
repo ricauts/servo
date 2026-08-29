@@ -1,6 +1,8 @@
-// Shared enum-like unions and API payload shapes. SQLite has no enums, so
-// these unions are the single source of truth for the string values stored in
-// the database. Keep prisma/seed.ts and all agents consistent with them.
+// Shared enum-like unions and API payload shapes. Enum-like fields are strings
+// BY CHOICE, not by dialect — see prisma/schema.prisma: a Prisma enum would turn
+// every new status or role into a migration. These unions are the single source
+// of truth for the string values stored in the database. Keep prisma/seed-core.ts
+// and all agents consistent with them.
 
 export type Role = "ADMIN" | "AGENT" | "REQUESTER" | "AI_AGENT";
 export type AiKind = "TRIAGE" | "RESOLVER" | "QA";

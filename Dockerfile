@@ -16,7 +16,8 @@ RUN npm ci --no-audit --no-fund && npx prisma generate
 COPY . .
 RUN npm run build
 
-# Databases live on a volume; see docker-compose.yml.
+# The app container is stateless: the database is the `db` service; see
+# docker-compose.yml. Prisma migrations ride in the image (COPY prisma ./prisma).
 ENV NODE_ENV=production \
     DATABASE_URL="file:/data/servo.db" \
     OPS_DATABASE_URL="file:/data/ops.db" \

@@ -7,10 +7,10 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
-    "setup": "prisma generate && prisma db push && tsx prisma/seed-core.ts",
+    "setup": "prisma generate && prisma migrate deploy && tsx prisma/seed-core.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "demo": "prisma generate && prisma db push && tsx prisma/seed-demo.ts",
+    "demo": "prisma generate && prisma migrate deploy && tsx prisma/seed-demo.ts",
     "lint:hex": "node scripts/no-hex-lint.mjs",
     "claims:audit": "node scripts/claims-audit.mjs"
   },

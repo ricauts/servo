@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     where.assigneeId = assigneeId;
   }
   if (q) {
-    where.OR = [{ title: { contains: q } }, { description: { contains: q } }];
+    where.OR = [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }];
   }
 
   const tickets = await db.ticket.findMany({

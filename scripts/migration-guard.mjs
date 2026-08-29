@@ -1,6 +1,7 @@
 // Tier classifier for a Prisma migration's SQL — spec item loop-03, the
 // §0.6 Tier B "additive schema" proof. Additive means the SQL only CREATES:
-// CREATE TABLE, CREATE INDEX, CREATE EXTENSION, CREATE TYPE, and ADD COLUMN
+// CREATE TABLE, CREATE INDEX, CREATE EXTENSION, CREATE TYPE, CREATE SCHEMA
+// (the namespace statement prisma migrate diff itself emits), and ADD COLUMN
 // that is nullable or carries a default. Anything else — DROP, ALTER COLUMN,
 // RENAME, ADD COLUMN NOT NULL without default, a unique index on a table the
 // migration did not itself create, INSERT/UPDATE/DELETE, GRANT, functions,
@@ -73,6 +74,7 @@ export function classifyMigration(sql) {
       continue;
     }
     if (/^CREATE\s+EXTENSION\b/i.test(s)) continue;
+    if (/^CREATE\s+SCHEMA\b/i.test(s)) continue; // namespaces create, destroy nothing
     if (/^CREATE\s+TYPE\b/i.test(s)) continue;
 
     const alter = s.match(ALTER_ADD_COLUMN_RE);
@@ -82,6 +84,19 @@ export function classifyMigration(sql) {
         reasons.push(`ADD COLUMN NOT NULL without DEFAULT on "${normIdent(alter[1])}": ${head}`);
       }
       continue; // nullable or defaulted ADD COLUMN is additive
+    }
+
+    // Prisma emits FK/PK/CHECK constraints as ALTER TABLE ... ADD CONSTRAINT
+    // after each CREATE TABLE. On a table this migration created, the
+    // constraint is part of the table's creation (additive); on a
+    // pre-existing table it can reject rows that already exist (Tier C).
+    const addConstraint = s.match(/^ALTER\s+TABLE\s+(?:ONLY\s+)?(["\w.]+)\s+ADD\s+CONSTRAINT\b/i);
+    if (addConstraint) {
+      const table = normIdent(addConstraint[1]);
+      if (!createdTables.has(table)) {
+        reasons.push(`ADD CONSTRAINT on pre-existing table "${table}": ${head}`);
+      }
+      continue;
     }
 
     if (/^DROP\b/i.test(s)) reasons.push(`DROP statement: ${head}`);

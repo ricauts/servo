@@ -65,7 +65,7 @@ export default async function TicketsPage({
   }
   if (category) where.category = category;
   if (q) {
-    where.OR = [{ title: { contains: q } }, { description: { contains: q } }];
+    where.OR = [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }];
   }
 
   const tickets = await db.ticket.findMany({
