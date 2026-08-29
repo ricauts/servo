@@ -148,9 +148,13 @@ describe("loop-05 · the env scrub", () => {
     ).toBe("1");
   });
 
-  it("has deleted every provider key env var src/lib/ai/settings.ts reads", () => {
+  it("has neutralised every provider key env var src/lib/ai/settings.ts reads", () => {
+    // Empty string, not undefined: the slot must stay held open so no later
+    // dotenv loader (Prisma's runtime loads .env at first client
+    // construction) can re-inject a real key — and settings.ts treats "" as
+    // absent, so the resolution is identical.
     for (const name of PROVIDER_KEY_ENV_VARS) {
-      expect(process.env[name], `${name} survived the scrub`).toBeUndefined();
+      expect(process.env[name] ?? "", `${name} survived the scrub`).toBe("");
     }
   });
 

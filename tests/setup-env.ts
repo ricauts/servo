@@ -21,8 +21,16 @@
 
 import { PROVIDER_KEY_ENV_VARS, SCRUB_MARKER } from "./helpers/provider-env";
 
+// NEUTRALISE, not merely delete: @prisma/client's runtime loads the repo's
+// .env into process.env at first client construction — AFTER this file ran —
+// and dotenv does not override keys that already exist. A developer with a
+// real key in .env therefore gets it re-injected mid-suite under a
+// delete-only scrub (reproduced: a Prisma-importing file sees the key, a
+// Prisma-free one does not). Setting the empty string holds the slot open
+// against every dotenv loader, and settings.ts treats "" as absent, so the
+// resolved provider stays exactly "mock".
 for (const name of PROVIDER_KEY_ENV_VARS) {
-  delete process.env[name];
+  process.env[name] = "";
 }
 
 // Proof of registration, not of effect: lets a test tell "the setup file ran
