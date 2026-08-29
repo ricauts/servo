@@ -23,12 +23,13 @@ const holder = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ get db() { return holder.db; } }));
 vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => holder.user }));
 
-const { POST: postDocGrant, DELETE: deleteDocGrant } = await import(
-  "@/app/api/kb/documents/[id]/grants/route"
-);
-const { POST: postCollGrant } = await import("@/app/api/kb/collections/[id]/grants/route");
-const { GET: getReaders } = await import("@/app/api/kb/documents/[id]/readers/route");
-const { entitledDocumentIds } = await import("@/lib/kb/entitlement");
+// Static imports: vitest hoists the vi.mock calls above them, and dynamic
+// imports of bracketed route paths read as unresolvable to the repo-refs
+// scanner (INDETERMINATE pollution).
+import { POST as postDocGrant, DELETE as deleteDocGrant } from "@/app/api/kb/documents/[id]/grants/route";
+import { POST as postCollGrant } from "@/app/api/kb/collections/[id]/grants/route";
+import { GET as getReaders } from "@/app/api/kb/documents/[id]/readers/route";
+import { entitledDocumentIds } from "@/lib/kb/entitlement";
 
 const handles: TmpDb[] = [];
 afterAll(async () => {
