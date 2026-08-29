@@ -155,15 +155,38 @@ describe("loop-05 · the env scrub", () => {
   });
 
   it("scrubs every name envKeyNameFor() can return, so a new provider cannot slip past", () => {
-    const kinds: AiProviderKind[] = ["anthropic", "zai", "openai", "mock"];
-    const named = kinds
-      .map((kind) => envKeyNameFor(kind))
-      .filter((name): name is string => name !== null);
-    // Guards against the scrub list silently going stale: every env var the
-    // resolver can consult must be one this suite deletes.
+    // Record<AiProviderKind, …> is the drift guard, and it is enforced by the
+    // COMPILER, not by this list being remembered: adding a fifth kind to the
+    // AiProviderKind union makes this object literal fail `npm run typecheck`
+    // until the kind is given its env var name here. A hand-written array
+    // would simply not mention the new kind and slip through silently.
+    const envKeyByKind: Record<AiProviderKind, string | null> = {
+      anthropic: "ANTHROPIC_API_KEY",
+      zai: "ZAI_API_KEY",
+      openai: "OPENAI_API_KEY",
+      mock: null,
+    };
+
+    const named: string[] = [];
+    for (const [kind, expected] of Object.entries(envKeyByKind) as [
+      AiProviderKind,
+      string | null,
+    ][]) {
+      // The map above is only trustworthy if it still matches the real
+      // resolver, so pin it against envKeyNameFor() rather than assuming.
+      expect(envKeyNameFor(kind), `envKeyNameFor(${kind})`).toBe(expected);
+      if (expected !== null) named.push(expected);
+    }
+
+    // Every env var the resolver can consult must be one this suite deletes.
     expect(named.length).toBeGreaterThan(0);
     for (const name of named) {
       expect(PROVIDER_KEY_ENV_VARS as readonly string[]).toContain(name);
+    }
+    // And nothing in the scrub list is dead weight — each name is one the
+    // resolver actually reads.
+    for (const name of PROVIDER_KEY_ENV_VARS) {
+      expect(named).toContain(name);
     }
   });
 
@@ -293,9 +316,15 @@ describe("loop-05 · the approval gate, end to end", () => {
       (s) => s.toolName === "cloud_apply_deployment",
     );
     expect(results).toHaveLength(1);
-    // The tool's own simulated output — proof it executed rather than being
-    // recorded as executed.
-    expect(results[0].content).toContain("applied");
+    // The tool's own success output — and this assertion is the ONLY thing
+    // separating "executed" from "recorded as attempted". engine.ts writes the
+    // TOOL_CALL step BEFORE it looks the tool up, so a resume that never
+    // reached tool.execute() still leaves exactly one TOOL_CALL row: the count
+    // above cannot detect zero executions on its own. Matched on the tool's
+    // full success token rather than a bare "applied", which a failure string
+    // ("could not be applied — rollout aborted") would also satisfy.
+    expect(results[0].content).toContain("Rollout completed");
+    expect(results[0].content).toContain(`Deployment plan ${JSON.parse(approval.toolInput).planId} applied`);
     expect(results[0].content).not.toContain("is not available");
 
     // The gated call is ordered after its approval request, and there is only

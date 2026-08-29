@@ -1,6 +1,13 @@
 // The names the env scrub owns (spec item loop-05). Data only — importing
 // this module must never scrub anything.
 //
+// Kept in sync with src/lib/ai/settings.ts by a COMPILER-enforced check in
+// tests/engine-approval-e2e.test.ts, not by anyone remembering: that test maps
+// every AiProviderKind to its env var name through a Record<AiProviderKind, …>,
+// so a fifth provider fails `npm run typecheck` until it is accounted for, and
+// pins each entry against envKeyNameFor() so the map cannot drift from the
+// resolver either.
+//
 // The split is deliberate and load-bearing. The scrub lives in
 // tests/setup-env.ts as a top-level side effect; if the test that checks the
 // scrub imported THAT module for its list, the import would perform the scrub
