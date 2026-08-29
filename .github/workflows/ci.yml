@@ -67,5 +67,10 @@ jobs:
       - name: Claims audit (banned phrases from docs/POSITIONING.md)
         run: npm run claims:audit
 
+      # hyg-04: nothing may become unreferenced without a reason. The keep-list
+      # is tests/fixtures/repo-refs-baseline.json; this step deletes nothing.
+      - name: Hygiene check (unreferenced files and dependencies)
+        run: npm run hygiene:check
+
       - name: Production build
         run: npm run build

@@ -12,7 +12,8 @@
     "test": "vitest run",
     "demo": "prisma generate && prisma migrate deploy && tsx prisma/seed-demo.ts",
     "lint:hex": "node scripts/no-hex-lint.mjs",
-    "claims:audit": "node scripts/claims-audit.mjs"
+    "claims:audit": "node scripts/claims-audit.mjs",
+    "hygiene:check": "node scripts/repo-refs.mjs --check"
   },
   "prisma": {
     "seed": "tsx prisma/seed-core.ts"
