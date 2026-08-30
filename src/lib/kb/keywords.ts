@@ -20,8 +20,19 @@ export interface KeywordPass {
   entities: string[];
 }
 
-/** Extract the deterministic keyword/entity set from one chunk of text. */
-export function keywordPass(text: string, topN = 8): KeywordPass {
+/**
+ * Extract the deterministic keyword/entity set from one chunk of text.
+ *
+ * opts.prefixEnd (dcl-04): the first N characters are a HEADING PREFIX the
+ * chunker prepended for context, not the chunk's own body. Keyword
+ * FREQUENCY is counted only past the boundary, so a term appearing only in
+ * a heading that dominates every chunk beneath it cannot enter that
+ * chunk's keywords; entities still scan the whole text (a citable anchor
+ * is citable wherever it appears). Baseline callers pass no opts and get
+ * exactly the pre-dcl-04 behaviour — there is no structure-aware branch
+ * in this function, only a boundary the caller names.
+ */
+export function keywordPass(text: string, topN = 8, opts: { prefixEnd?: number } = {}): KeywordPass {
   const normalized = text.replace(/\r\n/g, "\n");
 
   // Entities — order of appearance, deduped, capped.
@@ -45,9 +56,14 @@ export function keywordPass(text: string, topN = 8): KeywordPass {
   }
 
   // Keywords — frequency over non-stopword tokens, ties broken by term so
-  // the result is fully deterministic.
+  // the result is fully deterministic. The heading-prefix region (dcl-04)
+  // is excluded from the count when the caller names its boundary.
   const counts = new Map<string, number>();
-  for (const token of normalized.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []) {
+  const keywordRegion =
+    typeof opts.prefixEnd === "number" && opts.prefixEnd > 0 && opts.prefixEnd < normalized.length
+      ? normalized.slice(opts.prefixEnd)
+      : normalized;
+  for (const token of keywordRegion.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []) {
     if (STOPWORDS.has(token)) continue;
     counts.set(token, (counts.get(token) ?? 0) + 1);
   }
