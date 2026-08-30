@@ -38,7 +38,8 @@ export function timeAgo(d: Date | string): string {
   return `${months}mo ago`;
 }
 
-/** JSON.stringify that survives BigInt values coming from raw SQLite queries. */
+/** JSON.stringify that survives BigInt values coming from raw SQL queries
+ * (COUNT(*) through $queryRawUnsafe is BigInt on Postgres too). */
 export function jsonSafe(value: unknown): string {
   return JSON.stringify(value, (_k, v) =>
     typeof v === "bigint" ? Number(v) : v,

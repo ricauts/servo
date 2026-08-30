@@ -1,0 +1,5 @@
+Invoice INV-2024-113 closed on 2026-01-31.
+Ref https://app.example.com/INV-2024-113?token=1 only.
+Mail a.torres+inv@corp.io about #777 please.
+$500 approved for 12 kg on 01/02/2026.
+2 gb fits after 30 days of retention.

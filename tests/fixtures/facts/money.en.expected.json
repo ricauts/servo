@@ -3,6 +3,9 @@
     {
       "kind": "MONEY",
       "text": "1234.56 USD",
+      "offset": 44,
+      "length": 11,
+      "extractor": "facts@1",
       "num": 123456,
       "unit": "USD",
       "norm": "USD:123456",
@@ -13,6 +16,9 @@
     {
       "kind": "MONEY",
       "text": "$99.99",
+      "offset": 12,
+      "length": 6,
+      "extractor": "facts@1",
       "num": 9999,
       "unit": "USD",
       "norm": "USD:9999",
@@ -21,6 +27,9 @@
     {
       "kind": "MONEY",
       "text": "€50",
+      "offset": 37,
+      "length": 3,
+      "extractor": "facts@1",
       "num": 5000,
       "unit": "EUR",
       "norm": "EUR:5000",
@@ -31,6 +40,9 @@
     {
       "kind": "MONEY",
       "text": "¥3,000",
+      "offset": 24,
+      "length": 6,
+      "extractor": "facts@1",
       "num": 3000,
       "unit": "JPY",
       "norm": "JPY:3000",

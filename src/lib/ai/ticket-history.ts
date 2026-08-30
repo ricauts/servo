@@ -3,10 +3,10 @@
 // testable. The tools in src/lib/ai/tools/history.ts fetch candidate rows and
 // hand them to these functions.
 //
-// Why ranking lives here and not in SQL: SQLite has no built-in relevance
-// scoring, and Servo ships without an FTS extension so a self-host stays a
-// one-liner. Fetching a bounded candidate window and scoring it in memory
-// keeps the query portable and the behaviour testable.
+// Why ranking lives here and not in SQL: the score blends lexical overlap
+// with recency and kind weights over a bounded candidate window, and keeping
+// it in TypeScript keeps the query a plain portable SELECT and the behaviour
+// unit-testable without a database.
 
 /** The shape the tools select out of Prisma — kept structural on purpose. */
 export interface HistoryComment {

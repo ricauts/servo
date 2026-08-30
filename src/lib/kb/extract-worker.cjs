@@ -16,7 +16,10 @@
 // entity resolution).
 
 process.on("message", (msg) => {
-  extract(Buffer.from(msg.bytes), msg.contentType)
+  // dcl-01: the parent sends the SNIFFED route (xlsx|pdf|text) or the
+  // declared type when the sniff had nothing to say — routing on BYTES,
+  // never on the client-declared multipart Content-Type.
+  extract(Buffer.from(msg.bytes), msg.route || msg.contentType)
     .then((result) => {
       if (process.send) process.send({ ok: true, ...result });
     })
@@ -31,14 +34,16 @@ process.on("message", (msg) => {
     });
 });
 
-/** Dispatch on content type. Unknown types land UNSUPPORTED with the type
- *  named — never a silent empty extraction. */
+/** Dispatch on the route. Unknown types land UNSUPPORTED with the type
+ *  named — never a silent empty extraction. The sniffed routes ("xlsx",
+ *  "pdf", "text") sit beside the legacy declared types so both callers
+ *  dispatch identically. */
 async function extract(bytes, contentType) {
   const ct = contentType || "";
-  if (ct === "text/markdown" || ct === "text/plain" || ct === "application/markdown") {
+  if (ct === "text" || ct === "text/markdown" || ct === "text/plain" || ct === "application/markdown") {
     return { kind: "text", text: bytes.toString("utf8"), status: "EXTRACTED" };
   }
-  if (ct === "application/pdf") {
+  if (ct === "pdf" || ct === "application/pdf") {
     return extractPdf(bytes);
   }
   if (isXlsxFamily(ct)) return extractSpreadsheet(bytes);
@@ -56,9 +61,10 @@ async function extract(bytes, contentType) {
 }
 
 /** The xlsx family: the Office Open XML workbook types (extension .xlsx /
- *  .xlsm), however the uploader's form labels them. */
+ *  .xlsm), however the uploader's form labels them, plus the sniffed
+ *  route the parent derived from the bytes themselves. */
 function isXlsxFamily(ct) {
-  return ct.indexOf("spreadsheetml") !== -1 || ct.indexOf("xlsx") !== -1;
+  return ct === "xlsx" || ct.indexOf("spreadsheetml") !== -1 || ct.indexOf("xlsx") !== -1;
 }
 
 /** Extract the text layer of a PDF, page by page. unpdf wraps Mozilla's

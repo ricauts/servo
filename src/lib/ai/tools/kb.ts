@@ -8,6 +8,7 @@
 // principal — deny or invent a fallback are the only alternatives, and
 // inventing one is the exact leak this area exists to prevent.
 
+import { formatLocator } from "@/lib/kb/locator";
 import { db } from "@/lib/db";
 import { kbSearch } from "@/lib/kb/search";
 import { getEmbedSettings, embedWithEndpoint } from "@/lib/kb/embed";
@@ -61,7 +62,7 @@ export const kbTools: Record<string, ToolDef> = {
       return hits
         .map(
           (h, i) =>
-            `[${i + 1}] ${h.docName} · ${describeLocator(h.locator)}\n${h.text}`,
+            `[${i + 1}] ${h.docName} · ${formatLocator(h.locator)}\n${h.text}`,
         )
         .join("\n\n")
         .slice(0, 4000);
@@ -112,7 +113,7 @@ export const kbTools: Record<string, ToolDef> = {
         select: { name: true },
       });
       const body = page
-        .map((r) => `[chunk ${r.index} · ${describeLocator(safeJson(r.locator))}]\n${r.text}`)
+        .map((r) => `[chunk ${r.index} · ${formatLocator(safeJson(r.locator))}]\n${r.text}`)
         .join("\n\n");
       return `${doc?.name ?? "Document"}${next !== null ? `\n\nnext cursor: {"fromChunk": ${next}}` : "\n\n(end of document)"}\n\n${body}`.slice(0, 4000);
     },
@@ -146,15 +147,6 @@ export const kbTools: Record<string, ToolDef> = {
     },
   },
 };
-
-function describeLocator(locator: unknown): string {
-  if (typeof locator !== "object" || locator === null) return "location unknown";
-  const l = locator as Record<string, unknown>;
-  if (typeof l.sheet === "string") return `sheet ${l.sheet}${l.range ? ` ${l.range}` : ""}`;
-  if (typeof l.page === "number") return `page ${l.page}`;
-  if (typeof l.lines === "string") return `lines ${l.lines}`;
-  return "location unknown";
-}
 
 function safeJson(value: string): unknown {
   try {
