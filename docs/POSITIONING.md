@@ -375,15 +375,8 @@ paths-exempt:
   # delivered the extractors/ directory — every design-document reference
   # into the KB tree resolves now, so both targets left the way db-07's
   # did. The KB area is built.)
-  - target:
-      - src/lib/ai/tools/federation.ts
-    paths:
-      - docs/design/data-fabric.md
-    until: fed-06
-    reason: the data-fabric document names the router, the federation tools and
-      the two-silo fixtures that cat-* and fed-* create. cat-03 delivered
-      tests/fixtures/catalog, so that target left this list; the federation
-      tools wait for Phase 8.
+  # (src/lib/ai/tools/federation.ts rode here until fed-04 delivered it,
+  # so that target left this list; the two-silo fixtures wait for fed-06.)
   # (tests/fixtures/kb/docling/* and scripts/record-docling-fixture.mjs
   # rode here until dcl-03 delivered them; they left, and only the opt-in
   # live lane remains for dcl-07.)

@@ -10,6 +10,11 @@
 import { db } from "@/lib/db";
 import { ensureToolPolicies, getToolRegistry } from "@/lib/ai/custom-tools";
 import { CORE_TOOLS } from "@/lib/agent-profiles";
+
+/** The federation tools are engine-only (fed-04): absent from tools/list,
+ *  absent from tools/call — the run's retrieval budget has no meaning for
+ *  an external MCP client. */
+const FEDERATION_TOOLS = ["find_sources", "open_dataset", "discard_source", "query_dataset"];
 import { getAiSettings } from "@/lib/ai/settings";
 import { applySlaToTicket } from "@/lib/sla";
 import { emitTicketEvent } from "@/lib/webhooks";
@@ -121,6 +126,10 @@ export async function getMcpTools(): Promise<Record<string, ToolDef>> {
   const served: Record<string, ToolDef> = {};
   for (const [name, tool] of Object.entries(registry)) {
     if (CORE_TOOLS.includes(name)) continue;
+    // The federation four never cross MCP (fed-04): they operate a
+    // per-run ledger and per-run principals that an external caller has
+    // neither — the run IS the budget.
+    if (FEDERATION_TOOLS.includes(name)) continue;
     if ((KB_TOOLS as readonly string[]).includes(name)) continue;
     const policy = byName.get(name);
     if (!policy || !policy.enabled || policy.requiresApproval) continue;

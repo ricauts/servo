@@ -124,6 +124,29 @@ async function addStep(
  * assistant turn must share a single user message, so we extend the trailing
  * tool_result message when there is one.
  */
+/**
+ * The ENGINE BOUNDARY CAP (fed-04): every tool result is charged to the
+ * run's federation ledger BEFORE it re-enters the conversation — the
+ * engine otherwise appends tool strings verbatim (RESULT_LIMIT is an
+ * ad-hoc cap four tools apply; it was never an engine backstop). This is
+ * added at BOTH execute sites: the driveResolverLoop site and the
+ * resume-after-approval site; deleting either call makes the ledger stop
+ * charging while the conversation keeps growing — the test pins both.
+ */
+async function capToolResult(ctx: LoopContext, toolName: string, result: string): Promise<string> {
+  try {
+    const { chargeChars } = await import("./retrieval-budget");
+    const res = await chargeChars(db, ctx.runId, `tool:${toolName}`, result.length, {
+      overview: result.slice(0, Math.min(400, result.length)),
+      requested: result,
+      withheldName: "the remainder of the tool result",
+    });
+    return res.ok ? res.text : res.text;
+  } catch {
+    return result; // a ledger failure must not eat the tool's answer
+  }
+}
+
 function appendToolResult(
   messages: ConversationMessage[],
   block: Extract<ContentBlock, { type: "tool_result" }>,
@@ -598,6 +621,10 @@ async function driveResolverLoop(ctx: LoopContext): Promise<"completed" | "pause
         result = errorMessage(err);
         isError = true;
       }
+      // THE CAP, site 1 of 2 (driveResolverLoop). The twin call sits in
+      // resumeAfterApproval — deleting either makes the ledger-charging
+      // test fail; keep them together.
+      result = await capToolResult(ctx, call.name, result);
       await addStep(ctx, { type: "TOOL_RESULT", toolName: call.name, content: result });
       appendToolResult(ctx.messages, {
         type: "tool_result",
@@ -670,6 +697,10 @@ export async function resumeAfterApproval(approvalId: string): Promise<AgentRun>
           isError = true;
         }
       }
+      // THE CAP, site 2 of 2 (resumeAfterApproval). The twin call sits in
+      // driveResolverLoop — deleting either makes the ledger-charging test
+      // fail; keep them together.
+      result = await capToolResult(ctx, approval.toolName, result);
       await addStep(ctx, { type: "TOOL_RESULT", toolName: approval.toolName, content: result });
       appendToolResult(ctx.messages, {
         type: "tool_result",

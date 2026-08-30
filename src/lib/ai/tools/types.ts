@@ -17,6 +17,11 @@ export interface ToolContext {
   /** KB principal chain (kb-11): the agent principal intersected with the
    *  ticket requester. Absent on synthetic contexts (MCP) — KB tools deny. */
   principals?: { agentId: string; humanId: string | null };
+  /** The silo transport query_dataset rides (fed-04): injected by the
+   *  engine when the connection layer is configured; absent under the mock
+   *  provider except in scripted tests. Every call is read-only and
+   *  LIMIT-injected before it reaches this. */
+  silo?: { query(sql: string): Promise<unknown[]> };
 }
 
 export interface ToolDef {

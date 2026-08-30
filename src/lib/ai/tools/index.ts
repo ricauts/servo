@@ -13,10 +13,12 @@ import { opsDbTools } from "./ops-db";
 import { skillTools } from "./skills";
 import { ticketTools } from "./ticket";
 import { webTools } from "./web";
+import { federationTools } from "./federation";
 
 export type { ToolContext, ToolDef } from "./types";
 
 export const TOOLS = {
+  ...federationTools,
   ...opsDbTools,
   ...historyTools,
   ...kbTools,
