@@ -1606,6 +1606,79 @@ describe("hyg-03 — the CLI fails on a dead-path CANON error, not only on a mis
   });
 });
 
+describe("db-10 — the sqlite ban is a claim about the tree, not a hope", () => {
+  it("a scanned file mentioning sqlite outside the two exempt docs exits 1; the exempt docs stay clean", async () => {
+    // The canon has banned "sqlite" since reb-07; db-10 is the tick that
+    // makes the tree deserve it. This is the regression test that fails the
+    // day a comment or doc reintroduces the storage engine's name on any
+    // user-visible surface outside the migration guide and the ledger's
+    // marked history — the two permanent exemptions.
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync, mkdirSync, writeFileSync, copyFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const root = mkdtempSync(join(tmpdir(), "claims-sqlite-"));
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "docs"));
+    copyFileSync("scripts/claims-audit.mjs", join(root, "scripts/claims-audit.mjs"));
+    writeFileSync(
+      join(root, "docs/POSITIONING.md"),
+      [
+        "```banned-phrases",
+        "scan:",
+        "  - README.md",
+        "  - docs/migrating-to-postgres.md",
+        "matching:",
+        "  wordBoundary: true",
+        "  caseInsensitive: true",
+        "selfExclude:",
+        "  fence: banned-phrases",
+        "  appliesTo: all-scanned-files",
+        "banned:",
+        "  - sqlite",
+        "exempt:",
+        "  - phrase: sqlite",
+        "    reason: permanent - a migration guide describes what was",
+        "    paths:",
+        "      - docs/migrating-to-postgres.md",
+        "paths-scan:",
+        "  - README.md",
+        "  - docs/migrating-to-postgres.md",
+        "paths-matching:",
+        "  separatorRequired: true",
+        "  anchored: true",
+        "```",
+      ].join("\n"),
+    );
+    // The exempt doc may say it; a scanned file outside the exemption may not.
+    writeFileSync(join(root, "docs/migrating-to-postgres.md"), "# Guide\nthe sqlite era, honestly described\n");
+    writeFileSync(join(root, "README.md"), "# T\nbacked by sqlite since forever\n");
+
+    let status = 0;
+    let stderr = "";
+    try {
+      execFileSync("node", [join(root, "scripts/claims-audit.mjs")], { encoding: "utf8" });
+    } catch (err: any) {
+      status = err.status;
+      stderr = String(err.stderr);
+    }
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/README\.md:2:\d+: banned phrase "sqlite"/);
+    expect(stderr).toContain("0 canon error(s)");
+    expect(stderr).not.toContain("migrating-to-postgres.md"); // the exemption held
+
+    // The real tree, unmutated, stays clean — the same CLI the CI runs.
+    let treeStatus = 0;
+    try {
+      execFileSync("node", ["scripts/claims-audit.mjs"], { encoding: "utf8" });
+    } catch (err: any) {
+      treeStatus = err.status;
+    }
+    expect(treeStatus).toBe(0);
+  });
+});
+
 describe("hyg-03 follow-up — defects an adjudicator found after the merge", () => {
   it("BLOCKING: a 4-space-indented fence is NOT a fence, so it cannot un-scan a region", () => {
     // Reproduced on main: two 4-space-indented ``` lines around a paragraph

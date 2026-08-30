@@ -1,0 +1,3 @@
+Contact ops@example.com or OPS@Example.COM for access.
+Docs at https://docs.example.com/guides/setup?lang=en#intro today.
+See http://a.io/x and mailto:x@y.io for details.

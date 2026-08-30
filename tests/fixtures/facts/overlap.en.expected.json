@@ -1,0 +1,110 @@
+[
+  [
+    {
+      "kind": "IDENTIFIER",
+      "text": "INV-2024-113",
+      "offset": 8,
+      "length": 12,
+      "extractor": "facts@1",
+      "norm": "inv2024113",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DATE",
+      "text": "2026-01-31",
+      "offset": 31,
+      "length": 10,
+      "extractor": "facts@1",
+      "ts": 1769817600000,
+      "tsEnd": 1769904000000,
+      "norm": "2026-01-31/2026-02-01",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "URL",
+      "text": "https://app.example.com/INV-2024-113?token=1",
+      "offset": 4,
+      "length": 44,
+      "extractor": "facts@1",
+      "norm": "https://app.example.com/INV-2024-113"
+    }
+  ],
+  [
+    {
+      "kind": "EMAIL",
+      "text": "a.torres+inv@corp.io",
+      "offset": 5,
+      "length": 20,
+      "extractor": "facts@1",
+      "norm": "a.torres+inv@corp.io"
+    },
+    {
+      "kind": "IDENTIFIER",
+      "text": "#777",
+      "offset": 32,
+      "length": 4,
+      "extractor": "facts@1",
+      "norm": "777",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "MONEY",
+      "text": "$500",
+      "offset": 0,
+      "length": 4,
+      "extractor": "facts@1",
+      "num": 50000,
+      "unit": "USD",
+      "norm": "USD:50000",
+      "confidence": "ASSUMED"
+    },
+    {
+      "kind": "QUANTITY",
+      "text": "12 kg",
+      "offset": 18,
+      "length": 5,
+      "extractor": "facts@1",
+      "num": 12,
+      "unit": "kg",
+      "norm": "12:kg"
+    },
+    {
+      "kind": "DATE",
+      "text": "01/02/2026",
+      "offset": 27,
+      "length": 10,
+      "extractor": "facts@1",
+      "ts": 1769904000000,
+      "tsEnd": 1769990400000,
+      "norm": "2026-02-01/2026-02-02",
+      "confidence": "ASSUMED"
+    }
+  ],
+  [
+    {
+      "kind": "QUANTITY",
+      "text": "2 gb",
+      "offset": 0,
+      "length": 4,
+      "extractor": "facts@1",
+      "num": 2,
+      "unit": "gb",
+      "norm": "2:gb"
+    },
+    {
+      "kind": "DURATION",
+      "text": "30 days",
+      "offset": 16,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 2592000,
+      "unit": "s",
+      "norm": "P30D",
+      "confidence": "EXACT"
+    }
+  ]
+]

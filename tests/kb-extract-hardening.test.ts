@@ -13,7 +13,15 @@ const holder = vi.hoisted(() => ({ db: null as unknown as ServoDb }));
 vi.mock("@/lib/db", () => ({ get db() { return holder.db; } }));
 
 import { extractHardened, inspectZip, detectXxe, EXTRACT_LIMITS } from "@/lib/kb/extract";
+import { KB_EXTRACT_BUDGET_ENV, KB_EXTRACT_BUDGET_DEFAULT_MS } from "@/lib/kb/settings";
 import { ingestDocument } from "@/lib/kb/ingest";
+
+// dcl-01 amendment (the acceptance names it): the wall-clock constant became
+// the kb.extract.workerBudgetMs setting, resolved env-first. This file
+// tightens the env override to 10s so the wall-clock fixtures stay fast,
+// and asserts the default is the shipped 360000.
+process.env[KB_EXTRACT_BUDGET_ENV] = "10000";
+const BUDGET_MS = 10_000;
 
 const handles: TmpDb[] = [];
 afterAll(async () => {
@@ -57,8 +65,12 @@ describe("the pure pre-parse caps", () => {
   it("the caps are measured, not aspirational", () => {
     expect(EXTRACT_LIMITS.maxEntries).toBe(2_000);
     expect(EXTRACT_LIMITS.maxDecompressedBytes).toBe(64 * 1024 * 1024);
-    expect(EXTRACT_LIMITS.wallClockMs).toBeLessThanOrEqual(10_000);
     expect(EXTRACT_LIMITS.maxOldSpaceMb).toBe(512);
+    // dcl-01: the wall-clock budget is the kb.extract.workerBudgetMs
+    // setting — the shipped default is 360000, and this file's env
+    // override tightens it to 10s for the fixtures.
+    expect(KB_EXTRACT_BUDGET_DEFAULT_MS).toBe(360_000);
+    expect(process.env[KB_EXTRACT_BUDGET_ENV]).toBe("10000");
   });
 });
 
@@ -67,7 +79,7 @@ describe("extractHardened", () => {
     const started = Date.now();
     const outcome = await extractHardened(zipBomb(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     const elapsed = Date.now() - started;
-    expect(elapsed).toBeLessThan(EXTRACT_LIMITS.wallClockMs + 2_000);
+    expect(elapsed).toBeLessThan(BUDGET_MS + 2_000);
     expect(outcome.status).toBe("FAILED");
     expect(outcome.breach).toMatch(/entries|decompressed/);
     expect(outcome.error).toMatch(/Refused before parsing/);

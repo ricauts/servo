@@ -8,6 +8,7 @@ import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import { relatedDocuments } from "@/lib/kb/graph";
 import { statusCopy } from "@/components/kb/KbDocumentList";
 import KbSharePanel from "@/components/kb/KbSharePanel";
+import KbReextractButton from "@/components/kb/KbReextractButton";
 import PageHeader from "@/components/shell/PageHeader";
 import EmptyState from "@/components/legacy/EmptyState";
 
@@ -45,6 +46,11 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       summary: true,
       visibility: true,
       updatedAt: true,
+      ownerId: true,
+      extractor: true,
+      extractorVersion: true,
+      extractorFallback: true,
+      extractedAt: true,
     },
   });
   if (!doc) notFound();
@@ -87,6 +93,24 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       {status.hint && <p className="mt-1.5 text-xs text-muted-foreground">{status.hint}</p>}
       {doc.summary && <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{doc.summary}</p>}
 
+      {/* dcl-09: extractor provenance — NEVER a silent baseline. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-sans text-xs">
+        <span className="font-heading font-semibold uppercase tracking-wide text-muted-foreground">Extractor</span>
+        <span className="font-mono text-[11px]">{doc.extractor || "baseline"}{doc.extractorVersion ? ` · ${doc.extractorVersion}` : ""}</span>
+        {doc.extractorFallback ? (
+          <>
+            <span className="rounded-full border border-border px-1.5 py-px font-mono text-[10.5px]" style={{ color: "var(--warn)" }}>
+              fallback
+            </span>
+            <span className="text-muted-foreground">
+              Baseline extraction — the high-fidelity extractor was unavailable ({doc.extractorFallback}).
+            </span>
+          </>
+        ) : null}
+        {(can(user, "kb.manage") || doc.ownerId === user.id) && doc.textStatus !== "EXTRACTING" && (
+          <KbReextractButton documentId={doc.id} />
+        )}
+      </div>
       {can(user, "kb.share") && <KbSharePanel documentId={doc.id} />}
 
       {agentReaders === 0 && (

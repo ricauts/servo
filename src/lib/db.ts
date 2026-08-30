@@ -2,10 +2,11 @@ import { PrismaClient } from "@prisma/client";
 import { open, seal, SENSITIVE_SETTING_KEYS } from "@/lib/secret-store";
 
 // Secrets are encrypted at the write boundary (Setting values for sensitive
-// keys; AiCredential.apiKey, CustomTool.secret, Webhook.secret always) and
-// Setting reads are decrypted here because settings are read all over the
-// codebase. The other three models are decrypted at their single use site
-// (settingsForProfile, custom-tool execution, webhook signing) — a Prisma
+// keys; AiCredential.apiKey, CustomTool.secret, Webhook.secret, and
+// McpServer.secret always) and Setting reads are decrypted here because
+// settings are read all over the codebase. The other four models are
+// decrypted at their single use site (settingsForProfile, custom-tool
+// execution, webhook signing, the MCP client's header fill) — a Prisma
 // query extension never sees them arrive through nested `include` reads,
 // so decrypting there would be unreliable.
 
@@ -110,6 +111,21 @@ function makeClient() {
         },
         async update({ args, query }) {
           sealField(args.data as Record<string, unknown>, "secret");
+          return query(args);
+        },
+      },
+      mcpServer: {
+        async create({ args, query }) {
+          sealField(args.data, "secret");
+          return query(args);
+        },
+        async update({ args, query }) {
+          sealField(args.data as Record<string, unknown>, "secret");
+          return query(args);
+        },
+        async upsert({ args, query }) {
+          sealField(args.create, "secret");
+          sealField(args.update as Record<string, unknown>, "secret");
           return query(args);
         },
       },
