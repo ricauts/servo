@@ -17,16 +17,36 @@ export interface KbAdminSettings {
  *  with the query-egress warning BESIDE the field (not in a doc nobody
  *  opens), and auto-delivery toggles carrying the sends-without-a-human
  *  warning. Everything here requires settings.manage server-side. */
+export interface ExtractorHealth {
+  configured: boolean;
+  url: string;
+  version: string;
+  circuit: string;
+}
+
+export interface FallbackQueueEntry {
+  id: string;
+  name: string;
+  extractorFallback: string;
+}
+
 export default function KbAdminPanel({
   settings,
   collections,
+  extractorHealth,
+  fallbackQueue,
 }: {
   settings: KbAdminSettings;
   collections: { id: string; name: string; documentCount?: number }[];
+  /** dcl-09: the sidecar surface + the fallback queue. */
+  extractorHealth: ExtractorHealth;
+  fallbackQueue: FallbackQueueEntry[];
 }) {
   const router = useRouter();
   const [embed, setEmbed] = useState(settings);
   const [newCollection, setNewCollection] = useState("");
+  const [draining, setDraining] = useState(false);
+  const [drainNote, setDrainNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -49,6 +69,22 @@ export default function KbAdminPanel({
       setError(err instanceof Error ? err.message : "Save failed.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function drainQueue() {
+    setDraining(true);
+    setDrainNote(null);
+    try {
+      const res = await fetch("/api/kb/reextract-queue", { method: "POST" });
+      const body = (await res.json().catch(() => null)) as { walked?: number; drained?: number; error?: string } | null;
+      if (!res.ok) throw new Error(body?.error ?? "The drain failed.");
+      setDrainNote(`Walked ${body?.walked ?? 0}, cleared ${body?.drained ?? 0}.`);
+      router.refresh();
+    } catch (err) {
+      setDrainNote(err instanceof Error ? err.message : "The drain failed.");
+    } finally {
+      setDraining(false);
     }
   }
 
@@ -117,6 +153,66 @@ export default function KbAdminPanel({
             <FolderPlus size={13} /> Create
           </button>
         </div>
+      </div>
+
+      {/* --- Extraction sidecar (dcl-09) --------------------------------- */}
+      <div className="mt-5">
+        <p className="font-heading text-[13px] font-medium">Extraction sidecar</p>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+          {extractorHealth.configured
+            ? "The high-fidelity extraction lane. A version mismatch after an image change shows up HERE, as a version — not as a stream of fallback baselines."
+            : "Not configured — every document extracts on the built-in baseline (exceljs, unpdf, the text chunker). Configuring kb.extract.docling.url opts PDFs into the high-fidelity lane."}
+        </p>
+        {extractorHealth.configured && (
+          <dl className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+            <div>
+              <dt className="text-muted-foreground">URL</dt>
+              <dd className="font-mono text-[11px]">{extractorHealth.url}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Reported version</dt>
+              <dd className="font-mono text-[11px]">{extractorHealth.version}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Circuit</dt>
+              <dd className="font-mono text-[11px]">{extractorHealth.circuit}</dd>
+            </div>
+          </dl>
+        )}
+      </div>
+
+      {/* --- The re-extraction queue (dcl-09) ----------------------------- */}
+      <div className="mt-5">
+        <p className="font-heading text-[13px] font-medium">Re-extraction queue</p>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+          Documents that landed on the baseline because the high-fidelity
+          extractor was unavailable. Draining walks them one at a time.
+        </p>
+        {fallbackQueue.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">Empty — every document carries its preferred extraction.</p>
+        ) : (
+          <>
+            <ul className="mt-2 space-y-1">
+              {fallbackQueue.map((entry) => (
+                <li key={entry.id} className="flex items-center gap-2 text-xs">
+                  <a href={`/kb/${entry.id}`} className="hover:underline">{entry.name}</a>
+                  <span className="font-mono text-[10.5px] text-muted-foreground">{entry.extractorFallback}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={draining}
+                onClick={() => void drainQueue()}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-[12.5px] font-medium disabled:opacity-50"
+              >
+                {draining ? "Draining…" : `Re-extract ${fallbackQueue.length} document${fallbackQueue.length === 1 ? "" : "s"}`}
+              </button>
+              {drainNote && <span className="text-xs text-muted-foreground">{drainNote}</span>}
+            </div>
+          </>
+        )}
       </div>
 
       {/* --- Embeddings -------------------------------------------------- */}

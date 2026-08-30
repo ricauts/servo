@@ -108,6 +108,16 @@ describe("policy-creation sites in src/ are allowlisted", () => {
       "src/app/api/settings/tools/route.ts", // admin UI policy editor — the human downgrade
       "src/app/api/tools/route.ts", // admin UI custom-tool create
       "src/app/api/tools/[id]/route.ts", // admin UI custom-tool edit/delete
+      // cnp-02: the MCP tools/list sync. It is a NON-CORE source, so it is
+      // allowlisted only because the two writes it makes are a quarantined
+      // create and a quarantining update, and nothing else. What that is
+      // warranted by, precisely: tests/mcp-server-sync.test.ts drives the
+      // four admin states x the three snapshot states (same hash, changed
+      // hash, ABSENT hash) and asserts no field moved in the loosening
+      // direction on any of the twelve, plus the three named ways an enabled
+      // row can outlive its snapshot. Not a proof over all inputs — a proof
+      // over the state space the sync branches on.
+      "src/lib/mcp-client.ts",
       "prisma/seed-core.ts",
       "prisma/seed-demo.ts",
     ]);

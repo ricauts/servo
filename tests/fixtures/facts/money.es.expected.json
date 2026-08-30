@@ -3,6 +3,9 @@
     {
       "kind": "MONEY",
       "text": "1234,56 USD",
+      "offset": 41,
+      "length": 11,
+      "extractor": "facts@1",
       "num": 123456,
       "unit": "USD",
       "norm": "USD:123456",
@@ -13,6 +16,9 @@
     {
       "kind": "MONEY",
       "text": "€1.234,56",
+      "offset": 12,
+      "length": 9,
+      "extractor": "facts@1",
       "num": 123456,
       "unit": "EUR",
       "norm": "EUR:123456",
@@ -21,6 +27,9 @@
     {
       "kind": "MONEY",
       "text": "CLP$7.500",
+      "offset": 24,
+      "length": 9,
+      "extractor": "facts@1",
       "num": 7500,
       "unit": "CLP",
       "norm": "CLP:7500",

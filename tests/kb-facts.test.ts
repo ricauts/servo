@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { extractFacts, exponentFor, type FactRuleset } from "@/lib/kb/facts";
+import { extractFacts, exponentFor, FACT_PRECEDENCE, MAX_FACTS_PER_CALL, type FactRuleset } from "@/lib/kb/facts";
 
 const RULESET: FactRuleset = {
   refDate: "2026-01-15",
@@ -35,9 +35,11 @@ describe("purity — enforced at the source level", () => {
 });
 
 describe("golden corpora — byte-identical, twice in one test", () => {
-  const corpora = ["dates", "money", "duration"].flatMap((kind) =>
-    ["en", "es"].map((lang) => `${kind}.${lang}`),
-  );
+  const corpora = [
+    "dates.en", "dates.es", "money.en", "money.es", "duration.en", "duration.es",
+    "identifiers.en", "identifiers.es", "quantity.en", "references.en",
+    "overlap.en", "numeric.en",
+  ];
 
   for (const corpus of corpora) {
     it(`${corpus}: same input + same ruleset → byte-identical output`, () => {
@@ -49,12 +51,119 @@ describe("golden corpora — byte-identical, twice in one test", () => {
       );
       expect(inputs.length).toBe(expected.length);
 
-      const first = JSON.stringify(inputs.map((line) => extractFacts(line, RULESET).facts));
-      const second = JSON.stringify(inputs.map((line) => extractFacts(line, RULESET).facts));
-      expect(first).toBe(second);
+      const run = () => JSON.stringify(inputs.map((line) => extractFacts(line, RULESET).facts));
+      const first = run();
+      expect(first).toBe(run());
       expect(first).toBe(JSON.stringify(expected));
+
+      // ext-03: every fact slices back out of its line at its own offset —
+      // the locator contract, asserted for every golden fixture.
+      for (let i = 0; i < inputs.length; i++) {
+        for (const f of expected[i]) {
+          expect(inputs[i].slice(f.offset, f.offset + f.length), `${corpus} line ${i + 1}`).toBe(f.text);
+          expect(f.extractor).toBe("facts@1");
+        }
+      }
     });
   }
+});
+
+describe("ext-03 — identifiers, quantities, emails, URLs", () => {
+  it("INV-2024-113 yields exactly ONE identifier and NO date for the embedded 2024", () => {
+    const facts = extractFacts("Invoice INV-2024-113 was paid.", RULESET).facts;
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({ kind: "IDENTIFIER", norm: "inv2024113" });
+  });
+
+  it("identifiers normalize case and separator runs away — one reference, two spellings", () => {
+    const facts = extractFacts("Normalization: inv_2024_113 and INV-2024-113 are one reference.", RULESET).facts;
+    expect(facts.map((f) => f.norm)).toEqual(["inv2024113", "inv2024113"]);
+  });
+
+  it("letters-only and digits-only tokens are NOT identifiers", () => {
+    expect(extractFacts("Team GB won, Room 42 lost, and v1.2 shipped.", RULESET).facts).toEqual([]);
+  });
+
+  it("BARE NUMERALS ARE NOT EXTRACTED — the numeric-only fixture yields zero facts", () => {
+    const lines = readFileSync("tests/fixtures/facts/numeric.en.txt", "utf8").split(/\r?\n/).filter((l) => l.trim());
+    for (const line of lines) {
+      expect(extractFacts(line, RULESET).facts, `"${line}"`).toEqual([]);
+    }
+  });
+
+  it("quantities: num and unit set, norm '<value>:<unit>'; time stays DURATION", () => {
+    const facts = extractFacts("Shipped 12 kg at 50% in 3.5 GB.", RULESET).facts;
+    expect(facts).toMatchObject([
+      { kind: "QUANTITY", num: 12, unit: "kg", norm: "12:kg" },
+      { kind: "QUANTITY", num: 50, unit: "%", norm: "50:%" },
+      { kind: "QUANTITY", num: 3.5, unit: "gb", norm: "3.5:gb" },
+    ]);
+    const [dur] = extractFacts("kept 30 days", RULESET).facts;
+    expect(dur).toMatchObject({ kind: "DURATION", num: 2_592_000, unit: "s" });
+  });
+
+  it("URLs keep origin and path, drop query and fragment; emails case-fold", () => {
+    const [url] = extractFacts("Docs at https://docs.example.com/guides/setup?lang=en#intro", RULESET).facts;
+    expect(url).toMatchObject({ kind: "URL", norm: "https://docs.example.com/guides/setup" });
+    const [mail] = extractFacts("Write to OPS@Example.COM.", RULESET).facts;
+    expect(mail).toMatchObject({ kind: "EMAIL", norm: "ops@example.com" });
+  });
+});
+
+describe("ext-03 — overlap precedence and the 64 cap", () => {
+  it("LONGEST MATCH wins: a URL swallows the identifier inside its path", () => {
+    const facts = extractFacts("Ref https://app.example.com/INV-2024-113?token=1 only.", RULESET).facts;
+    expect(facts).toHaveLength(1);
+    expect(facts[0].kind).toBe("URL");
+  });
+
+  it("equal spans settle by the fixed order: IDENTIFIER outranks MONEY", () => {
+    // "USD1234" is a legal MONEY match and a legal letters-then-digits
+    // IDENTIFIER over the same span — the precedence table decides.
+    const facts = extractFacts("paid USD1234 upfront", RULESET).facts;
+    expect(facts).toHaveLength(1);
+    expect(facts[0].kind).toBe("IDENTIFIER");
+  });
+
+  it("the precedence table is the spec's order, as data", () => {
+    expect(Object.entries(FACT_PRECEDENCE).sort((a, b) => a[1] - b[1]).map(([k]) => k)).toEqual([
+      "URL", "EMAIL", "IDENTIFIER", "MONEY", "DATE", "DURATION", "QUANTITY",
+    ]);
+  });
+
+  it("at most 64 facts, kept in offset order, dropped deterministically", () => {
+    const text = Array.from({ length: 70 }, (_, i) => `ref-${String(i).padStart(4, "0")}-x`).join(" ");
+    const first = extractFacts(text, RULESET).facts;
+    const second = extractFacts(text, RULESET).facts;
+    expect(first).toHaveLength(64);
+    expect(first).toEqual(second);
+    // Offset order, and the survivors are the FIRST 64 by offset.
+    const offsets = first.map((f) => f.offset);
+    expect([...offsets].sort((a, b) => a - b)).toEqual(offsets);
+    expect(first[63].text).toContain("ref-0063");
+  });
+
+  it("MAX_FACTS_PER_CALL is a constant, not a Setting the ruleset carries", () => {
+    expect(MAX_FACTS_PER_CALL).toBe(64);
+    expect(RULESET).not.toHaveProperty("maxFacts");
+  });
+});
+
+describe("ext-03 — the module header states its coverage limits", () => {
+  it("index.ts says, in plain words, what is English/Spanish-only and what is deliberately not extracted", () => {
+    // Read the header as PROSE: comment wrapping must not be able to hide
+    // an absence by breaking a phrase across lines.
+    const header = readFileSync("src/lib/kb/facts/index.ts", "utf8")
+      .slice(0, 2400)
+      .replace(/\s*\/\/\s*/g, " ")
+      .replace(/\s+/g, " ");
+    expect(header).toMatch(/English and Spanish only/);
+    for (const absent of ["person names", "organisations", "places", "phone numbers", "times of day"]) {
+      expect(header).toContain(absent);
+    }
+    // Capitalized multi-word names stay in kb-08's lexical half.
+    expect(header).toMatch(/kb-08/);
+  });
 });
 
 describe("every DATE fact is an interval", () => {

@@ -1,0 +1,31 @@
+{
+  "fixtures": [
+    {
+      "file": "manual.doclingdocument.json",
+      "source_filename": "manual.pdf",
+      "provenance": "synthetic",
+      "synthetic": true,
+      "reason": "no docling-serve sidecar exists in the tree yet (LANE 1); hand-authored to the DoclingDocument item/provenance shape so the mapper, schema and caps are testable offline. Replaced by scripts/record-docling-fixture.mjs once docker-compose.docling.yml arrives — docling-fixture-lint fails on synthetic entries from that moment",
+      "docling_serve_version": null,
+      "image_digest": null
+    },
+    {
+      "file": "scanned.doclingdocument.json",
+      "source_filename": "scanned.pdf",
+      "provenance": "synthetic",
+      "synthetic": true,
+      "reason": "the OCR case unpdf returns nothing for — the reason this section exists; synthesized until a live sidecar can record the real conversion",
+      "docling_serve_version": null,
+      "image_digest": null
+    },
+    {
+      "file": "messy-workbook.doclingdocument.json",
+      "source_filename": "messy-workbook.pdf",
+      "provenance": "synthetic",
+      "synthetic": true,
+      "reason": "two labelled tables on one page, exercising the sheet/range/table/cell mapping offline",
+      "docling_serve_version": null,
+      "image_digest": null
+    }
+  ]
+}

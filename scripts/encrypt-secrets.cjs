@@ -5,7 +5,8 @@
 //
 // Reads SERVO_ENCRYPTION_KEY from the environment (or .env), then seals every
 // sensitive value that is still plaintext: Setting rows for secret keys,
-// AiCredential.apiKey, CustomTool.secret and Webhook.secret. Idempotent —
+// AiCredential.apiKey, CustomTool.secret, Webhook.secret and
+// McpServer.secret. Idempotent —
 // already-encrypted values are left alone. New writes are encrypted
 // automatically by the app; this exists only for rows written before the key.
 const fs = require("fs");
@@ -89,6 +90,16 @@ function seal(key, plain) {
     if (hook.secret && !hook.secret.startsWith(PREFIX)) {
       await db.webhook.update({ where: { id: hook.id }, data: { secret: seal(key, hook.secret) } });
       console.log(`sealed webhook secret ${hook.id}`);
+      sealed++;
+    }
+  }
+  // cnp-02 joined McpServer.secret to the sealed-secret family in
+  // src/lib/db.ts; a model the write hook seals but this backfill does not
+  // know about would leave pre-key rows plaintext forever.
+  for (const server of await db.mcpServer.findMany()) {
+    if (server.secret && !server.secret.startsWith(PREFIX)) {
+      await db.mcpServer.update({ where: { id: server.id }, data: { secret: seal(key, server.secret) } });
+      console.log(`sealed MCP server secret ${server.slug}`);
       sealed++;
     }
   }

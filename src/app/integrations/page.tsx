@@ -20,6 +20,10 @@ import AuthTenantForm, {
   type AuthTenantView,
 } from "@/components/admin/AuthTenantForm";
 import McpForm, { type McpSettingsView } from "@/components/admin/McpForm";
+import McpServersManager, {
+  type McpServerView,
+} from "@/components/admin/McpServersManager";
+import { parseToolsJson } from "@/lib/mcp-client";
 import EgressForm, { type EgressSettingsView } from "@/components/admin/EgressForm";
 import { getMcpConfig } from "@/lib/mcp";
 import { getEgressConfig } from "@/lib/egress";
@@ -67,6 +71,24 @@ export default async function IntegrationsPage() {
       orderBy: { createdAt: "asc" },
     }),
   ]);
+  // cnp-02: the secret is destructured away here, not rendered — the page is
+  // a server component, so anything left on the object crosses to the client.
+  const mcpServerRows = await db.mcpServer.findMany({ orderBy: { createdAt: "asc" } });
+  const mcpServerViews: McpServerView[] = mcpServerRows.map((server) => ({
+    id: server.id,
+    slug: server.slug,
+    name: server.name,
+    transport: server.transport,
+    url: server.url,
+    enabled: server.enabled,
+    secretSet: server.secret.length > 0,
+    lastSyncAt: server.lastSyncAt === null ? null : server.lastSyncAt.toISOString(),
+    tools: parseToolsJson(server.toolsJson).map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      declaredRiskLevel: tool.declaredRiskLevel,
+    })),
+  }));
 
   const authView: AuthTenantView = {
     mode: authConfig.mode,
@@ -201,6 +223,17 @@ export default async function IntegrationsPage() {
         "Servo as a Model Context Protocol server: external agents file and search tickets and operate the tool registry.",
       status: mcpView.tokenSet ? { label: "Active", tone: "good" } : off,
       body: <McpForm initial={mcpView} />,
+    },
+    {
+      id: "mcp-servers",
+      title: "MCP servers",
+      blurb:
+        "Servo as an MCP client: connect an external server over Streamable HTTP and sync its tool catalogue. Synced tools land disabled, approval-required and HIGH risk.",
+      status:
+        mcpServerViews.length > 0
+          ? { label: `${mcpServerViews.length} registered`, tone: "good" as const }
+          : off,
+      body: <McpServersManager servers={mcpServerViews} />,
     },
   ];
 

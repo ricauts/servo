@@ -1,0 +1,5 @@
+Invoice INV-2024-113 was paid in full.
+See PO/2024/88 and case_4821 for the audit trail.
+Ticket SR00123 is blocked; duplicate #4821 stays open.
+Normalization: inv_2024_113 and INV-2024-113 are one reference.
+Team GB won, Room 42 lost, and v1.2 shipped — no facts here.

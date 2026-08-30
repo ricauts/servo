@@ -296,6 +296,17 @@ paths-matching:
 paths-exempt:
   # --- Negative references -------------------------------------------------
   - target:
+      - prisma/*.db
+      - prisma/*.db*
+    paths:
+      - docs/design/hygiene.md
+      - docs/design/postgres.md
+    reason: negative references - db-10 deleted the SQLite files and their
+      ignore rules, and both documents name the glob precisely to record
+      that refusal (the never-in-scope list, the .gitignore row, the
+      acceptance). If the glob resolved again, a file came back and both
+      documents would be wrong.
+  - target:
       - docs/spec/control-plane.md
       - docs/integrations.md
       - docs/marketplace.md
@@ -320,11 +331,11 @@ paths-exempt:
       - prisma/seed.ts
       - src/lib/ai/tools.ts
     paths:
-      - docs/CONTRACT.md
-    until: hyg-08
-    reason: a superseded build order. hyg-08 moves it to docs/history/ with a
-      header naming these as files that no longer exist; the header is what
-      turns them from stale references into recorded history.
+      - docs/history/CONTRACT.md
+    reason: recorded history, permanent. hyg-08 moved the superseded build
+      order under docs/history/ and its header names these as files that no
+      longer exist — the header is what turns them from stale references
+      into provenance, and the body below it stays unedited.
   # --- Written relative to a directory the surrounding prose names ---------
   - target:
       - api/tickets/route.ts
@@ -349,58 +360,35 @@ paths-exempt:
       .claude-plugin/plugin.json, tools/*.tool.json) are two segments and no
       longer reach the check, for the same reason a GitHub coordinate does not.
   # --- Untracked by design -------------------------------------------------
-  - target:
-      - prisma/*.db
-      - prisma/*.db*
-    paths:
-      - docs/ARCHITECTURE.md
-      - docs/design/hygiene.md
-      - docs/design/postgres.md
-    until: db-10
-    reason: gitignored runtime artefacts. They exist on an operator's machine
-      and in no checkout; db-10 removes both the ignore rules and the files.
+  # (The prisma/*.db entry that lived here is gone: db-10 deleted the files
+  # and the .gitignore rules, and the three documents that named the glob
+  # now record it as history — see the negative-reference entries above for
+  # the form a "this must not exist" claim takes.)
   # --- Forward references, by the item that creates the target -------------
   # db-07 delivered docs/migrating-to-postgres.md, scripts/migrate-sqlite-
   # to-postgres.mjs and the pg_dump backup procedure; its targets left this
-  # list, the same way db-01/02/03/08's did.
+  # list, the same way db-01/02/03/08's did. db-06 delivered
+  # tests/ops-isolation.test.ts, which was this list's last Postgres-area
+  # forward reference and left with it — the reference in
+  # docs/design/postgres.md now resolves.
+  # (src/lib/kb/* rode here until dcl-01, src/lib/kb/*/* until dcl-03
+  # delivered the extractors/ directory — every design-document reference
+  # into the KB tree resolves now, so both targets left the way db-07's
+  # did. The KB area is built.)
+  # (src/lib/ai/tools/federation.ts rode here until fed-04 delivered it,
+  # so that target left this list; the two-silo fixtures wait for fed-06.)
+  # (tests/fixtures/kb/docling/* and scripts/record-docling-fixture.mjs
+  # rode here until dcl-03 delivered them; they left, and only the opt-in
+  # live lane remains for dcl-07.)
   - target:
-      - tests/ops-isolation.test.ts
-    paths:
-      - docs/design/postgres.md
-    until: db-10
-    reason: the Postgres design document names the one-shot import and the
-      tests that db-03 through db-08 create. db-01 delivered the migrations
-      and init file, db-02 delivered the harness (tests/setup/postgres.ts,
-      tests/helpers/tmp-db.ts, tests/tmp-db.test.ts), db-03 delivered the
-      search and ticket-number tests, and db-08 delivered the platform
-      smoke test, so those targets left this list.
-  - target:
-      - src/lib/kb/*
-      - src/lib/kb/*/*
-    paths:
-      - docs/design/knowledge-base.md
-      - docs/design/extraction.md
-      - docs/design/data-fabric.md
-      - docs/design/docling.md
-    until: kb-11
-    reason: the knowledge-base and facts design documents name the modules the
-      kb-* and ext-* items create, and the data-fabric and Docling documents
-      compose the same entitlement module. Nothing in the KB area has been
-      built.
-  # fed-04 delivered src/lib/ai/tools/federation.ts, so that target left
-  # this list; the two-silo fixtures wait for fed-06.
-  - target:
-      - tests/fixtures/kb/docling/*
-      - scripts/record-docling-fixture.mjs
       - tests/live
       - tests/live/*
       - tests/docling-compose.test.ts
     paths:
       - docs/design/docling.md
     until: dcl-07
-    reason: the Docling document names the fixtures, the recorder and the
-      opt-in live lane that dcl-03 and dcl-07 create. The sidecar area has not
-      started, and it is optional even when it does.
+    reason: the Docling document names the opt-in live lane dcl-07 creates.
+      The sidecar area is optional even when it ships.
   # ext-02 delivered the golden fact corpora (tests/fixtures/facts/), so
   # that target left this list.
   - target:
@@ -420,15 +408,17 @@ paths-exempt:
       - docs/design/ux.md
     reason: permanent - the kanban board and the runs console are Roadmap
       (ux-02, ux-05), so nothing in v1 creates either module.
+  # (docs/hygiene rode here too until hyg-audit-01 wrote its first audit
+  # file there — the directory reference resolves now, so it left this list
+  # the way every delivered target does.)
   - target:
-      - docs/hygiene
       - scripts/media
       - tests/dockerignore.test.ts
     paths:
       - docs/design/hygiene.md
     until: hyg-09
-    reason: the hygiene design document names the evidence directory (hyg-05),
-      the archived media rig (hyg-09) and the dockerignore test (hyg-07).
+    reason: the hygiene design document names the archived media rig
+      (hyg-09) and the dockerignore test (hyg-07).
   # loop-07 delivered docs/integrations/ (the one mining procedure), so
   # that target left this list.
   - target:

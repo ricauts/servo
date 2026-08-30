@@ -3,6 +3,9 @@
     {
       "kind": "DATE",
       "text": "2026-01-31",
+      "offset": 21,
+      "length": 10,
+      "extractor": "facts@1",
       "ts": 1769817600000,
       "tsEnd": 1769904000000,
       "norm": "2026-01-31/2026-02-01",
@@ -13,6 +16,9 @@
     {
       "kind": "DATE",
       "text": "01/02/2026",
+      "offset": 12,
+      "length": 10,
+      "extractor": "facts@1",
       "ts": 1769904000000,
       "tsEnd": 1769990400000,
       "norm": "2026-02-01/2026-02-02",
@@ -23,6 +29,9 @@
     {
       "kind": "DATE",
       "text": "January 15, 2026",
+      "offset": 21,
+      "length": 16,
+      "extractor": "facts@1",
       "ts": 1768435200000,
       "tsEnd": 1768521600000,
       "norm": "2026-01-15/2026-01-16",
@@ -33,6 +42,9 @@
     {
       "kind": "DATE",
       "text": "January 2026",
+      "offset": 20,
+      "length": 12,
+      "extractor": "facts@1",
       "ts": 1767225600000,
       "tsEnd": 1769904000000,
       "norm": "2026-01-01/2026-02-01",
@@ -41,6 +53,9 @@
     {
       "kind": "DATE",
       "text": "Q3 2026",
+      "offset": 41,
+      "length": 7,
+      "extractor": "facts@1",
       "ts": 1782864000000,
       "tsEnd": 1790812800000,
       "norm": "2026-07-01/2026-10-01",
@@ -51,6 +66,9 @@
     {
       "kind": "DATE",
       "text": "Yesterday",
+      "offset": 0,
+      "length": 9,
+      "extractor": "facts@1",
       "ts": 1768348800000,
       "tsEnd": 1768435200000,
       "norm": "2026-01-14/2026-01-15",
@@ -59,6 +77,9 @@
     {
       "kind": "DATE",
       "text": "tomorrow",
+      "offset": 26,
+      "length": 8,
+      "extractor": "facts@1",
       "ts": 1768521600000,
       "tsEnd": 1768608000000,
       "norm": "2026-01-16/2026-01-17",

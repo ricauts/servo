@@ -297,6 +297,30 @@ model McpCall {
   @@index([createdAt])
 }
 
+// An external MCP server Servo connects to as a CLIENT (cnp-02). v1 is
+// Streamable HTTP only, tools only, static header auth only — `transport` is
+// a String so "stdio" is data rather than a migration when it arrives.
+// `toolsJson` is the last tools/list snapshot: [{name, description,
+// inputSchema, hash}], where hash is sha256(name+description+inputSchema) and
+// drives the tighten-only re-quarantine. `secret` is sealed by the $extends
+// write hook in src/lib/db.ts and opened only inside src/lib/mcp-client.ts.
+// Tools materialise as ToolPolicy rows named mcp__<slug>__<tool>, always with
+// the §0.8 rail-4 quarantine triple.
+model McpServer {
+  id         String    @id @default(cuid())
+  slug       String    @unique // ^[a-z][a-z0-9-]{1,30}$ — becomes the mcp__<slug>__ prefix
+  name       String
+  transport  String    @default("http") // "http" in v1; "stdio" reserved for roadmap
+  url        String
+  headers    String    @default("{}") // JSON object; values may contain {secret}
+  secret     String    @default("") // bearer token / API key; never returned by the API
+  enabled    Boolean   @default(false)
+  toolsJson  String    @default("[]") // last tools/list snapshot
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
 // An admin-defined HTTP tool/integration the resolver can call. Enable/disable
 // and risk/approval live in the matching ToolPolicy row (same toolName).
 // {input.field} placeholders are substituted from the model's tool input;
@@ -372,6 +396,15 @@ model Document {
   data        Bytes? // bytea; never selected outside the download route
   textStatus  String   @default("PENDING") // PENDING | EXTRACTING | EXTRACTED | FAILED | UNSUPPORTED
   textError   String?
+  // Extractor provenance (dcl-01): which extractor id produced the chunks,
+  // the exact library versions it names, which extractor answered instead
+  // when the preferred one was unavailable (NULL on every successful
+  // non-fallback extraction — the "the sidecar was down" queue drains by
+  // this being NULL again), and when the chunks were made.
+  extractor         String    @default("baseline")
+  extractorVersion  String    @default("")
+  extractorFallback String?
+  extractedAt       DateTime?
   summary     String   @default("") // deterministic extract — no model call at ingest
   keywords    Json     @default("[]") // string[]
   ownerId     String
