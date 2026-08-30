@@ -55,6 +55,9 @@ export function extractDurations(
     facts.push({
       kind: "DURATION",
       text: m[0],
+      offset: m.index,
+      length: m[0].length,
+      extractor: "facts@1",
       num: total,
       unit: "s",
       norm,
@@ -73,7 +76,7 @@ export function extractDurations(
     const key = `${total}:${norm}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    facts.push({ kind: "DURATION", text: m[0], num: total, unit: "s", norm, confidence: "EXACT" });
+    facts.push({ kind: "DURATION", text: m[0], offset: m.index, length: m[0].length, extractor: "facts@1", num: total, unit: "s", norm, confidence: "EXACT" });
   }
 
   return { facts, steps: 0 };

@@ -7,20 +7,43 @@
 // src/lib/kb/facts/: dates normalize to UTC. A per-desk timezone is
 // ROADMAP and is deliberately absent here.
 
-export type FactKind = "DATE" | "MONEY" | "DURATION";
-
-export type FactConfidence = "EXACT" | "ASSUMED";
+export type FactKind =
+  | "DATE"
+  | "MONEY"
+  | "DURATION"
+  | "IDENTIFIER"
+  | "QUANTITY"
+  | "EMAIL"
+  | "URL";
 
 /**
- * Every DATE fact is an INTERVAL: ts inclusive UTC midnight, tsEnd
- * exclusive. A single day has tsEnd = ts + 1 day; a month, a quarter and a
- * relative span use the same shape. One representation, one predicate —
- * there is no separate "instant" date fact anywhere.
+ * The extractor version every fact is stamped with (ext-03). When a rule
+ * changes what a fact WOULD be, this string changes and every stored fact
+ * from an older version is re-extracted rather than mixed with the new
+ * output. It is a CONSTANT, not a Setting: a setting that changes
+ * extraction output silently invalidates every stored fact.
  */
-export interface DateFact {
-  kind: "DATE";
+export const EXTRACTOR_VERSION = "facts@1";
+
+/**
+ * Every fact names its exact span: text.slice(0) at [offset, offset+length)
+ * round-trips byte-identically. Facts from one extraction never overlap —
+ * overlaps are resolved by LONGEST MATCH, ties by the fixed precedence
+ * URL > EMAIL > IDENTIFIER > MONEY > DATE > DURATION > QUANTITY.
+ */
+export interface FactBase {
   /** The matched text span. */
   text: string;
+  /** Inclusive start offset within the input. */
+  offset: number;
+  /** Length in UTF-16 code units; slice(offset, offset + length) === text. */
+  length: number;
+  /** The ruleset that produced this fact — see EXTRACTOR_VERSION. */
+  extractor: typeof EXTRACTOR_VERSION;
+}
+
+export interface DateFact extends FactBase {
+  kind: "DATE";
   /** Inclusive UTC midnight, epoch ms. */
   ts: number;
   /** Exclusive end, epoch ms. */
@@ -29,15 +52,10 @@ export interface DateFact {
   confidence: FactConfidence;
 }
 
-/**
- * MONEY is stored in INTEGER MINOR UNITS: num is never a float. The ISO
- * code rides `unit`, and `norm` is "<CODE>:<minor>". Exponents come from
- * currencies.json; a symbol or code absent from that table produces NO
- * money fact — it stays a keyword.
- */
-export interface MoneyFact {
+export type FactConfidence = "EXACT" | "ASSUMED";
+
+export interface MoneyFact extends FactBase {
   kind: "MONEY";
-  text: string;
   /** Minor units as an integer (cents for USD/EUR, whole yen for JPY). */
   num: number;
   /** ISO 4217 code, resolved (possibly via the ruleset default). */
@@ -50,16 +68,82 @@ export interface MoneyFact {
  * DURATION normalizes to seconds in num with unit "s" and an ISO-8601
  * duration in norm: "30 days" → 2592000 / "P30D".
  */
-export interface DurationFact {
+export interface DurationFact extends FactBase {
   kind: "DURATION";
-  text: string;
   num: number; // seconds
   unit: "s";
   norm: string; // ISO-8601 duration
   confidence: FactConfidence;
 }
 
-export type Fact = DateFact | MoneyFact | DurationFact;
+/**
+ * IDENTIFIER: a document-style reference token — letters AND digits with an
+ * internal -_/. separator, a letters-then-digits form like SR00123, or a
+ * #-prefixed numeral. Normalization case-folds and collapses every
+ * separator run AWAY, so INV-2024-113 and inv_2024_113 are one
+ * identifier: "inv2024113". Space is NOT a separator — "paid 300" must
+ * never become a reference.
+ */
+export interface IdentifierFact extends FactBase {
+  kind: "IDENTIFIER";
+  norm: string; // case-folded, separators collapsed away
+  confidence: FactConfidence;
+}
+
+/**
+ * QUANTITY: a number with a NON-time unit (time belongs to DURATION).
+ * BARE NUMERALS ARE NOT EXTRACTED — no unit and no currency means no fact.
+ * norm is "<value>:<unit>" with the unit lowercased.
+ */
+export interface QuantityFact extends FactBase {
+  kind: "QUANTITY";
+  num: number;
+  unit: string; // "kg", "%", "gb", ...
+  norm: string; // "3.5:gb"
+}
+
+/** EMAIL: the whole address, case-folded. */
+export interface EmailFact extends FactBase {
+  kind: "EMAIL";
+  norm: string;
+}
+
+/** URL: origin plus path; query and fragment are DROPPED. */
+export interface UrlFact extends FactBase {
+  kind: "URL";
+  norm: string; // "https://host/path"
+}
+
+export type Fact =
+  | DateFact
+  | MoneyFact
+  | DurationFact
+  | IdentifierFact
+  | QuantityFact
+  | EmailFact
+  | UrlFact;
+
+/**
+ * Tie-break order for overlapping spans of EQUAL LENGTH (ext-03). A longer
+ * span always wins first; this order settles same-span collisions.
+ */
+export const FACT_PRECEDENCE: Record<Fact["kind"], number> = {
+  URL: 0,
+  EMAIL: 1,
+  IDENTIFIER: 2,
+  MONEY: 3,
+  DATE: 4,
+  DURATION: 5,
+  QUANTITY: 6,
+};
+
+/**
+ * At most this many facts leave one extractFacts call, kept in offset
+ * order, the remainder dropped deterministically (ext-03). A CONSTANT,
+ * not a Setting — a setting that changes extraction output silently
+ * invalidates every stored fact.
+ */
+export const MAX_FACTS_PER_CALL = 64;
 
 /** Day-month-year or month-day-year for ambiguous numeric dates. */
 export type DateOrder = "DMY" | "MDY";

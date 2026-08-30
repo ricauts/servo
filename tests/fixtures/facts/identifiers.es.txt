@@ -1,0 +1,2 @@
+Factura INV-2024-113 pagada; ver PO/2024/88.
+Ticket SR00123 bloqueado; duplicado #4821 abierto.

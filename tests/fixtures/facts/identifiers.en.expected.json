@@ -1,0 +1,74 @@
+[
+  [
+    {
+      "kind": "IDENTIFIER",
+      "text": "INV-2024-113",
+      "offset": 8,
+      "length": 12,
+      "extractor": "facts@1",
+      "norm": "inv2024113",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "IDENTIFIER",
+      "text": "PO/2024/88",
+      "offset": 4,
+      "length": 10,
+      "extractor": "facts@1",
+      "norm": "po202488",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "IDENTIFIER",
+      "text": "case_4821",
+      "offset": 19,
+      "length": 9,
+      "extractor": "facts@1",
+      "norm": "case4821",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "IDENTIFIER",
+      "text": "SR00123",
+      "offset": 7,
+      "length": 7,
+      "extractor": "facts@1",
+      "norm": "sr00123",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "IDENTIFIER",
+      "text": "#4821",
+      "offset": 37,
+      "length": 5,
+      "extractor": "facts@1",
+      "norm": "4821",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "IDENTIFIER",
+      "text": "inv_2024_113",
+      "offset": 15,
+      "length": 12,
+      "extractor": "facts@1",
+      "norm": "inv2024113",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "IDENTIFIER",
+      "text": "INV-2024-113",
+      "offset": 32,
+      "length": 12,
+      "extractor": "facts@1",
+      "norm": "inv2024113",
+      "confidence": "EXACT"
+    }
+  ],
+  []
+]

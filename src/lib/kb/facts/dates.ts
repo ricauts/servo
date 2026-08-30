@@ -65,8 +65,9 @@ function civilFromDays(days: number): string {
   return `${pad(year, 4)}-${pad(m)}-${pad(d)}`;
 }
 
-function fact(text: string, ts: number, tsEnd: number, confidence: FactConfidence): DateFact {
-  return { kind: "DATE", text, ts, tsEnd, norm: `${civilFromDays(ts / DAY_MS)}/${civilFromDays(tsEnd / DAY_MS)}`, confidence };
+function fact(m: RegExpMatchArray, ts: number, tsEnd: number, confidence: FactConfidence): DateFact {
+  const at = m.index ?? 0;
+  return { kind: "DATE", text: m[0], offset: at, length: m[0].length, extractor: "facts@1", ts, tsEnd, norm: `${civilFromDays(ts / DAY_MS)}/${civilFromDays(tsEnd / DAY_MS)}`, confidence };
 }
 
 export interface DatePassResult {
@@ -103,7 +104,7 @@ export function extractDates(
     const d = Number(m[3]);
     if (mo >= 1 && mo <= 12 && d >= 1 && d <= daysInMonth(y, mo)) {
       const ts = ymdToMs(y, mo, d);
-      push(fact(m[0], ts, ts + DAY_MS, "EXACT"));
+      push(fact(m, ts, ts + DAY_MS, "EXACT"));
     }
   }
 
@@ -116,15 +117,15 @@ export function extractDates(
     // Day > 12: unambiguous — the setting does not change it.
     if (a > 12 && b <= 12) {
       const ts = ymdToMs(y, b, a);
-      push(fact(m[0], ts, ts + DAY_MS, "EXACT"));
+      push(fact(m, ts, ts + DAY_MS, "EXACT"));
     } else if (b > 12 && a <= 12) {
       const ts = ymdToMs(y, a, b);
-      push(fact(m[0], ts, ts + DAY_MS, "EXACT"));
+      push(fact(m, ts, ts + DAY_MS, "EXACT"));
     } else if (a >= 1 && a <= 12 && b >= 1 && b <= 12) {
       // Both readings legal: the ruleset decides, and the fact says ASSUMED.
       const [d, mo] = opts.dateOrder === "DMY" ? [a, b] : [b, a];
       const ts = ymdToMs(y, mo, d);
-      push(fact(m[0], ts, ts + DAY_MS, "ASSUMED"));
+      push(fact(m, ts, ts + DAY_MS, "ASSUMED"));
     }
   }
 
@@ -138,7 +139,7 @@ export function extractDates(
       const y = Number(m[3]);
       if (d >= 1 && d <= daysInMonth(y, mo)) {
         const ts = ymdToMs(y, mo, d);
-        push(fact(m[0], ts, ts + DAY_MS, "EXACT"));
+        push(fact(m, ts, ts + DAY_MS, "EXACT"));
       }
     } else if (m[4]) {
       const d = Number(m[4]);
@@ -146,7 +147,7 @@ export function extractDates(
       const y = Number(m[6]);
       if (d >= 1 && d <= daysInMonth(y, mo)) {
         const ts = ymdToMs(y, mo, d);
-        push(fact(m[0], ts, ts + DAY_MS, "EXACT"));
+        push(fact(m, ts, ts + DAY_MS, "EXACT"));
       }
     }
   }
@@ -163,7 +164,7 @@ export function extractDates(
     const mo = monthIndex(m[1]);
     const y = Number(m[2]);
     const ts = ymdToMs(y, mo, 1);
-    push(fact(m[0], ts, ts + daysInMonth(y, mo) * DAY_MS, "EXACT"));
+    push(fact(m, ts, ts + daysInMonth(y, mo) * DAY_MS, "EXACT"));
   }
 
   // Quarters: "Q3 2026" — a three-month interval.
@@ -174,7 +175,7 @@ export function extractDates(
     const ts = ymdToMs(y, q * 3 - 2, 1);
     const endMonth = q === 4 ? 1 : q * 3 + 1;
     const endYear = q === 4 ? y + 1 : y;
-    push(fact(m[0], ts, ymdToMs(endYear, endMonth, 1), "EXACT"));
+    push(fact(m, ts, ymdToMs(endYear, endMonth, 1), "EXACT"));
   }
 
   // Relative spans, resolved against the ruleset's refTs — never a clock.
@@ -192,7 +193,7 @@ export function extractDates(
     for (const m of text.matchAll(re)) {
       if (!opts.pay()) break;
       const ts = (refDays + shift(0)) * DAY_MS;
-      push(fact(m[0], ts, ts + DAY_MS, "ASSUMED"));
+      push(fact(m, ts, ts + DAY_MS, "ASSUMED"));
     }
   }
 

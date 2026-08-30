@@ -1,0 +1,42 @@
+[
+  [
+    {
+      "kind": "IDENTIFIER",
+      "text": "INV-2024-113",
+      "offset": 8,
+      "length": 12,
+      "extractor": "facts@1",
+      "norm": "inv2024113",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "IDENTIFIER",
+      "text": "PO/2024/88",
+      "offset": 33,
+      "length": 10,
+      "extractor": "facts@1",
+      "norm": "po202488",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "IDENTIFIER",
+      "text": "SR00123",
+      "offset": 7,
+      "length": 7,
+      "extractor": "facts@1",
+      "norm": "sr00123",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "IDENTIFIER",
+      "text": "#4821",
+      "offset": 36,
+      "length": 5,
+      "extractor": "facts@1",
+      "norm": "4821",
+      "confidence": "EXACT"
+    }
+  ]
+]
