@@ -159,23 +159,27 @@ describe("rail 4 — prisma/*.db* residue", () => {
 describe("rail 5 — schema change needs a migration", () => {
   const SCHEMA = { status: "M", path: "prisma/schema.prisma" };
 
-  it("is inert while prisma/migrations/ does not exist, and says so", () => {
-    const r = checkMigrations([SCHEMA], false);
-    expect(r.ok).toBe(true);
-    expect(r.note).toMatch(/inert/);
+  it("is active unconditionally since db-10 — there is no inert state left", () => {
+    // The migrations directory is permanent, so the rail no longer takes a
+    // directory flag at all: a schema change with no migration fails on
+    // every machine, not just where prisma/migrations/ happens to exist.
+    const r = checkMigrations([SCHEMA]);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/rail 5/);
+    expect(String(checkMigrations.length)).toBe("1");
   });
 
-  it("refuses a schema change with no migration once the directory exists", () => {
-    const r = checkMigrations([SCHEMA, { status: "M", path: "src/lib/x.ts" }], true);
+  it("refuses a schema change with no migration", () => {
+    const r = checkMigrations([SCHEMA, { status: "M", path: "src/lib/x.ts" }]);
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/rail 5/);
   });
 
   it("passes a schema change that adds a migration, and ignores unrelated diffs", () => {
     expect(
-      checkMigrations([SCHEMA, { status: "A", path: "prisma/migrations/0003_kb/migration.sql" }], true).ok,
+      checkMigrations([SCHEMA, { status: "A", path: "prisma/migrations/0003_kb/migration.sql" }]).ok,
     ).toBe(true);
-    expect(checkMigrations([{ status: "M", path: "src/lib/x.ts" }], true).ok).toBe(true);
+    expect(checkMigrations([{ status: "M", path: "src/lib/x.ts" }]).ok).toBe(true);
   });
 
   it("parses name-status output, including rename scores", () => {

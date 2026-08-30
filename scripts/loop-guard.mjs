@@ -14,7 +14,6 @@
 // Node builtins only, per the loop-02 acceptance.
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -148,9 +147,10 @@ export function checkBranch(branch) {
 }
 
 /**
- * Rail 4: no prisma/*.db* path in git status --porcelain. The SQLite files
- * still exist on the owner's machine until db-10 removes them, so this is
- * the secondary rail that keeps them out of a commit.
+ * Rail 4: no prisma/*.db* path in git status --porcelain. The SQLite-era
+ * files and the .gitignore rules that tolerated them are gone (db-10), so a
+ * prisma/*.db path in the status means one came BACK — that is always a
+ * finding, never a staging accident to work around.
  */
 export function checkPorcelain(porcelain) {
   for (const raw of String(porcelain ?? "").split("\n")) {
@@ -161,30 +161,24 @@ export function checkPorcelain(porcelain) {
     if (/^prisma\/[^/]*\.db/.test(entry)) {
       return fail(
         "rail 4 (residue)",
-        `"${entry}" appears in git status — prisma/*.db* files are never staged, committed or written`,
+        `"${entry}" appears in git status — prisma/*.db* paths should not exist at all (db-10 removed the last of them); delete the file, do not stage it`,
       );
     }
   }
-  return ok("rail 4 (residue)", "no prisma/*.db* path in the working-tree status");
+  return ok("rail 4 (residue)", "no prisma/*.db* path in the working-tree status — none should exist at all");
 }
 
 /**
  * Rail 5: a changed prisma/schema.prisma must ship with an added
- * prisma/migrations/ entry. Inert — reported as ok with a note — until the
- * migrations directory exists (db-01/db-02 create it); until then the repo
- * has no migration history to keep in sync. `changedFiles` entries are
- * { status, path } pairs from git diff --cached --name-status.
+ * prisma/migrations/ entry. Active unconditionally since db-10 — the
+ * migrations directory is permanent, so there is no inert state to fall
+ * back to. `changedFiles` entries are { status, path } pairs from
+ * git diff --cached --name-status.
  */
-export function checkMigrations(changedFiles, migrationsDirExists) {
+export function checkMigrations(changedFiles) {
   const files = Array.isArray(changedFiles) ? changedFiles : [];
   const schemaChanged = files.some((f) => f.path === "prisma/schema.prisma" && f.status !== "D");
   if (!schemaChanged) return ok("rail 5 (migrations)", "prisma/schema.prisma unchanged in the staged diff");
-  if (!migrationsDirExists) {
-    return ok(
-      "rail 5 (migrations)",
-      "inert: prisma/migrations/ does not exist yet — the rail activates when db-01/db-02 create it",
-    );
-  }
   const added = files.some(
     (f) => f.path.startsWith("prisma/migrations/") && (f.status === "A" || f.status === "R"),
   );
@@ -220,7 +214,7 @@ export function runGuard(inputs, { dbPushIntent = false } = {}) {
     checkBranch(inputs.branch),
     checkPorcelain(inputs.porcelain),
     checkStagedDiff(inputs.stagedDiff),
-    checkMigrations(inputs.changedFiles ?? [], Boolean(inputs.migrationsDirExists)),
+    checkMigrations(inputs.changedFiles ?? []),
   ];
   if (dbPushIntent) results.push(checkDbPush(inputs.databaseUrl));
   return results;
@@ -241,7 +235,6 @@ function main() {
     porcelain: sh("git", ["status", "--porcelain"]),
     stagedDiff: sh("git", ["diff", "--cached"]),
     changedFiles: parseNameStatus(sh("git", ["diff", "--cached", "--name-status"])),
-    migrationsDirExists: existsSync(path.join(REPO_ROOT, "prisma", "migrations")),
   };
   const results = runGuard(inputs, { dbPushIntent: process.argv.includes("--db-push") });
   const failed = results.filter((r) => !r.ok);

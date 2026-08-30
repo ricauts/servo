@@ -296,6 +296,17 @@ paths-matching:
 paths-exempt:
   # --- Negative references -------------------------------------------------
   - target:
+      - prisma/*.db
+      - prisma/*.db*
+    paths:
+      - docs/design/hygiene.md
+      - docs/design/postgres.md
+    reason: negative references - db-10 deleted the SQLite files and their
+      ignore rules, and both documents name the glob precisely to record
+      that refusal (the never-in-scope list, the .gitignore row, the
+      acceptance). If the glob resolved again, a file came back and both
+      documents would be wrong.
+  - target:
       - docs/spec/control-plane.md
       - docs/integrations.md
       - docs/marketplace.md
@@ -349,16 +360,10 @@ paths-exempt:
       .claude-plugin/plugin.json, tools/*.tool.json) are two segments and no
       longer reach the check, for the same reason a GitHub coordinate does not.
   # --- Untracked by design -------------------------------------------------
-  - target:
-      - prisma/*.db
-      - prisma/*.db*
-    paths:
-      - docs/ARCHITECTURE.md
-      - docs/design/hygiene.md
-      - docs/design/postgres.md
-    until: db-10
-    reason: gitignored runtime artefacts. They exist on an operator's machine
-      and in no checkout; db-10 removes both the ignore rules and the files.
+  # (The prisma/*.db entry that lived here is gone: db-10 deleted the files
+  # and the .gitignore rules, and the three documents that named the glob
+  # now record it as history — see the negative-reference entries above for
+  # the form a "this must not exist" claim takes.)
   # --- Forward references, by the item that creates the target -------------
   # db-07 delivered docs/migrating-to-postgres.md, scripts/migrate-sqlite-
   # to-postgres.mjs and the pg_dump backup procedure; its targets left this

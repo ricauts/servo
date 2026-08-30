@@ -42,7 +42,7 @@ export async function POST(
       { status: 403 },
     );
   }
-  // Conditional write: WHERE status = "PENDING" is atomic in SQLite, so of two
+  // Conditional write: WHERE status = "PENDING" is atomic, so of two
   // concurrent decisions (double-click, two tabs) exactly one claims the
   // approval and resumes the run; the other gets the 409.
   const claimed = await db.approval.updateMany({

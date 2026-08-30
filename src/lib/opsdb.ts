@@ -36,9 +36,9 @@ function readOnlyUrl(): string {
   return process.env.OPS_DATABASE_READONLY_URL ?? opsUrl();
 }
 
-// Pooled, module-level: the SQLite-era one-connection-at-a-time constraint
-// rode PRAGMA query_only, which Postgres does not have. Two clients, one
-// per role.
+// Pooled, module-level. Two clients, one per role; the read-only role is
+// enforced by the database itself (revoked grants), not by any client-side
+// switch.
 const globalForOps = globalThis as unknown as {
   opsRead?: PrismaClient;
   opsWrite?: PrismaClient;
