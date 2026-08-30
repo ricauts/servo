@@ -427,15 +427,17 @@ paths-exempt:
       - docs/design/ux.md
     reason: permanent - the kanban board and the runs console are Roadmap
       (ux-02, ux-05), so nothing in v1 creates either module.
+  # (docs/hygiene rode here too until hyg-audit-01 wrote its first audit
+  # file there — the directory reference resolves now, so it left this list
+  # the way every delivered target does.)
   - target:
-      - docs/hygiene
       - scripts/media
       - tests/dockerignore.test.ts
     paths:
       - docs/design/hygiene.md
     until: hyg-09
-    reason: the hygiene design document names the evidence directory (hyg-05),
-      the archived media rig (hyg-09) and the dockerignore test (hyg-07).
+    reason: the hygiene design document names the archived media rig
+      (hyg-09) and the dockerignore test (hyg-07).
   # loop-07 delivered docs/integrations/ (the one mining procedure), so
   # that target left this list.
   - target:
