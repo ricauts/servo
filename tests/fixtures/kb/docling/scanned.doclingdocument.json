@@ -1,0 +1,23 @@
+{
+  "schema_name": "docling-core/v1.24.0",
+  "name": "scanned-manual.pdf",
+  "pages": [
+    { "page_no": 1, "size": { "width": 612, "height": 792 } },
+    { "page_no": 2, "size": { "width": 612, "height": 792 } }
+  ],
+  "body": { "children": ["#/texts/0", "#/texts/1"] },
+  "items": [
+    {
+      "item_type": "text",
+      "self_ref": "#/texts/0",
+      "text": "SCANNED PAGE ONE: boiler pressure must stay under 4 bar during startup.",
+      "prov": [{ "page_no": 1, "bbox": { "l": 60, "t": 80, "r": 550, "b": 130 } }]
+    },
+    {
+      "item_type": "text",
+      "self_ref": "#/texts/1",
+      "text": "SCANNED PAGE TWO: the relief valve is tested annually by an external contractor.",
+      "prov": [{ "page_no": 2, "bbox": { "l": 60, "t": 80, "r": 550, "b": 130 } }]
+    }
+  ]
+}

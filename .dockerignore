@@ -8,5 +8,9 @@ prisma/*.db-journal
 *.md
 docs
 
+# dcl-03: DoclingDocument fixtures are multi-MB test data; a self-hoster who
+# never wanted Docling must not bake them into the image.
+tests
+
 # agents/*.md are data, not documentation — the seed loads them.
 !agents

@@ -83,6 +83,11 @@
       "path": "src/instrumentation.ts",
       "reason": "Next.js server-boot convention: the framework loads src/instrumentation.ts by filename, so no import can ever reference it; it runs the dcl-01 boot reclaim. spec.md's dcl-01 row names it, but spec.md is excluded as a referencing source",
       "owner": "dcl-01"
+    },
+    {
+      "path": "docs/design/extraction.md",
+      "reason": "design document for the dcl-* area, same shape as connectors.md and external-sources.md: every pointer to it is inside spec.md (section 7), which is excluded as a referencing source. It rode POSITIONING's paths-exempt list until dcl-03 retired the last satisfied target and the entry's own path reference went with it",
+      "owner": "hyg-08"
     }
   ],
   "packages": [
