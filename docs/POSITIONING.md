@@ -371,22 +371,10 @@ paths-exempt:
   # tests/ops-isolation.test.ts, which was this list's last Postgres-area
   # forward reference and left with it — the reference in
   # docs/design/postgres.md now resolves.
-  # (src/lib/kb/* rode here too until dcl-01 created src/lib/kb/settings.ts
-  # and every direct reference resolved — it left this list the same way
-  # db-07's targets did; only the deeper src/lib/kb/*/* forward references
-  # remain, until their items create them.)
-  - target:
-      - src/lib/kb/*/*
-    paths:
-      - docs/design/knowledge-base.md
-      - docs/design/extraction.md
-      - docs/design/data-fabric.md
-      - docs/design/docling.md
-    until: kb-11
-    reason: the knowledge-base and facts design documents name the modules the
-      kb-* and ext-* items create, and the data-fabric and Docling documents
-      compose the same entitlement module. Nothing in the KB area has been
-      built.
+  # (src/lib/kb/* rode here until dcl-01, src/lib/kb/*/* until dcl-03
+  # delivered the extractors/ directory — every design-document reference
+  # into the KB tree resolves now, so both targets left the way db-07's
+  # did. The KB area is built.)
   - target:
       - src/lib/ai/tools/federation.ts
     paths:
@@ -396,18 +384,18 @@ paths-exempt:
       the two-silo fixtures that cat-* and fed-* create. cat-03 delivered
       tests/fixtures/catalog, so that target left this list; the federation
       tools wait for Phase 8.
+  # (tests/fixtures/kb/docling/* and scripts/record-docling-fixture.mjs
+  # rode here until dcl-03 delivered them; they left, and only the opt-in
+  # live lane remains for dcl-07.)
   - target:
-      - tests/fixtures/kb/docling/*
-      - scripts/record-docling-fixture.mjs
       - tests/live
       - tests/live/*
       - tests/docling-compose.test.ts
     paths:
       - docs/design/docling.md
     until: dcl-07
-    reason: the Docling document names the fixtures, the recorder and the
-      opt-in live lane that dcl-03 and dcl-07 create. The sidecar area has not
-      started, and it is optional even when it does.
+    reason: the Docling document names the opt-in live lane dcl-07 creates.
+      The sidecar area is optional even when it ships.
   # ext-02 delivered the golden fact corpora (tests/fixtures/facts/), so
   # that target left this list.
   - target:

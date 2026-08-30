@@ -1,0 +1,63 @@
+{
+  "schema_name": "docling-core/v1.24.0",
+  "name": "field-manual.pdf",
+  "pages": [
+    { "page_no": 1, "size": { "width": 612, "height": 792 } },
+    { "page_no": 2, "size": { "width": 612, "height": 792 } },
+    { "page_no": 3, "size": { "width": 612, "height": 792 } }
+  ],
+  "body": { "children": ["#/texts/0", "#/tables/0"] },
+  "items": [
+    {
+      "item_type": "document-title",
+      "self_ref": "#/texts/0",
+      "text": "Field Manual",
+      "prov": [{ "page_no": 1, "bbox": { "l": 72, "t": 72, "r": 300, "b": 96 } }]
+    },
+    {
+      "item_type": "text",
+      "self_ref": "#/texts/1",
+      "text": "Chapter 1 covers installation. Mount the unit level before powering it on.",
+      "prov": [{ "page_no": 1, "bbox": { "l": 72, "t": 120, "r": 540, "b": 160 } }]
+    },
+    {
+      "item_type": "section-header",
+      "self_ref": "#/texts/2",
+      "text": "Chapter 2 — Maintenance",
+      "prov": [{ "page_no": 2, "bbox": { "l": 72, "t": 90, "r": 400, "b": 110 } }]
+    },
+    {
+      "item_type": "text",
+      "self_ref": "#/texts/3",
+      "text": "Replace the filter every 90 days. Torque the housing bolts to 12 Nm.",
+      "prov": [{ "page_no": 2, "bbox": { "l": 72, "t": 130, "r": 540, "b": 170 } }]
+    },
+    {
+      "item_type": "text",
+      "self_ref": "#/texts/4",
+      "text": "Warranty claims must quote the serial band and the purchase invoice.",
+      "prov": [{ "page_no": 3, "bbox": { "l": 72, "t": 100, "r": 540, "b": 140 } }]
+    },
+    {
+      "item_type": "table",
+      "self_ref": "#/tables/0",
+      "label": "service-intervals",
+      "prov": [{ "page_no": 3, "bbox": { "l": 72, "t": 180, "r": 540, "b": 320 } }],
+      "data": {
+        "num_rows": 3,
+        "num_cols": 3,
+        "table_cells": [
+          { "row": 0, "col": 0, "text": "Part" },
+          { "row": 0, "col": 1, "text": "Interval" },
+          { "row": 0, "col": 2, "text": "Torque" },
+          { "row": 1, "col": 0, "text": "Filter" },
+          { "row": 1, "col": 1, "text": "90 days" },
+          { "row": 1, "col": 2, "text": "12 Nm" },
+          { "row": 2, "col": 0, "text": "Belt" },
+          { "row": 2, "col": 1, "text": "180 days" },
+          { "row": 2, "col": 2, "text": "8 Nm" }
+        ]
+      }
+    }
+  ]
+}
