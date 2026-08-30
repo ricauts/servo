@@ -12,6 +12,7 @@ import { chunkMarkdown } from "@/lib/kb/chunk";
 import { chunkSpreadsheetSheets } from "@/lib/kb/extract-xlsx";
 import { chunkPdfPages } from "@/lib/kb/extract-pdf";
 import { runExtractionJob } from "@/lib/kb/extract";
+import { LineLocator, PageLocator, SheetLocator } from "@/lib/kb/locator";
 import type { ExtractInput, Extractor, ExtractOutcome } from "./index";
 
 const EXCELJS_VERSION = "4.4.0";
@@ -89,6 +90,20 @@ export const textExtractor: Extractor = {
     };
   },
 };
+
+/**
+ * The locator contract at the emission site (dcl-02): every chunk a
+ * baseline extractor emits must validate against one of the three
+ * schemas — a chunk that cannot be cited by contract is a bug here, not
+ * a renderer problem later.
+ */
+export function locatorContractOk(
+  chunks: Array<{ locator: Record<string, unknown> }>,
+  kind: "sheet" | "page" | "lines",
+): boolean {
+  const schema = kind === "sheet" ? SheetLocator : kind === "page" ? PageLocator : LineLocator;
+  return chunks.every((c) => schema.safeParse(c.locator).success);
+}
 
 /** LANE 1: the shipped registry, in pick order. */
 export const BASELINE_EXTRACTORS: readonly Extractor[] = [

@@ -182,15 +182,30 @@ describe("the boot reclaim", () => {
 });
 
 describe("LANE 1 — the fresh-install state", () => {
-  it("no Docling anywhere under src/", () => {
+  // AMENDED BY dcl-03, which legitimately ships the Docling client under
+  // src/lib/kb/extractors/: the guarantee this test owns was never the
+  // absence of the code — it is that none of it EXECUTES unconfigured. The
+  // structural form: the registry carries no docling extractor, and no
+  // module on the ingest path (registry, runner, ingest) imports the
+  // docling client. dcl-03's own suite additionally asserts the shipped
+  // registry ids directly.
+  it("no docling module is reachable from the extraction path without configuration", () => {
+    expect(BASELINE_EXTRACTORS.map((e) => e.id)).not.toContain(expect.stringMatching(/docling/i));
+
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
         e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`],
       );
-    const offenders = walk("src")
-      .filter((f) => f.endsWith(".ts") || f.endsWith(".cjs"))
-      .filter((f) => readFileSync(f, "utf8").toLowerCase().includes("docling"));
-    expect(offenders).toEqual([]);
+    const onThePath = [
+      ...walk("src/lib/kb/extractors").filter((f) => /(?:index|baseline|run)\.ts$/.test(f)),
+      "src/lib/kb/extract.ts",
+      "src/lib/kb/ingest.ts",
+    ];
+    expect(onThePath.length).toBeGreaterThan(0);
+    for (const f of onThePath) {
+      const source = readFileSync(f, "utf8").split(/\r?\n/).map((l) => l.replace(/\/\/.*$/, "")).join("\n");
+      expect(source, `${f} reaches the docling client unconfigured`).not.toMatch(/docling-client/);
+    }
   });
 });
 
