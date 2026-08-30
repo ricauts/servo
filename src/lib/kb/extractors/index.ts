@@ -62,3 +62,24 @@ export function pickExtractor(
   }
   return null;
 }
+
+/**
+ * Selection (dcl-05): baseline whenever the Docling lane is unset — with
+ * the url empty the docling module is never even IMPORTED (dynamic, below),
+ * let alone constructed. When the lane is configured, a sniffed type the
+ * admin opted into routes to Docling; everything else stays baseline.
+ * Selection is on the SNIFFED type from dcl-01, never the declared one:
+ * the config's types list carries declared mimes, and the lane maps the
+ * sniffed routes onto them itself.
+ */
+export async function resolveExtractor(
+  sniffedType: string,
+  docling: import("@/lib/kb/settings").DoclingConfig | null,
+  registry: readonly Extractor[],
+): Promise<Extractor | null> {
+  const baseline = pickExtractor(sniffedType, registry);
+  if (!docling || !docling.url) return baseline;
+  const { makeDoclingExtractor } = await import("./docling");
+  const lane = makeDoclingExtractor(docling);
+  return lane.supports(sniffedType) ? lane : baseline;
+}

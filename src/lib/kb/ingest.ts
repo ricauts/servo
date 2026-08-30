@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { chunkMarkdown } from "@/lib/kb/chunk";
 import { extractDocument } from "@/lib/kb/extractors/run";
-import { getKbExtractBudgetMs } from "@/lib/kb/settings";
+import { getKbExtractBudgetMs, getDoclingConfig } from "@/lib/kb/settings";
 import { keywordPass } from "@/lib/kb/keywords";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
 
@@ -136,9 +136,17 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
     // AbortSignal. The transaction commits the row in EXTRACTING; the
     // extractor's outcome lands right after.
     const budgetMs = await getKbExtractBudgetMs(db);
+    // A misconfigured lane (bad URL, refused OCR engine) never breaks an
+    // upload: the reason is named loudly here and the lane stays off for
+    // this document — baseline answers, exactly as LANE 1.
+    const docling = await getDoclingConfig(db).catch((err: unknown) => {
+      console.error(`[servo] docling lane disabled: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    });
     const ran = await extractDocument(input.bytes, input.contentType, {
       signal: AbortSignal.timeout(budgetMs),
       budgetMs,
+      docling,
     });
     const outcome = ran.outcome;
     if (outcome.status !== "EXTRACTED") {
@@ -184,7 +192,10 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
         // this being NULL again.
         extractor: ran.extractorId || "baseline",
         extractorVersion: ran.extractorVersion,
-        extractorFallback: null,
+        // The dcl-05 fallback taxonomy: the reason the preferred lane
+        // failed when baseline answered; NULL on every successful
+        // non-fallback extraction — the queue drains by this being NULL.
+        extractorFallback: ran.extractorFallback ?? null,
         extractedAt: new Date(),
       },
     });
