@@ -15,7 +15,7 @@
 import { createServer, type Server as HttpServer } from "node:http";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 export interface FixtureTool {
   name: string;
@@ -52,6 +52,16 @@ export async function startMcpFixture(initial: FixtureTool[] = []): Promise<McpF
       { capabilities: { tools: {} } },
     );
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+    // cnp-03: the call path. Every fixture tool echoes its string input
+    // back as a text block — enough to prove the round trip end to end.
+    server.setRequestHandler(CallToolRequestSchema, async (req) => ({
+      content: [
+        {
+          type: "text",
+          text: typeof req.params.arguments?.text === "string" ? req.params.arguments.text : JSON.stringify(req.params.arguments ?? {}),
+        },
+      ],
+    }));
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

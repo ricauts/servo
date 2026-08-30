@@ -15,6 +15,11 @@ import { CORE_TOOLS } from "@/lib/agent-profiles";
  *  absent from tools/call — the run's retrieval budget has no meaning for
  *  an external MCP client. */
 const FEDERATION_TOOLS = ["find_sources", "open_dataset", "discard_source", "query_dataset"];
+
+/** cnp-03: Servo's own MCP server never proxies another server's tools —
+ *  a client calling Servo gets Servo's tools, not a hop-through to every
+ *  server Servo itself consumes. The whole mcp__ namespace is refused. */
+const MCP_NAMESPACED = /^mcp__/;
 import { getAiSettings } from "@/lib/ai/settings";
 import { applySlaToTicket } from "@/lib/sla";
 import { emitTicketEvent } from "@/lib/webhooks";
@@ -130,6 +135,7 @@ export async function getMcpTools(): Promise<Record<string, ToolDef>> {
     // per-run ledger and per-run principals that an external caller has
     // neither — the run IS the budget.
     if (FEDERATION_TOOLS.includes(name)) continue;
+    if (MCP_NAMESPACED.test(name)) continue;
     if ((KB_TOOLS as readonly string[]).includes(name)) continue;
     const policy = byName.get(name);
     if (!policy || !policy.enabled || policy.requiresApproval) continue;
