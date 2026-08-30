@@ -7,7 +7,7 @@
 // existing rows can be migrated with `node scripts/encrypt-secrets.cjs`.
 //
 // Without a key Servo still works (POC mode) but secrets stay in plaintext
-// inside SQLite — SECURITY.md documents why you want the key in production.
+// in the database — SECURITY.md documents why you want the key in production.
 
 import crypto from "crypto";
 
