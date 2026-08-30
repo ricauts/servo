@@ -73,6 +73,11 @@
       "finding": "unreferenced",
       "reason": "the one TS expansion point (rbac-01); its consumer today is the entitlement CTE's SQL twin, and the TS callers arrive with the parked named-approver work — question 47 owns it until that lands",
       "owner": "question-47"
+    },
+    {
+      "path": "src/instrumentation.ts",
+      "reason": "Next.js server-boot convention: the framework loads src/instrumentation.ts by filename, so no import can ever reference it; it runs the dcl-01 boot reclaim. spec.md's dcl-01 row names it, but spec.md is excluded as a referencing source",
+      "owner": "dcl-01"
     }
   ],
   "packages": [

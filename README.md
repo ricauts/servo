@@ -184,7 +184,7 @@ The desk gets smarter with every ticket it closes:
 
 *Roadmap:* distilling a resolved ticket into a draft skill automatically (today an admin writes the skill from the ticket timeline), and a company knowledge base with cited answers.
 
-See [ROADMAP.md](ROADMAP.md) for what's shipped, in progress (document upload + RAG knowledge base for agents, WhatsApp/Telegram intake, Postgres/MySQL connectors) and next. [docs/USER-GUIDE.md](docs/USER-GUIDE.md) has the day-to-day usage guide (setup, integrations, the AI reply loop, approvals, troubleshooting), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full engine design, [docs/DEMO.md](docs/DEMO.md) for a 5-minute guided tour, and [docs/DESIGN.md](docs/DESIGN.md) for the color system (WCAG-audited light/dark tokens).
+See [ROADMAP.md](ROADMAP.md) for what's shipped, in progress (document upload + RAG knowledge base for agents, WhatsApp/Telegram intake, Postgres/MySQL connectors) and next. [docs/README.md](docs/README.md) is the one-screen documentation index: what to read first, what each document is for, and which are history — [docs/USER-GUIDE.md](docs/USER-GUIDE.md) for the day-to-day guide (setup, integrations, the AI reply loop, approvals, troubleshooting), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full engine design, [docs/DEMO.md](docs/DEMO.md) for a 5-minute guided tour, and [docs/DESIGN.md](docs/DESIGN.md) for the color system (WCAG-audited light/dark tokens).
 
 ## Project structure
 

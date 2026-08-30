@@ -1,4 +1,7 @@
--- cnp-02: Servo as an MCP client. One table, one unique index; nothing
+-- cnp-02: Servo as an MCP client. Numbered 0009 because dcl-01 landed
+-- 0008_extractor_provenance while this branch sat in review; renumbered on
+-- the merge so the history stays a monotonic sequence rather than two
+-- directories sharing a number. One table, one unique index; nothing
 -- existing is touched, so this is additive by the migration-guard's reading.
 -- `enabled` defaults FALSE: a server is inert until an admin turns it on,
 -- and its tools stay quarantined (enabled false / requiresApproval true /
