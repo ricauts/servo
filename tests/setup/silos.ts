@@ -48,6 +48,24 @@ export interface SiloWorld {
   teardown(): Promise<void>;
 }
 
+/**
+ * Query-level retry for the WAREHOUSE client (fed-06 CI hardening): the
+ * suite's other files keep the server busy while this client's pool sits
+ * idle, and CI's postgres drops idle connections — the next read then
+ * surfaces P1017. Prisma reconnects on the following attempt, so a short
+ * retry turns the drop into a delay instead of a red CI run.
+ */
+export async function warehouseQuery<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= 3 || !/P1017|P1004|P1015/i.test(String(err))) throw err;
+      await new Promise((r) => setTimeout(r, attempt * 800));
+    }
+  }
+}
+
 /** Deterministic letter-salad table names: no accidental affinities. */
 export function noiseName(i: number): string {
   return `t${((i * 2654435761) % 1679616).toString(36)}z`;

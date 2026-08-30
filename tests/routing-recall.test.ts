@@ -8,7 +8,7 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { tmpDb, type TmpDb } from "./helpers/tmp-db";
-import { silos, PAYROLL_TRUTH } from "./setup/silos";
+import { silos, warehouseQuery, PAYROLL_TRUTH } from "./setup/silos";
 import { routeSources } from "@/lib/kb/route";
 
 type ServoDb = { [key: string]: unknown };
@@ -68,24 +68,25 @@ describe("routing recall", () => {
       // The router reads the entitlement view in the database it QUERIES —
       // the cards live in the warehouse, so the grant lands there (a
       // warehouse mutation: under the lock).
-      await world.withLock(async () => {
+      const siloSetup = world;
+      await warehouseQuery(() => siloSetup.withLock(async () => {
         const rows = ["silo-warehouse", "silo-payroll"].map((s) => `SELECT '${s}'::text AS "dataSourceId", '${reader.id}'::text AS "userId"`).join(" UNION ALL ");
         await world!.db.$executeRawUnsafe(`CREATE OR REPLACE VIEW datasource_readable_by_human AS ${rows}`);
-      });
+      }));
   };
 
   it("recall headline", async () => {
     await setup();
     const siloWorld = world!;
     const results: Array<{ top: string[]; truth: string }> = [];
-    await siloWorld.withLock(async () => {
+    await warehouseQuery(() => siloWorld.withLock(async () => {
       for (const question of QUESTIONS) {
         // Route over the WAREHOUSE db (where the cards live), with the
         // reader's entitlement resolved through the run-db contract views:
         const routed = await routeSources(siloWorld.db as never, { humanId: reader.id, agentId: null }, question.q, { limit: 3 });
         results.push({ top: routed.sources.map((s) => s.documentId), truth: question.truth });
       }
-    });
+    }));
     const { r1, r3, misses } = recallOver(results);
     console.log(`RECALL_JSON: ${JSON.stringify({ recall1: r1, recall3: r3, misses })}`);
     expect(r3, `recall@3 = ${r3} (misses: ${misses.map((m) => m.q).join("; ")})`).toBeGreaterThanOrEqual(0.9);
@@ -103,7 +104,7 @@ describe("routing recall", () => {
     // strip→measure→RESTORE runs under the warehouse lock: the other fed-06
     // worker must never observe a half-deleted warehouse, and the deletions
     // are restored so later runs re-find the seeded shape.
-    const measured = await siloWorld.withLock(async () => {
+    const measured = await warehouseQuery(() => siloWorld.withLock(async () => {
       const edges = await siloWorld.db.knowledgeEdge.findMany({});
       const altChunks = await siloWorld.db.documentChunk.findMany({ where: { index: { gt: 0 } } });
       await siloWorld.db.knowledgeEdge.deleteMany({});
@@ -126,7 +127,7 @@ describe("routing recall", () => {
           data: altChunks.map((c) => ({ ...c, keywords: c.keywords as never, locator: c.locator as never })),
         });
       }
-    });
+    }));
     console.log(`RECALL_JSON: ${JSON.stringify({ recall1: measured.r1, recall3: measured.r3, misses: measured.misses })}`);
     // The deletions were restored under the same lock — the warehouse is
     // byte-identical to the seeded shape for every later reader.

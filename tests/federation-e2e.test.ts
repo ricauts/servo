@@ -7,7 +7,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { tmpDb, type TmpDb } from "./helpers/tmp-db";
-import { silos, PAYROLL_TRUTH, WAREHOUSE_DB } from "./setup/silos";
+import { silos, warehouseQuery, PAYROLL_TRUTH, WAREHOUSE_DB } from "./setup/silos";
 import { federationTools } from "@/lib/ai/tools/federation";
 import { readLedger, FED_CONTEXT_BUDGET, MAX_CHARS_PER_DATASET, MAX_PAGES_PER_DATASET, MAX_SOURCES_PROBED } from "@/lib/ai/retrieval-budget";
 
@@ -75,13 +75,13 @@ beforeEach(async () => {
 describe("the two-silo world", () => {
   it("Silo A exists on the existing container with 400 tables, ANALYZEd; Silo B is in-process 127.0.0.1", async () => {
     const w = await theWorld();
-    const { cards, stats } = await w.withLock(async () => ({
+    const { cards, stats } = await warehouseQuery(() => w.withLock(async () => ({
       cards: await w.db.document.count({ where: { kind: "CATALOG" } }),
       // The warehouse has live statistics (ANALYZE ran):
       stats: await w.db.$queryRawUnsafe<{ n: number }[]>(
         `SELECT COUNT(*)::int AS n FROM pg_stats WHERE schemaname = 'public'`,
       ),
-    }));
+    })));
     expect(cards).toBe(400);
     expect(stats[0].n).toBeGreaterThan(0);
     expect(w.siloB.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
