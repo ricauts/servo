@@ -299,6 +299,28 @@ async function reverifyCitations(
       `after the draft was written). Regenerate the draft.`
     );
   }
+
+  // dcl-09: a citation whose CHUNK no longer exists went dark too —
+  // re-extraction replaces chunk rows, so a draft built before one dangles.
+  // The refusal names the citation; the atomic claim is never attempted, so
+  // the draft stays PENDING with no comment, no mail and no webhook.
+  const cited = sources.filter((s) => typeof (s as { chunkId?: string }).chunkId === "string");
+  if (cited.length > 0) {
+    const chunkIds = cited.map((s) => (s as unknown as { chunkId: string }).chunkId);
+    const rows = await db.documentChunk.findMany({
+      where: { id: { in: chunkIds } },
+      select: { id: true },
+    });
+    const live = new Set(rows.map((r) => r.id));
+    const vanished = cited.filter((s) => !live.has((s as unknown as { chunkId: string }).chunkId));
+    if (vanished.length > 0) {
+      return (
+        `Cannot send: a citation went dark — ${vanished.map((s) => s.docName).join(", ")} ` +
+        `was re-extracted after this draft was written, and the passage it cited ` +
+        `no longer exists. Regenerate the draft.`
+      );
+    }
+  }
   return null;
 }
 

@@ -218,3 +218,32 @@ function declaredEquivalent(sniffedType: string): string {
 
 export { circuit as doclingCircuitForTests };
 export { laneTransport };
+
+/** The extractor health surface (dcl-09): what the KB settings page shows.
+ *  LANE 1: with no url configured, nothing is fetched and the version is
+ *  the unknown literal — the page can still render the OFF state. */
+export async function extractorHealth(
+  db: import("@/lib/kb/settings").SettingReader | null,
+  opts: { transport?: DoclingTransport } = {},
+): Promise<{ configured: boolean; url: string; version: string; circuit: string }> {
+  const config = await import("@/lib/kb/settings")
+    .then((m) => m.getDoclingConfig(db))
+    .catch(() => null);
+  const configured = Boolean(config?.url);
+  let version = "docling-serve@unknown";
+  if (configured && config) {
+    const client = new DoclingClient({
+      baseUrl: config.url,
+      apiKey: config.apiKey || undefined,
+      transport: opts.transport ?? laneTransport(),
+    });
+    version = await client.serverVersion();
+  }
+  const c = circuit;
+  return {
+    configured,
+    url: config?.url ?? "",
+    version,
+    circuit: c.status === "open" ? "open" : `closed (${c.consecutiveFailures} consecutive failure${c.consecutiveFailures === 1 ? "" : "s"})`,
+  };
+}
