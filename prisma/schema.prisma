@@ -422,6 +422,7 @@ model Document {
   updatedAt   DateTime @updatedAt
 
   chunks   DocumentChunk[]
+  facts    DocumentFact[]
   edgesOut KnowledgeEdge[] @relation("edgeFrom")
   edgesIn  KnowledgeEdge[] @relation("edgeTo")
   grants   KbGrant[]
@@ -430,6 +431,37 @@ model Document {
   // back-linked by catalogEntryId. FILE is every ordinary upload.
   kind           String   @default("FILE") // FILE | CATALOG
   catalogEntryId String?  @unique
+}
+
+
+// ext-01: a typed fact extracted from a chunk (dates, money, identifiers,
+// quantities, emails, URLs — the ext-02/03 rulesets). String unions, no
+// Prisma enums; a fact is a fragment of document content, so the RLS
+// backstop covers it from birth (see 0011's header).
+model DocumentFact {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkId    String
+  chunk      DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  kind       String // DATE | MONEY | DURATION | IDENTIFIER | QUANTITY | EMAIL | URL
+  norm       String // the normalized value — the joinable form
+  num        Decimal? @db.Decimal(38, 6)
+  unit       String // ISO currency code, "s", the quantity unit, or ""
+  ts         BigInt?
+  tsEnd      BigInt?
+  text       String
+  offset     Int
+  length     Int
+  confidence String   @default("EXACT")
+  extractor  String // e.g. "facts@1" (ext-03)
+  createdAt  DateTime @default(now())
+
+  @@unique([chunkId, offset, kind])
+  @@index([documentId, kind])
+  @@index([kind, norm])
+  @@index([kind, num])
+  @@index([kind, ts])
 }
 
 model DocumentChunk {
@@ -450,6 +482,7 @@ model DocumentChunk {
 
   @@unique([documentId, index])
   @@index([documentId])
+  facts     DocumentFact[]
 }
 
 model Collection {
