@@ -372,6 +372,15 @@ model Document {
   data        Bytes? // bytea; never selected outside the download route
   textStatus  String   @default("PENDING") // PENDING | EXTRACTING | EXTRACTED | FAILED | UNSUPPORTED
   textError   String?
+  // Extractor provenance (dcl-01): which extractor id produced the chunks,
+  // the exact library versions it names, which extractor answered instead
+  // when the preferred one was unavailable (NULL on every successful
+  // non-fallback extraction — the "the sidecar was down" queue drains by
+  // this being NULL again), and when the chunks were made.
+  extractor         String    @default("baseline")
+  extractorVersion  String    @default("")
+  extractorFallback String?
+  extractedAt       DateTime?
   summary     String   @default("") // deterministic extract — no model call at ingest
   keywords    Json     @default("[]") // string[]
   ownerId     String

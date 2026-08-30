@@ -371,8 +371,11 @@ paths-exempt:
   # tests/ops-isolation.test.ts, which was this list's last Postgres-area
   # forward reference and left with it — the reference in
   # docs/design/postgres.md now resolves.
+  # (src/lib/kb/* rode here too until dcl-01 created src/lib/kb/settings.ts
+  # and every direct reference resolved — it left this list the same way
+  # db-07's targets did; only the deeper src/lib/kb/*/* forward references
+  # remain, until their items create them.)
   - target:
-      - src/lib/kb/*
       - src/lib/kb/*/*
     paths:
       - docs/design/knowledge-base.md
