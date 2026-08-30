@@ -50,6 +50,8 @@ export const MCP_SLUG_RE = /^[a-z][a-z0-9-]{1,30}$/;
 export const MCP_TRANSPORTS = ["http"] as const;
 
 const LIST_TIMEOUT_MS = 10_000;
+/** One tools/call round trip (cnp-03), inside the engine's tool budget. */
+const CALL_TIMEOUT_MS = 20_000;
 
 /** A tool name longer than this cannot be a `ToolPolicy` primary key: the
  *  column is the table's `@id`, and Postgres refuses a btree index entry over
@@ -178,6 +180,43 @@ async function egressFetch(url: string | URL, init?: RequestInit): Promise<Respo
  * `tools/list` over the SDK. Exported for the tests; `syncMcpServerTools` is
  * the path production uses.
  */
+/**
+ * Call ONE tool on a server (cnp-03). The same transport, egress and
+ * header rules as listRemoteTools — one client, one session, closed in a
+ * finally. The result content is rendered to a string: text blocks join
+ * with newlines, anything else serializes once. Errors are the CALLER's
+ * to translate: this throws, the derived tool's execute() returns
+ * "Error: ..." instead.
+ */
+export async function callRemoteTool(
+  server: Pick<McpServer, "slug" | "transport" | "url" | "headers" | "secret">,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  if (!(MCP_TRANSPORTS as readonly string[]).includes(server.transport)) {
+    throw new Error(`Transport "${server.transport}" is not supported. Servo speaks Streamable HTTP in v1.`);
+  }
+  const secret = open(server.secret);
+  const headers = fillHeaders(server.headers, secret);
+  const client = new Client({ name: "servo", version: "1.0.0" }, { capabilities: {} });
+  const transport = new StreamableHTTPClientTransport(new URL(server.url), {
+    fetch: egressFetch,
+    requestInit: { headers },
+  });
+  try {
+    await client.connect(transport, { timeout: CALL_TIMEOUT_MS });
+    const result = await client.callTool({ name: toolName, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS });
+    const content = (result as { content?: Array<{ type: string; text?: string }> }).content ?? [];
+    const text = content
+      .map((block) => (block.type === "text" && typeof block.text === "string" ? block.text : null))
+      .filter((t): t is string => t !== null);
+    if (text.length > 0) return text.join("\n");
+    return JSON.stringify(result);
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 export async function listRemoteTools(
   server: Pick<McpServer, "slug" | "name" | "transport" | "url" | "headers" | "secret">,
 ): Promise<McpToolSnapshot[]> {

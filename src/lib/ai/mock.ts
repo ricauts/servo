@@ -226,6 +226,19 @@ export class MockProvider implements ChatProvider {
     const text = `${ticket.title} ${ticket.description}`;
     const steps: ScriptStep[] = [];
 
+    // cnp-03: a ticket that asks the desk to echo through an MCP tool gets
+    // the FIRST available mcp__ tool called — the mock reads its advertised
+    // toolset the way a model would, so the approval gate, the call and the
+    // result all run through the real engine paths offline.
+    const mcpTool = [...available].find((n) => n.startsWith("mcp__"));
+    if (mcpTool && /echo|mcp/i.test(text)) {
+      steps.push({
+        name: mcpTool,
+        input: { text: "hello from the fixture" },
+        plan: "This request routes through the desk's MCP integration — I'll call the connected tool.",
+      });
+    }
+
     // KB-shaped tickets exercise the knowledge base (kb-11): a ticket that
     // names the knowledge base, a manual or a document gets a search_knowledge
     // call before anything else, so the offline loop exercises the tool.
