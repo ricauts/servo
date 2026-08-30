@@ -11,6 +11,10 @@ claims.
 | [USER-GUIDE.md](USER-GUIDE.md) | The day-to-day guide: setup, integrations, the AI reply loop, approvals, troubleshooting |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The engine design: the resolver loop, tools, policies, approvals, the ops sandbox |
 | [migrating-to-postgres.md](migrating-to-postgres.md) | Upgrading an install from the pre-Postgres era, one command |
+| [connectors.md](connectors.md) | MCP servers: adding one, the quarantine default, approval pauses, egress rules |
+| [skills.md](skills.md) | Agent Skills compatibility, distillation, the human gate |
+| [plugins.md](plugins.md) | Local plugin bundles: layout, disabled-by-default, namespacing |
+| [knowledge-base.md](knowledge-base.md) | The entitlement invariant, grants, STAFF/PUBLIC, auto-deliver, the embeddings default |
 
 **Reference**
 
