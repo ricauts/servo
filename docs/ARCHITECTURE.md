@@ -3,7 +3,7 @@
 This document describes how Servo is built: the stack, the data model, the AI
 agent engine, the tool/approval policy system, and the provider abstraction.
 For the build contract that module authors follow, see
-[CONTRACT.md](CONTRACT.md).
+[the superseded build contract](history/CONTRACT.md) — kept for provenance under `docs/history/`.
 
 ## Stack
 
@@ -12,7 +12,7 @@ For the build contract that module authors follow, see
 | Framework | Next.js 15 (App Router), React 19, server components by default |
 | Language | TypeScript (strict) |
 | Database | Prisma 6 + PostgreSQL (pgvector image; app DB `servo`, numbered migrations in `prisma/migrations/`) |
-| Styling | Tailwind CSS 3.4 with design tokens (no raw hex in markup) |
+| Styling | Tailwind 4 via `@tailwindcss/postcss` with design tokens (no `tailwind.config.ts`, no raw hex in markup) |
 | Validation | zod v4 |
 | AI SDK | `@anthropic-ai/sdk` (only used when a key is configured) |
 
@@ -367,23 +367,3 @@ wins over the URL stored in Settings, the URL is never returned by the API
 setup can never break a ticket flow. `POST /api/settings/test-email` sends
 a real test message for the Settings UI.
 
-## From POC to a real deployment
-
-The sandbox ops DB and the simulated tools are deliberate stand-ins. To take
-this architecture to production you would keep the engine, the policy layer,
-and the pause/resume protocol unchanged, and swap tool implementations:
-
-- `query_ops_database` / `execute_ops_sql` → connections to real
-  warehouses/CMDBs, with per-tool credentials and read replicas for the
-  read path.
-- `get_device_info` → your MDM/asset system's API.
-- `reset_password` → your identity provider (Entra ID, Okta, …).
-- `github_*` → the real GitHub API with a scoped app installation.
-- `cloud_*` → Terraform/Bicep pipelines or cloud provider APIs, where the
-  plan/apply split maps naturally onto the approval gate.
-
-Each tool's `execute()` is the only thing that changes — risk levels,
-approval gates, QA review, and the run trace all apply to real integrations
-exactly as they do to the simulations. You would also replace the demo
-cookie auth with SSO and encrypt stored secrets (the database is already
-PostgreSQL, db-01), per the security disclaimer in the README.
