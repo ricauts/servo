@@ -20,8 +20,12 @@ import AuthTenantForm, {
   type AuthTenantView,
 } from "@/components/admin/AuthTenantForm";
 import McpForm, { type McpSettingsView } from "@/components/admin/McpForm";
+import McpServersManager, {
+  type McpServerView,
+} from "@/components/admin/McpServersManager";
 import EgressForm, { type EgressSettingsView } from "@/components/admin/EgressForm";
 import { getMcpConfig } from "@/lib/mcp";
+import { mcpToolName, parseSnapshot } from "@/lib/mcp-client";
 import { getEgressConfig } from "@/lib/egress";
 import { getSmtpConfig } from "@/lib/notify";
 import { getInboundConfig } from "@/lib/inbound-email";
@@ -67,6 +71,7 @@ export default async function IntegrationsPage() {
       orderBy: { createdAt: "asc" },
     }),
   ]);
+  const mcpServerRows = await db.mcpServer.findMany({ orderBy: { createdAt: "asc" } });
 
   const authView: AuthTenantView = {
     mode: authConfig.mode,
@@ -107,6 +112,23 @@ export default async function IntegrationsPage() {
     tokenSource: mcp.tokenSource,
   };
   const egressView: EgressSettingsView = { allowlist: egress.allowlist };
+  // The secret never reaches the client: only secretSet crosses the boundary.
+  const mcpServerViews: McpServerView[] = mcpServerRows.map((server) => ({
+    id: server.id,
+    slug: server.slug,
+    name: server.name,
+    transport: server.transport,
+    url: server.url,
+    enabled: server.enabled,
+    secretSet: server.secret.length > 0,
+    lastSyncAt: server.lastSyncAt ? server.lastSyncAt.toISOString() : null,
+    tools: parseSnapshot(server.toolsJson).map((tool) => ({
+      name: tool.name,
+      policyName: mcpToolName(server.slug, tool.name),
+      description: tool.description,
+    })),
+  }));
+  const connectedServers = mcpServerViews.filter((s) => s.enabled).length;
   const webhookViews: WebhookView[] = webhookRows.map((hook) => ({
     id: hook.id,
     url: hook.url,
@@ -193,6 +215,19 @@ export default async function IntegrationsPage() {
           ? { label: `${egressView.allowlist.length} allowed`, tone: "good" as const }
           : { label: "Public web", tone: "brand" as const },
       body: <EgressForm initial={egressView} />,
+    },
+    {
+      id: "mcp-connections",
+      title: "MCP connections",
+      blurb:
+        "Servo as a Model Context Protocol client: connect an external MCP server and list its tools. Everything it offers arrives disabled, HIGH risk and approval-gated until an admin enables it.",
+      status:
+        connectedServers > 0
+          ? { label: `${connectedServers} enabled`, tone: "good" as const }
+          : mcpServerViews.length > 0
+            ? { label: `${mcpServerViews.length} off`, tone: "warn" as const }
+            : off,
+      body: <McpServersManager servers={mcpServerViews} />,
     },
     {
       id: "mcp",

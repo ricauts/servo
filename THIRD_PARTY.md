@@ -124,6 +124,30 @@ a permissive code licence says nothing about what ships beside it.
   the dependency: its licence travels inside `node_modules` to every
   install. Nothing of it is copied into this tree.
 
+### @modelcontextprotocol/sdk (cnp-02)
+
+- **Upstream:** <https://github.com/modelcontextprotocol/typescript-sdk>
+- **Licence:** MIT, verified from the `LICENSE` file shipped in the installed
+  package (`node_modules/@modelcontextprotocol/sdk/LICENSE`) on 2026-08-30.
+- **Copyright:** `Copyright (c) 2024 Anthropic, PBC`
+- **What we use:** an ordinary npm dependency (1.30.0), not vendored code — no
+  file from it lives in this tree. It is the **client** half of Servo's MCP
+  support: `Client` and `StreamableHTTPClientTransport` speak Streamable HTTP
+  to external MCP servers inside `src/lib/mcp-client.ts` (spec cnp-02), with
+  the SDK's `fetch` hook pointed at Servo's egress guard so every hop is
+  policy-checked. The entry records the adopt-first verdict for a new RUNTIME
+  dependency — the package was previously a devDependency only. The
+  alternative it REJECTS is the one the spec named explicitly: **a
+  hand-rolled JSON-RPC and SSE client**, which would have to reimplement
+  message framing, the initialize handshake and multi-event SSE parsing, and
+  whose degradation modes the SDK simply removes.
+- **Note on Servo's own MCP *server*:** it stays the hand-rolled stateless
+  handler at `src/app/api/mcp/route.ts`. Adopting the SDK's server transport
+  is Roadmap, and nothing in this entry claims otherwise.
+- **Obligations:** attribution only, discharged by `package.json` shipping the
+  dependency: its licence travels inside `node_modules` to every install.
+  Nothing of it is copied into this tree.
+
 ### shadcn/ui
 
 - **Upstream:** <https://github.com/shadcn-ui/ui> — two layers of its component

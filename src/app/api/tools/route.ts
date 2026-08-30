@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { forbid } from "@/lib/permissions";
 import { HTTP_METHODS } from "@/lib/ai/custom-tools";
+import { isMcpToolName, MCP_TOOL_PREFIX } from "@/lib/mcp-client";
 import { TOOLS } from "@/lib/ai/tools";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,17 @@ export async function POST(req: NextRequest) {
   }
   const data = parsed.data;
 
+  // Namespace reservation (cnp-02): mcp__ belongs to tools derived from
+  // external MCP servers. A custom tool squatting on mcp__<slug>__<tool>
+  // would collide with a policy row a sync mints and quarantines.
+  if (isMcpToolName(data.name)) {
+    return Response.json(
+      {
+        error: `"${MCP_TOOL_PREFIX}" is reserved for tools from connected MCP servers — choose another name.`,
+      },
+      { status: 400 },
+    );
+  }
   if (TOOLS[data.name]) {
     return Response.json(
       { error: `"${data.name}" is a built-in tool name.` },

@@ -1,5 +1,5 @@
 {
-  "$schema-note": "hyg-04. A KEEP-LIST, not a to-delete list. One row per finding the repository has decided to live with: an unreferenced-but-kept file, or a dependency finding (declared-and-unimported, imported-and-undeclared, or claimed-but-absent). Findings the scanner already reports as `keep` (the never-delete list) and dependencies it already reports as `referenced` or `tooling` are not findings and get no row. Every row carries a one-line `reason` and an `owner`. The owner convention is: the backlog item id that will END the row, and a `question-<n>` under spec.md section 14 ONLY where no item ends it. That is why run-relay.ts is owned by hyg-09 even though question 31 names it — hyg-09 is what resolves it — while the shadcn primitives and react-is are owned by question 31, which decided to keep them indefinitely. `node scripts/repo-refs.mjs --check` (npm run hygiene:check) fails on any finding with no row here. A row may only be REMOVED in the same commit that removes the thing it describes or adds a reference to it; tests/repo-refs-baseline.test.ts asserts every row still describes something real.",
+  "$schema-note": "hyg-04. A KEEP-LIST, not a to-delete list. One row per finding the repository has decided to live with: an unreferenced-but-kept file, or a dependency finding (declared-and-unimported, imported-and-undeclared, or claimed-but-absent). Findings the scanner already reports as `keep` (the never-delete list) and dependencies it already reports as `referenced` or `tooling` are not findings and get no row. Every row carries a one-line `reason` and an `owner`. The owner convention is: the backlog item id that will END the row, and a `question-<n>` under spec.md section 14 ONLY where no item ends it. That is why run-relay.ts is owned by hyg-09 even though question 31 names it \u2014 hyg-09 is what resolves it \u2014 while the shadcn primitives and react-is are owned by question 31, which decided to keep them indefinitely. `node scripts/repo-refs.mjs --check` (npm run hygiene:check) fails on any finding with no row here. A row may only be REMOVED in the same commit that removes the thing it describes or adds a reference to it; tests/repo-refs-baseline.test.ts asserts every row still describes something real.",
   "files": [
     {
       "path": "docs/design/connectors.md",
@@ -64,19 +64,19 @@
     {
       "path": "scripts/readme-screenshots.mjs",
       "finding": "unreferenced",
-      "reason": "operator tool, invoked by hand from the repo root (its header shows the command); no code imports a script, and no backlog item will ever reference it — question 47 keeps it indefinitely",
+      "reason": "operator tool, invoked by hand from the repo root (its header shows the command); no code imports a script, and no backlog item will ever reference it \u2014 question 47 keeps it indefinitely",
       "owner": "question-47"
     },
     {
       "path": "src/lib/catalog/types.ts",
       "finding": "unreferenced",
-      "reason": "the string unions the catalog columns document; consumers import from the modules that USE them (classify/tier1-sql), and the unions page documents the shapes — kept as the one types-only module of the area",
+      "reason": "the string unions the catalog columns document; consumers import from the modules that USE them (classify/tier1-sql), and the unions page documents the shapes \u2014 kept as the one types-only module of the area",
       "owner": "cat-05"
     },
     {
       "path": "src/lib/principals.ts",
       "finding": "unreferenced",
-      "reason": "the one TS expansion point (rbac-01); its consumer today is the entitlement CTE's SQL twin, and the TS callers arrive with the parked named-approver work — question 47 owns it until that lands",
+      "reason": "the one TS expansion point (rbac-01); its consumer today is the entitlement CTE's SQL twin, and the TS callers arrive with the parked named-approver work \u2014 question 47 owns it until that lands",
       "owner": "question-47"
     },
     {
@@ -94,19 +94,13 @@
     {
       "name": "gifenc",
       "finding": "unreferenced",
-      "reason": "declared in devDependencies and imported by nothing; removed with committed evidence under the deletion rule, not here — hyg-04 removes nothing",
+      "reason": "declared in devDependencies and imported by nothing; removed with committed evidence under the deletion rule, not here \u2014 hyg-04 removes nothing",
       "owner": "hyg-05"
-    },
-    {
-      "name": "@modelcontextprotocol/sdk",
-      "finding": "unreferenced",
-      "reason": "the adopted MCP client (MIT, spec.md section 0.4), declared ahead of the item that imports it; not dead, unused-so-far",
-      "owner": "cnp-02"
     },
     {
       "name": "react-is",
       "finding": "unreferenced",
-      "reason": "satisfies recharts' react-is peerDependency (node_modules/recharts/package.json peerDependencies); never imported by app code, so removing it breaks the peer range. NOT enumerated in question 31, which names only _ds_bundle.js, the five shadcn primitives and run-relay.ts — it is filed there as the question that owns the unreferenced-but-kept CLASS, and the owner should move if you open a narrower one",
+      "reason": "satisfies recharts' react-is peerDependency (node_modules/recharts/package.json peerDependencies); never imported by app code, so removing it breaks the peer range. NOT enumerated in question 31, which names only _ds_bundle.js, the five shadcn primitives and run-relay.ts \u2014 it is filed there as the question that owns the unreferenced-but-kept CLASS, and the owner should move if you open a narrower one",
       "owner": "question-31"
     },
     {

@@ -315,6 +315,30 @@ model CustomTool {
   updatedAt    DateTime @updatedAt
 }
 
+// An external MCP server Servo connects to as a CLIENT (cnp-02). v1 is
+// Streamable HTTP only, tools only, static header auth only — `transport` is
+// a plain String so "stdio" can arrive from the roadmap without a migration.
+// `slug` becomes the mcp__<slug>__<tool> prefix every derived tool policy
+// carries, so it is unique and tightly shaped. `secret` is sealed by the
+// $extends write hook in src/lib/db.ts and opened only inside the client;
+// the API redacts it to secretSet. `enabled` defaults to false: a plugin or
+// an admin adds a server dark, and nothing it serves is reachable until both
+// the server and each tool's own policy row are turned on by a human.
+model McpServer {
+  id         String    @id @default(cuid())
+  slug       String    @unique // ^[a-z][a-z0-9-]{1,30}$
+  name       String
+  transport  String    @default("http") // "http" in v1; "stdio" reserved for roadmap
+  url        String
+  headers    String    @default("{}") // JSON object; values may contain {secret}
+  secret     String    @default("") // bearer token / API key; never exposed
+  enabled    Boolean   @default(false)
+  toolsJson  String    @default("[]") // last tools/list snapshot: [{name, description, inputSchema, hash}]
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
 model Setting {
   key   String @id
   value String

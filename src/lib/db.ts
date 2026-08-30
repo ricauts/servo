@@ -103,6 +103,24 @@ function makeClient() {
           return query(args);
         },
       },
+      // External MCP servers (cnp-02): same shape as CustomTool.secret — the
+      // bearer token is sealed here and opened only inside src/lib/mcp-client.ts
+      // at header-substitution time, never on a nested read.
+      mcpServer: {
+        async create({ args, query }) {
+          sealField(args.data, "secret");
+          return query(args);
+        },
+        async update({ args, query }) {
+          sealField(args.data as Record<string, unknown>, "secret");
+          return query(args);
+        },
+        async upsert({ args, query }) {
+          sealField(args.create, "secret");
+          sealField(args.update as Record<string, unknown>, "secret");
+          return query(args);
+        },
+      },
       webhook: {
         async create({ args, query }) {
           sealField(args.data, "secret");

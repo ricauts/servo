@@ -94,6 +94,21 @@ describe("quarantineRow — the only way a non-core tool gets a policy", () => {
     expect(QUARANTINE_TRIPLE).toEqual({ enabled: false, requiresApproval: true, riskLevel: "HIGH" });
   });
 
+  it("the MCP intake's own constant IS the triple, so the two cannot drift", async () => {
+    // cnp-02 writes policy rows from src/, which cannot import a .mjs script
+    // in a Next build — so the constant is duplicated there and pinned here.
+    const { MCP_QUARANTINE } = await import("@/lib/mcp-client");
+    expect({ ...MCP_QUARANTINE }).toEqual({ ...QUARANTINE_TRIPLE });
+    // And it is the ONLY policy shape that file writes.
+    const source = readFileSync(
+      path.resolve(__dirname, "..", "src/lib/mcp-client.ts"),
+      "utf8",
+    );
+    expect(source).not.toMatch(/enabled:\s*true/);
+    expect(source).not.toMatch(/requiresApproval:\s*false/);
+    expect(source).not.toMatch(/riskLevel:\s*"(LOW|MEDIUM)"/);
+  });
+
   it("a fixture declaring riskLevel LOW still lands HIGH — there is no floor", () => {
     for (const declared of ["LOW", "MEDIUM", "HIGH", undefined]) {
       expect(quarantineRow("x", "", declared ? { riskLevel: declared } : null).riskLevel).toBe("HIGH");
@@ -108,6 +123,10 @@ describe("policy-creation sites in src/ are allowlisted", () => {
       "src/app/api/settings/tools/route.ts", // admin UI policy editor — the human downgrade
       "src/app/api/tools/route.ts", // admin UI custom-tool create
       "src/app/api/tools/[id]/route.ts", // admin UI custom-tool edit/delete
+      // cnp-02 intake: mints rows only from MCP_QUARANTINE, and the test
+      // below pins that constant to QUARANTINE_TRIPLE so the allowance
+      // cannot widen into "whatever mcp-client decides to write".
+      "src/lib/mcp-client.ts",
       "prisma/seed-core.ts",
       "prisma/seed-demo.ts",
     ]);
