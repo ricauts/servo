@@ -43,6 +43,7 @@ interface ReclaimClient extends SettingReader {
 import path from "node:path";
 import type { SheetRows } from "@/lib/kb/extract-xlsx";
 import type { ExtractOutcome, Extractor } from "@/lib/kb/extractors";
+import type { Fact, FactRuleset } from "@/lib/kb/facts";
 
 /** Resource caps — measured BEFORE parsing, on the bytes themselves. The
  *  wall-clock budget is NOT here any more: kb.extract.workerBudgetMs
@@ -265,6 +266,117 @@ export function runExtractionJob(
     });
 
     child.send({ bytes: Array.from(bytes), route });
+  });
+}
+
+/** One chunk handed to the facts route: its id travels so the parent can
+ *  key the upsert without re-deriving an order. */
+export interface FactsJobChunk {
+  id: string;
+  text: string;
+}
+
+/** What the facts route returns — one entry per chunk, in the order sent. */
+export type FactsJobResult =
+  | { ok: true; results: { chunkId: string; facts: Fact[] }[] }
+  | { ok: false; error: string; breach?: LegacyExtractOutcome["breach"] };
+
+/**
+ * Run the typed-fact pass (spec ext-04) for one document's chunks in the
+ * SAME forked worker the byte routes use, under the SAME caps — the fork's
+ * heap budget (EXTRACT_LIMITS.maxOldSpaceMb) and the kb.extract
+ * .workerBudgetMs wall clock, which this function arms itself from
+ * budgetMs so no caller can omit it. Nothing in EXTRACT_LIMITS changes:
+ * the entry-count and decompressed-size caps are pre-parse zip checks and
+ * have no bytes to inspect on this route.
+ *
+ * The one launch difference is the tsx loader in execArgv. The worker is
+ * CommonJS and the fact parsers are typed ESM modules with extensionless
+ * relative imports, so a bare fork cannot load them; reimplementing the
+ * parsers in CommonJS would put a second, unfixtured copy of ext-02/ext-03
+ * in the tree. tsx is already a dependency and already ships in the
+ * runtime image (Dockerfile line 2), and only THIS route pays the flag —
+ * runExtractionJob's fork is byte-identical to what it was.
+ */
+export function runFactsJob(
+  chunks: FactsJobChunk[],
+  ruleset: FactRuleset,
+  opts: JobOptions = {},
+): Promise<FactsJobResult> {
+  if (chunks.length === 0) return Promise.resolve({ ok: true, results: [] });
+  return new Promise((resolve) => {
+    const workerPath = path.join(process.cwd(), "src", "lib", "kb", "extract-worker.cjs");
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (result: FactsJobResult) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      // The listener is removed, not just left `once`: backfillFacts may
+      // pass ONE signal into a fork per batch, and a signal that outlives
+      // the job would otherwise retain a listener — and the child and
+      // resolve closures behind it — for every batch of a corpus walk.
+      opts.signal?.removeEventListener("abort", onAbort);
+      child.kill();
+      resolve(result);
+    };
+
+    const child = fork(workerPath, [], {
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
+      execArgv: [`--max-old-space-size=${EXTRACT_LIMITS.maxOldSpaceMb}`, "--import", "tsx"],
+    });
+
+    // The wall-clock kill is armed HERE, from budgetMs, rather than only
+    // when a caller happens to pass a signal. The byte route can rely on
+    // its caller because the extractor registry threads one signal through
+    // every lane; this route is awaited straight from the ingestion path,
+    // and a cap a caller can forget to pass is not a cap.
+    const budgetMs = opts.budgetMs ?? DEFAULT_EXTRACT_BUDGET_MS;
+    const onAbort = () =>
+      finish({
+        ok: false,
+        error: `Fact extraction exceeded ${budgetMs} ms and was killed.`,
+        breach: "budget",
+      });
+    // Clamped to setTimeout's 32-bit ceiling. Node does not reject a larger
+    // delay, it silently rewrites it to 1 ms — so an operator who raised
+    // kb.extract.workerBudgetMs past ~24.8 days would otherwise turn a
+    // generous budget into an instant kill on every document.
+    timer = setTimeout(onAbort, Math.min(budgetMs, 2_147_483_647));
+    timer.unref?.();
+    if (opts.signal) {
+      if (opts.signal.aborted) onAbort();
+      else opts.signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    child.on("message", (msg: { ok?: boolean; kind?: string; error?: string; results?: { chunkId: string; facts: Fact[] }[] }) => {
+      if (!msg.ok || msg.kind !== "facts") {
+        finish({ ok: false, error: msg.error ?? "Fact extraction failed." });
+        return;
+      }
+      finish({ ok: true, results: msg.results ?? [] });
+    });
+    child.on("error", (err) => {
+      finish({ ok: false, error: err.message, breach: "crash" });
+    });
+    child.on("exit", (code, signal) => {
+      if (!settled) {
+        finish({
+          ok: false,
+          error:
+            signal === "SIGTERM"
+              ? `Fact extraction exceeded the memory budget (${EXTRACT_LIMITS.maxOldSpaceMb} MB).`
+              : `Fact extraction worker died (${signal ?? `exit ${code}`}).`,
+          breach: signal === "SIGTERM" ? "heap" : "crash",
+        });
+      }
+    });
+
+    child.stderr?.on("data", () => {
+      /* worker diagnostics are intentionally not surfaced to callers */
+    });
+
+    child.send({ route: "facts", chunks, ruleset });
   });
 }
 
