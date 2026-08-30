@@ -124,6 +124,30 @@ a permissive code licence says nothing about what ships beside it.
   the dependency: its licence travels inside `node_modules` to every
   install. Nothing of it is copied into this tree.
 
+### @modelcontextprotocol/sdk (cnp-02)
+
+- **Upstream:** <https://github.com/modelcontextprotocol/typescript-sdk>
+- **Licence:** MIT, verified from the `LICENSE` file shipped in the installed
+  package (`node_modules/@modelcontextprotocol/sdk/LICENSE`) on 2026-08-30.
+  The package's own `package.json` declares `"license": "MIT"`, and the
+  lockfile records the same for the resolved 1.30.0 tarball.
+- **Copyright:** `Copyright (c) 2024 Anthropic, PBC`
+- **What we use:** an ordinary npm dependency (1.30.0), not vendored code —
+  no file from it lives in this tree. `Client` and
+  `StreamableHTTPClientTransport` speak MCP to external servers from
+  `src/lib/mcp-client.ts` (spec cnp-02), which supplies the transport's
+  `fetch` so every byte still leaves through `safeFetch`/`checkEgress`.
+  It moved from `devDependencies` to `dependencies` with this item: it was
+  previously only a test-time reference and is now on a runtime path.
+- **Adopt-first verdict:** ADOPT, the verdict §0.4 of `spec.md` already
+  records as verified. It is the reason `cnp-02` writes **no** JSON-RPC
+  framing and **no** SSE parsing of its own — the hand-rolled client, and
+  with it the multi-event-SSE degradation caveat, is deleted from the item's
+  design rather than implemented and caveated.
+- **Obligations:** attribution only, discharged by `package.json` shipping
+  the dependency: its licence travels inside `node_modules` to every
+  install. Nothing of it is copied into this tree.
+
 ### shadcn/ui
 
 - **Upstream:** <https://github.com/shadcn-ui/ui> — two layers of its component
