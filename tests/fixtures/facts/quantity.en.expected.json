@@ -1,0 +1,79 @@
+[
+  [
+    {
+      "kind": "QUANTITY",
+      "text": "12 kg",
+      "offset": 8,
+      "length": 5,
+      "extractor": "facts@1",
+      "num": 12,
+      "unit": "kg",
+      "norm": "12:kg"
+    },
+    {
+      "kind": "QUANTITY",
+      "text": "3.5 GB",
+      "offset": 18,
+      "length": 6,
+      "extractor": "facts@1",
+      "num": 3.5,
+      "unit": "gb",
+      "norm": "3.5:gb"
+    }
+  ],
+  [
+    {
+      "kind": "QUANTITY",
+      "text": "21 °C",
+      "offset": 7,
+      "length": 5,
+      "extractor": "facts@1",
+      "num": 21,
+      "unit": "°c",
+      "norm": "21:°c"
+    },
+    {
+      "kind": "QUANTITY",
+      "text": "8 km",
+      "offset": 17,
+      "length": 4,
+      "extractor": "facts@1",
+      "num": 8,
+      "unit": "km",
+      "norm": "8:km"
+    },
+    {
+      "kind": "QUANTITY",
+      "text": "50%",
+      "offset": 32,
+      "length": 3,
+      "extractor": "facts@1",
+      "num": 50,
+      "unit": "%",
+      "norm": "50:%"
+    },
+    {
+      "kind": "QUANTITY",
+      "text": "0.5 ml",
+      "offset": 42,
+      "length": 6,
+      "extractor": "facts@1",
+      "num": 0.5,
+      "unit": "ml",
+      "norm": "0.5:ml"
+    }
+  ],
+  [
+    {
+      "kind": "DURATION",
+      "text": "30 days",
+      "offset": 38,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 2592000,
+      "unit": "s",
+      "norm": "P30D",
+      "confidence": "EXACT"
+    }
+  ]
+]

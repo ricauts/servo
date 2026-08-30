@@ -1,0 +1,59 @@
+[
+  [
+    {
+      "kind": "EMAIL",
+      "text": "ops@example.com",
+      "offset": 8,
+      "length": 15,
+      "extractor": "facts@1",
+      "norm": "ops@example.com"
+    },
+    {
+      "kind": "EMAIL",
+      "text": "OPS@Example.COM",
+      "offset": 27,
+      "length": 15,
+      "extractor": "facts@1",
+      "norm": "ops@example.com"
+    }
+  ],
+  [
+    {
+      "kind": "URL",
+      "text": "https://docs.example.com/guides/setup?lang=en#intro",
+      "offset": 8,
+      "length": 51,
+      "extractor": "facts@1",
+      "norm": "https://docs.example.com/guides/setup"
+    },
+    {
+      "kind": "DATE",
+      "text": "today",
+      "offset": 60,
+      "length": 5,
+      "extractor": "facts@1",
+      "ts": 1768435200000,
+      "tsEnd": 1768521600000,
+      "norm": "2026-01-15/2026-01-16",
+      "confidence": "ASSUMED"
+    }
+  ],
+  [
+    {
+      "kind": "URL",
+      "text": "http://a.io/x",
+      "offset": 4,
+      "length": 13,
+      "extractor": "facts@1",
+      "norm": "http://a.io/x"
+    },
+    {
+      "kind": "EMAIL",
+      "text": "x@y.io",
+      "offset": 29,
+      "length": 6,
+      "extractor": "facts@1",
+      "norm": "x@y.io"
+    }
+  ]
+]

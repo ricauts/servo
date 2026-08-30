@@ -79,7 +79,7 @@ export function extractMoney(
   const facts: MoneyFact[] = [];
   const seen = new Set<string>();
 
-  const emit = (text2: string, code: string, amountRaw: string, confidence: FactConfidence) => {
+  const emit = (m: RegExpMatchArray, code: string, amountRaw: string, confidence: FactConfidence) => {
     const exponent = exponentFor(code);
     if (exponent === null) return; // unknown code: no fact, stays a keyword
     const num = parseAmount(amountRaw, exponent);
@@ -87,7 +87,8 @@ export function extractMoney(
     const key = `${code}:${num}`;
     if (seen.has(key)) return;
     seen.add(key);
-    facts.push({ kind: "MONEY", text: text2, num, unit: code, norm: `${code}:${num}`, confidence });
+    const at = m.index ?? 0;
+    facts.push({ kind: "MONEY", text: m[0], offset: at, length: m[0].length, extractor: "facts@1", num, unit: code, norm: `${code}:${num}`, confidence });
   };
 
   // All symbols the table knows, longest first so CLP$ wins over $, with
@@ -107,9 +108,9 @@ export function extractMoney(
     if (!opts.pay(2)) break;
     const sym = m[1];
     if (AMBIGUOUS_SYMBOLS.has(sym)) {
-      emit(m[0], opts.defaultCurrency, m[2], "ASSUMED");
+      emit(m, opts.defaultCurrency, m[2], "ASSUMED");
     } else {
-      emit(m[0], SYMBOL_TO_CODE.get(sym)!, m[2], "EXACT");
+      emit(m, SYMBOL_TO_CODE.get(sym)!, m[2], "EXACT");
     }
   }
 
@@ -118,11 +119,11 @@ export function extractMoney(
   const codeAlt = "USD|EUR|GBP|JPY|CHF|CLP|COP|MXN|BRL|CAD|INR|SEK";
   for (const m of text.matchAll(new RegExp(`\\b(${amount})\\s{0,2}(${codeAlt})\\b`, "g"))) {
     if (!opts.pay(2)) break;
-    emit(m[0], m[2], m[1], "EXACT");
+    emit(m, m[2], m[1], "EXACT");
   }
   for (const m of text.matchAll(new RegExp(`\\b(${codeAlt})\\s{0,2}(${amount})\\b`, "g"))) {
     if (!opts.pay(2)) break;
-    emit(m[0], m[1], m[2], "EXACT");
+    emit(m, m[1], m[2], "EXACT");
   }
 
   return { facts, steps: 0 };
