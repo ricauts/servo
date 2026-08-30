@@ -187,12 +187,15 @@ export async function silos(): Promise<SiloWorld> {
       }
     };
 
-    const db = new PrismaClient({ datasourceUrl: withLimit(urlForDatabase(WAREHOUSE_DB), 4) });
-    // The locked setup retries once: a dropped lock SESSION (CI runners see
+    // A FRESH warehouse client per attempt: a dropped connection poisons
+    // the pool it lived in, so reusing the client across retries replays
+    // the same P1017. Recreating gives the retry a clean pool.
+    let db = new PrismaClient({ datasourceUrl: withLimit(urlForDatabase(WAREHOUSE_DB), 4) });
+    // The locked setup retries: a dropped lock SESSION (CI runners see
     // P1017-class churn) releases the advisory lock early, letting two
     // workers race CREATE/migrate and one see P2021 (missing table) on the
-    // first query. The retry re-enters the lock and repairs — migrate is
-    // idempotent and the seed is upserts.
+    // first query. The retry re-enters the lock with a fresh client and
+    // repairs — migrate is idempotent and the seed is upserts.
     const lockedSetup = async (): Promise<void> => {
       await withLock(async () => {
         const admin = new PrismaClient({ datasourceUrl: withLimit(testDatabaseUrl(), 2) });
@@ -246,8 +249,10 @@ export async function silos(): Promise<SiloWorld> {
         await lockedSetup();
         break;
       } catch (err) {
-        if (setupAttempt >= 2 || !/P2021|P1004|P1017|does not exist/i.test(String(err))) throw err;
-        await new Promise((r) => setTimeout(r, 1_000));
+        if (setupAttempt >= 3 || !/P2021|P1004|P1017|does not exist/i.test(String(err))) throw err;
+        await db.$disconnect().catch(() => undefined);
+        db = new PrismaClient({ datasourceUrl: withLimit(urlForDatabase(WAREHOUSE_DB), 4) });
+        await new Promise((r) => setTimeout(r, setupAttempt * 1_000));
       }
     }
     const siloB = await startObjectFixture({ objects: [] });
