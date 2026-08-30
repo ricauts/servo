@@ -10,6 +10,7 @@
 // additionally serialized per ticket, mirroring the resolver-run guard.
 
 import type { ReplyDraft, User } from "@prisma/client";
+import { formatLocator } from "@/lib/kb/locator";
 import { db } from "@/lib/db";
 import { sendMail } from "@/lib/notify";
 import { isEditedReply, replySubject } from "@/lib/reply-format";
@@ -103,22 +104,13 @@ async function retrieveSources(
   const sources: DraftSource[] = [];
   let budget = KB_CONTEXT_LIMIT;
   for (const [i, hit] of hits.entries()) {
-    const marker = `[${i + 1}] ${hit.docName} · ${describeLocator(hit.locator)}`;
+    const marker = `[${i + 1}] ${hit.docName} · ${formatLocator(hit.locator)}`;
     if (marker.length + hit.text.length > budget) break;
     budget -= marker.length + hit.text.length;
     passages.push(`${marker}\n${hit.text}`);
     sources.push({ docId: hit.documentId, docName: hit.docName, locator: hit.locator, chunkId: hit.chunkId });
   }
   return { passages, sources };
-}
-
-function describeLocator(locator: unknown): string {
-  if (typeof locator !== "object" || locator === null) return "";
-  const l = locator as Record<string, unknown>;
-  if (typeof l.sheet === "string") return `sheet ${l.sheet}${l.range ? ` ${l.range}` : ""}`;
-  if (typeof l.page === "number") return `page ${l.page}`;
-  if (typeof l.lines === "string") return `lines ${l.lines}`;
-  return "";
 }
 
 // In-process guard: one draft generation per ticket at a time (same pattern
