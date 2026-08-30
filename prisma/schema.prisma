@@ -217,6 +217,10 @@ model Skill {
   // KPIs count the COLUMN (reb-06), never the frontmatter. Bare FK by
   // design, like AgentRun.agentUserId — nothing navigates the reverse edge.
   sourceTicketId String?
+  // cnp-06 provenance: bundled ("local") or plugin-originated ("plugin:<name>").
+  // Distillation provenance is sourceTicketId (reb-05) — orthogonal; there is
+  // no third column.
+  origin        String   @default("local")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -234,6 +238,8 @@ model AgentProfile {
   systemPrompt String // markdown body appended to the resolver system prompt
   markdown     String // raw .md source (frontmatter + body)
   enabled      Boolean  @default(true)
+  // cnp-06 provenance, same shape as Skill.origin.
+  origin       String   @default("local")
   // Which pool credential this agent runs on; null = the default BYOK config.
   credentialId String?
   credential   AiCredential? @relation(fields: [credentialId], references: [id])

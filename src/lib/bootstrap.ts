@@ -119,6 +119,166 @@ export async function syncSkills(): Promise<number> {
 }
 
 /**
+ * syncPlugins() (cnp-06) — THE installation system for
+ * plugins/<dir>/.claude-plugin/plugin.json. There is no second installer —
+ * no pack-install model, no marketplace-source model, no marketplace
+ * manifest, no tools manifest, no pack-id column anywhere in the tree —
+ * the loader, the Skill/AgentProfile/McpServer tables and the cnp-02
+ * policy sync are the whole surface, and tests/plugin-loader.test.ts
+ * greps this commit's tree with the exact banned tokens to prove it.
+ *
+ * Everything a plugin ships arrives DISABLED — Skill.enabled=false,
+ * AgentProfile.enabled=false, McpServer.enabled=false — and every tool
+ * policy a plugin server ever derives carries the Ruling-6 triple at sync
+ * time (cnp-02). An admin promotes plugin content deliberately; nothing
+ * activates by being installed.
+ *
+ * Create-only, exactly like syncSkills() and syncAgentProfiles(): existing
+ * rows are never touched, so an admin's edit or enablement survives every
+ * re-run. Plugin content is namespaced <plugin>--<slug> so two plugins
+ * cannot collide and plugin content cannot shadow a bundled slug.
+ */
+export async function syncPlugins(pluginsDir?: string): Promise<{
+  plugins: number;
+  skills: number;
+  profiles: number;
+  servers: number;
+  skipped: string[];
+}> {
+  const root = pluginsDir ?? path.join(process.cwd(), "plugins");
+  if (!fs.existsSync(root)) return { plugins: 0, skills: 0, profiles: 0, servers: 0, skipped: [] };
+  const stats = { plugins: 0, skills: 0, profiles: 0, servers: 0, skipped: [] as string[] };
+
+  for (const entry of fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .sort((a, b) => a.name.localeCompare(b.name))) {
+    const manifestPath = path.join(root, entry.name, ".claude-plugin", "plugin.json");
+    if (!fs.existsSync(manifestPath)) continue;
+    let manifest: { name?: unknown; version?: unknown; description?: unknown };
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    } catch {
+      stats.skipped.push(`${entry.name}: unparseable plugin.json`);
+      continue;
+    }
+    const pluginName = typeof manifest.name === "string" ? manifest.name.trim() : "";
+    // kebab-case, required — a plugin that cannot name itself cannot be
+    // installed, but it must not block boot either.
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(pluginName)) {
+      stats.skipped.push(`${entry.name}: plugin.json name is required and kebab-case`);
+      continue;
+    }
+    const origin = `plugin:${pluginName}`;
+    stats.plugins++;
+
+    // skills/ — lenient parse: a malformed SKILL.md is skipped, not fatal.
+    const skillsDir = path.join(root, entry.name, "skills");
+    if (fs.existsSync(skillsDir)) {
+      for (const skillDir of fs
+        .readdirSync(skillsDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .sort((a, b) => a.name.localeCompare(b.name))) {
+        const file = path.join(skillsDir, skillDir.name, "SKILL.md");
+        if (!fs.existsSync(file)) continue;
+        const markdown = fs.readFileSync(file, "utf8");
+        let parsed;
+        try {
+          parsed = parseSkillMarkdown(markdown);
+        } catch {
+          stats.skipped.push(`${pluginName}/${skillDir.name}: malformed SKILL.md`);
+          continue;
+        }
+        const slug = `${pluginName}--${slugify(skillDir.name)}`;
+        if (await db.skill.findUnique({ where: { slug } })) continue;
+        await db.skill.create({
+          data: {
+            slug,
+            name: parsed.name,
+            description: parsed.description,
+            categories: JSON.stringify(parsed.categories),
+            body: parsed.body,
+            markdown,
+            enabled: false,
+            origin,
+          },
+        });
+        stats.skills++;
+      }
+    }
+
+    // agents/ — the agent-profile format; malformed is skipped, not fatal.
+    const agentsDir = path.join(root, entry.name, "agents");
+    if (fs.existsSync(agentsDir)) {
+      for (const agentDir of fs
+        .readdirSync(agentsDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .sort((a, b) => a.name.localeCompare(b.name))) {
+        const file = path.join(agentsDir, agentDir.name, "profile.md");
+        if (!fs.existsSync(file)) continue;
+        let parsed;
+        try {
+          parsed = parseProfileMarkdown(fs.readFileSync(file, "utf8"));
+        } catch {
+          stats.skipped.push(`${pluginName}/${agentDir.name}: malformed profile.md`);
+          continue;
+        }
+        const slug = `${pluginName}--${slugify(agentDir.name)}`;
+        if (await db.agentProfile.findUnique({ where: { slug } })) continue;
+        await db.agentProfile.create({
+          data: {
+            slug,
+            name: parsed.name,
+            description: parsed.description,
+            systemPrompt: parsed.systemPrompt,
+            markdown: fs.readFileSync(file, "utf8"),
+            tools: JSON.stringify(parsed.tools),
+            categories: JSON.stringify(parsed.categories),
+            enabled: false,
+            origin,
+          },
+        });
+        stats.profiles++;
+      }
+    }
+
+    // .mcp.json — loaded, and the servers arrive DISABLED through the
+    // cnp-02 model; enabling one is an admin action, and the first tools/
+    // list sync writes every derived tool's Ruling-6 policy.
+    const mcpPath = path.join(root, entry.name, ".mcp.json");
+    if (fs.existsSync(mcpPath)) {
+      let mcp: { mcpServers?: Record<string, { url?: unknown; headers?: unknown }> };
+      try {
+        mcp = JSON.parse(fs.readFileSync(mcpPath, "utf8"));
+      } catch {
+        stats.skipped.push(`${pluginName}: unparseable .mcp.json`);
+        continue;
+      }
+      for (const [serverName, config] of Object.entries(mcp.mcpServers ?? {})) {
+        const url = typeof config?.url === "string" ? config.url : "";
+        if (!url) {
+          stats.skipped.push(`${pluginName}/${serverName}: .mcp.json server carries no url`);
+          continue;
+        }
+        const slug = `${pluginName}--${slugify(serverName)}`;
+        if (await db.mcpServer.findUnique({ where: { slug } })) continue;
+        await db.mcpServer.create({
+          data: {
+            slug,
+            name: serverName,
+            url,
+            headers: JSON.stringify(config?.headers ?? {}),
+            enabled: false,
+          },
+        });
+        stats.servers++;
+      }
+    }
+  }
+  return stats;
+}
+
+/**
  * The sandbox "ops" database schema the database tools operate on. Fresh
  * installs get empty tables (the tools work, queries return no rows) —
  * `npm run demo` fills them with the showcase inventory.

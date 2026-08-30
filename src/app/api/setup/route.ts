@@ -6,7 +6,7 @@ import { USER_COOKIE } from "@/lib/auth";
 import { AUTH_SETTING_KEYS, needsSetup } from "@/lib/authjs";
 import { ensureToolPolicies } from "@/lib/ai/custom-tools";
 import { ensureSlaPolicies } from "@/lib/sla";
-import { ensureOpsSchema, syncAgentProfiles, syncSkills } from "@/lib/bootstrap";
+import { ensureOpsSchema, syncAgentProfiles, syncPlugins, syncSkills } from "@/lib/bootstrap";
 import { AI_AGENT_COLORS, SETUP_ADMIN_COLOR } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +92,9 @@ export async function POST(req: NextRequest) {
   await ensureSlaPolicies();
   await syncAgentProfiles();
   await syncSkills();
+  // cnp-06: plugins install beside the bundled skills — everything they
+  // ship arrives disabled.
+  await syncPlugins();
   await ensureOpsSchema();
 
   // Demo-mode installs act as the new admin immediately; OIDC installs go

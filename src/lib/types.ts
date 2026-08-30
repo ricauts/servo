@@ -98,6 +98,14 @@ export interface ConversationMessage {
   content: ContentBlock[];
 }
 
+/**
+ * Content provenance (cnp-06): bundled with the desk ("local") or shipped by
+ * an installed plugin ("plugin:<name>", the plugin.json's kebab-case name).
+ * Plugin content is namespaced <plugin>--<slug> and arrives DISABLED; the
+ * kind is recorded so the UI can say where a skill or profile came from.
+ */
+export type OriginKind = "local" | `plugin:${string}`;
+
 // ---------------------------------------------------------------------------
 // Settings keys (Setting table). Values are strings; booleans are "true"/"false".
 // ---------------------------------------------------------------------------
