@@ -331,11 +331,11 @@ paths-exempt:
       - prisma/seed.ts
       - src/lib/ai/tools.ts
     paths:
-      - docs/CONTRACT.md
-    until: hyg-08
-    reason: a superseded build order. hyg-08 moves it to docs/history/ with a
-      header naming these as files that no longer exist; the header is what
-      turns them from stale references into recorded history.
+      - docs/history/CONTRACT.md
+    reason: recorded history, permanent. hyg-08 moved the superseded build
+      order under docs/history/ and its header names these as files that no
+      longer exist — the header is what turns them from stale references
+      into provenance, and the body below it stays unedited.
   # --- Written relative to a directory the surrounding prose names ---------
   - target:
       - api/tickets/route.ts
