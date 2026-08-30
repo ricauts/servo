@@ -12,7 +12,8 @@
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { chunkMarkdown } from "@/lib/kb/chunk";
-import { extractHardened } from "@/lib/kb/extract";
+import { extractDocument } from "@/lib/kb/extractors/run";
+import { getKbExtractBudgetMs } from "@/lib/kb/settings";
 import { keywordPass } from "@/lib/kb/keywords";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
 
@@ -128,11 +129,18 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       return { documentId, textStatus: "UNSUPPORTED", chunkCount: 0 };
     }
 
-    // kb-05: extraction runs in the HARDENED forked worker — off this
-    // transaction and off the event loop, with the zip/XXE/wall-clock/heap
-    // caps enforced BEFORE any parse. The transaction commits the row in
-    // EXTRACTING; the worker's outcome lands right after.
-    const outcome = await extractHardened(input.bytes, input.contentType);
+    // kb-05 via the dcl-01 seam: extraction runs in the HARDENED forked
+    // worker — off this transaction and off the event loop, with the
+    // zip/XXE/heap caps enforced BEFORE any parse — behind the extractor
+    // registry, under the kb.extract.workerBudgetMs budget carried by the
+    // AbortSignal. The transaction commits the row in EXTRACTING; the
+    // extractor's outcome lands right after.
+    const budgetMs = await getKbExtractBudgetMs(db);
+    const ran = await extractDocument(input.bytes, input.contentType, {
+      signal: AbortSignal.timeout(budgetMs),
+      budgetMs,
+    });
+    const outcome = ran.outcome;
     if (outcome.status !== "EXTRACTED") {
       await tx.document.update({
         where: { id: documentId },
@@ -170,6 +178,14 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
         textError: null,
         // Deterministic extract: the first chunk, capped. No provider call.
         summary: (chunks[0]?.text ?? "").slice(0, 300),
+        // dcl-01 provenance: the exact extractor and its library versions;
+        // extractorFallback NULL on every successful non-fallback
+        // extraction, so a future "the sidecar was down" queue drains by
+        // this being NULL again.
+        extractor: ran.extractorId || "baseline",
+        extractorVersion: ran.extractorVersion,
+        extractorFallback: null,
+        extractedAt: new Date(),
       },
     });
     return { documentId, textStatus: "EXTRACTED", chunkCount: chunks.length };
