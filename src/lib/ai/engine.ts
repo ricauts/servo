@@ -57,6 +57,9 @@ interface LoopContext {
   registry: Record<string, ToolDef>;
   messages: ConversationMessage[];
   nextIndex: number;
+  /** Datasets whose federation results were already compacted (fed-05):
+   *  at most once per dataset per run. */
+  compactedDatasets: Set<string>;
 }
 
 // -- small shared helpers ----------------------------------------------------
@@ -243,6 +246,7 @@ async function buildLoopContext(
     runId,
     ticket,
     agentUser,
+    compactedDatasets: new Set<string>(),
     principals: {
       agentId: agentPrincipalId({ profileId: profile?.id ?? null }),
       humanId: ticket.requesterId,
@@ -503,10 +507,16 @@ async function runResolverInner(ticketId: string): Promise<AgentRun> {
  */
 async function driveResolverLoop(ctx: LoopContext): Promise<"completed" | "paused"> {
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+    // The graceful last turn (fed-05): no tools on the final iteration,
+    // so the model must answer with what it holds and the run COMPLETES.
+    const lastTurn = iteration === MAX_ITERATIONS - 1;
     const turn = await ctx.provider.complete({
       system: ctx.system,
       messages: ctx.messages,
-      tools: ctx.toolSpecs,
+      // The graceful last turn (fed-05): tools withdrawn, so the provider
+      // cannot call another tool and must produce the final summary — the
+      // run COMPLETES where it used to throw "exceeded iterations".
+      tools: lastTurn ? [] : ctx.toolSpecs,
     });
 
     const assistantBlocks: ContentBlock[] = [];
@@ -625,6 +635,20 @@ async function driveResolverLoop(ctx: LoopContext): Promise<"completed" | "pause
       // resumeAfterApproval — deleting either makes the ledger-charging
       // test fail; keep them together.
       result = await capToolResult(ctx, call.name, result);
+      // Compaction (fed-05): only discard_source fires it, only past 60%
+      // of the budget, once per dataset per run, never refunding the
+      // ledger. The audit split: steps keep the originals.
+      if (call.name === "discard_source") {
+        const id = String((call.input as Record<string, unknown>)?.datasetId ?? "");
+        if (id) {
+          const { compactionDue, compactFederationResults } = await import("./compaction");
+          const { readLedger, FED_CONTEXT_BUDGET } = await import("./retrieval-budget");
+          const ledger = await readLedger(db, ctx.runId);
+          if (compactionDue(true, ledger.chars, FED_CONTEXT_BUDGET, ctx.compactedDatasets.has(id))) {
+            compactFederationResults(ctx.messages, id, ctx.compactedDatasets);
+          }
+        }
+      }
       await addStep(ctx, { type: "TOOL_RESULT", toolName: call.name, content: result });
       appendToolResult(ctx.messages, {
         type: "tool_result",
