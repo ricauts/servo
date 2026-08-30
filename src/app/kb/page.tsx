@@ -57,9 +57,16 @@ export default async function KnowledgePage() {
   // warning beside the field, auto-delivery toggles — kb.manage only.
   let admin: React.ReactNode = null;
   if (can(user, "kb.manage")) {
-    const [settings, collections] = await Promise.all([
+    const [settings, collections, health, fallbackQueue] = await Promise.all([
       db.setting.findMany({ where: { key: { startsWith: "kb." } } }),
       db.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } } ),
+      // dcl-09: the extractor health surface and the fallback queue.
+      import("@/lib/kb/extractors/docling").then((m) => m.extractorHealth(db)),
+      db.document.findMany({
+        where: { extractorFallback: { not: null } },
+        orderBy: { extractedAt: "asc" },
+        select: { id: true, name: true, extractorFallback: true },
+      }),
     ]);
     const map = new Map(settings.map((s) => [s.key, s.value]));
     const autodeliverCategories = settings
@@ -75,6 +82,8 @@ export default async function KnowledgePage() {
           dailyCap: map.get("kb.autodeliver.dailyCap") ?? "",
         }}
         collections={collections}
+        extractorHealth={health}
+        fallbackQueue={fallbackQueue.map((q) => ({ ...q, extractorFallback: q.extractorFallback ?? "" }))}
       />
     );
   }
