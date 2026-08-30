@@ -19,6 +19,7 @@ import { extractDocument } from "@/lib/kb/extractors/run";
 import { getKbExtractBudgetMs, getDoclingConfig } from "@/lib/kb/settings";
 import { chunkMarkdown, type Chunked } from "@/lib/kb/chunk";
 import { keywordPass } from "@/lib/kb/keywords";
+import { persistFactsForDocument } from "@/lib/kb/facts/persist";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
 import { backfillEmbeddings } from "@/lib/kb/backfill";
 
@@ -106,6 +107,17 @@ export async function reextractDocument(documentId: string): Promise<ReextractRe
     // Steps 4-5: the graph corpus rebuild, then the kb-09 embedding
     // backfill over the freshly-nulled chunks. Both best-effort at this
     // layer — the same calls the upload path makes.
+    // ext-04: this path DELETES the chunks and recreates them, so the FK
+    // cascade has just taken every fact with them. Re-running the pass
+    // here is what keeps re-extraction from silently emptying the facts
+    // table — same forked worker, same budget, same best-effort posture as
+    // the two calls below.
+    await persistFactsForDocument(db, documentId, { budgetMs }).catch((err: unknown) => {
+      console.error(
+        `[servo] fact extraction skipped for ${documentId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    });
     await rebuildEdgesFor(documentId).catch(() => 0);
     // Recompute embeddings over the fresh chunks (kb-09). expectModel ""
     // accepts whatever the configured embedder reports, the same posture

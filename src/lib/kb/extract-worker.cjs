@@ -16,23 +16,80 @@
 // entity resolution).
 
 process.on("message", (msg) => {
-  // dcl-01: the parent sends the SNIFFED route (xlsx|pdf|text) or the
-  // declared type when the sniff had nothing to say — routing on BYTES,
-  // never on the client-declared multipart Content-Type.
-  extract(Buffer.from(msg.bytes), msg.route || msg.contentType)
-    .then((result) => {
-      if (process.send) process.send({ ok: true, ...result });
-    })
-    .catch((err) => {
-      if (process.send) {
-        process.send({ ok: false, error: err && err.message ? err.message : String(err) });
-      }
-    })
-    .finally(() => {
-      // One job per process: the parent forks fresh for each document.
-      process.disconnect();
-    });
+  // ext-04: the facts route carries CHUNKS and a ruleset instead of bytes —
+  // the typed-fact pass runs here, in the same forked worker under the same
+  // caps, rather than on the request path. It is dispatched before the byte
+  // routes because its message has no `bytes` to buffer.
+  const job =
+    msg && msg.route === "facts"
+      ? extractChunkFacts(msg.chunks || [], msg.ruleset)
+      : // dcl-01: the parent sends the SNIFFED route (xlsx|pdf|text) or the
+        // declared type when the sniff had nothing to say — routing on BYTES,
+        // never on the client-declared multipart Content-Type.
+        extract(Buffer.from(msg.bytes), msg.route || msg.contentType);
+  job
+    .then((result) => reply({ ok: true, ...result }))
+    .catch((err) => reply({ ok: false, error: err && err.message ? err.message : String(err) }));
 });
+
+/**
+ * Send one reply, then close the channel — IN THAT ORDER, and not before.
+ *
+ * process.send() is ASYNCHRONOUS: it hands the payload to the IPC channel
+ * and returns. Disconnecting in a .finally() beside it therefore tears the
+ * channel down while a large payload is still draining, and the parent
+ * sees a clean `exit 0` with no message — a silent, size-dependent loss.
+ * The byte routes only ever hit that at megabyte replies; ext-04's facts
+ * route reaches it at an ordinary multi-hundred-chunk document, which is
+ * how it was found. The disconnect therefore waits for send's completion
+ * callback, and falls back to a timer if the callback never fires so a
+ * wedged channel still ends the process rather than hanging it.
+ */
+function reply(payload) {
+  if (!process.send) return;
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    // One job per process: the parent forks fresh for each document.
+    try {
+      process.disconnect();
+    } catch {
+      /* the parent may already have killed the channel */
+    }
+  };
+  const guard = setTimeout(close, 30_000);
+  guard.unref?.();
+  process.send(payload, () => {
+    clearTimeout(guard);
+    close();
+  });
+}
+
+/**
+ * The typed-fact pass (spec ext-04), run in this process rather than the
+ * parent's. One job carries every chunk of one document, so a document
+ * costs one fork — the same "one job per process" rule the byte routes
+ * follow.
+ *
+ * The extractor itself is the TYPED module ext-02/ext-03 shipped
+ * (src/lib/kb/facts/), imported here rather than reimplemented: two copies
+ * of a parser drift, and the golden fixtures only pin one of them. That is
+ * why the parent launches THIS route with the tsx loader in execArgv
+ * (src/lib/kb/extract.ts) — the byte routes are launched exactly as before
+ * and never pay for it. A worker started without the loader cannot serve
+ * this route, which is why the parent owns the flag.
+ */
+async function extractChunkFacts(chunks, ruleset) {
+  const { extractFacts } = await import("./facts/index.ts");
+  const results = chunks.map((chunk) => ({
+    chunkId: chunk.id,
+    // The pass is PURE and bounded by the ruleset's own step budget
+    // (ext-02); the fork's heap and wall-clock caps bound the rest.
+    facts: extractFacts(String(chunk.text || ""), ruleset).facts,
+  }));
+  return { kind: "facts", results, status: "EXTRACTED" };
+}
 
 /** Dispatch on the route. Unknown types land UNSUPPORTED with the type
  *  named — never a silent empty extraction. The sniffed routes ("xlsx",

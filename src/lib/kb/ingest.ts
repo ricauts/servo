@@ -15,6 +15,7 @@ import { chunkMarkdown } from "@/lib/kb/chunk";
 import { extractDocument } from "@/lib/kb/extractors/run";
 import { getKbExtractBudgetMs, getDoclingConfig } from "@/lib/kb/settings";
 import { keywordPass } from "@/lib/kb/keywords";
+import { persistFactsForDocument } from "@/lib/kb/facts/persist";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
 
 /** Stored-byte cap, enforced before anything touches the database. */
@@ -74,6 +75,12 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
     where: { ownerId: input.ownerId, name: input.name },
     select: { id: true },
   });
+
+  // Resolved once, before the transaction: the extraction step inside it
+  // and the ext-04 fact pass after it run under the SAME
+  // kb.extract.workerBudgetMs, and reading the setting twice could hand
+  // them different numbers.
+  const budgetMs = await getKbExtractBudgetMs(db);
 
   const document = await db.$transaction(async (tx) => {
     let documentId: string;
@@ -135,7 +142,6 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
     // registry, under the kb.extract.workerBudgetMs budget carried by the
     // AbortSignal. The transaction commits the row in EXTRACTING; the
     // extractor's outcome lands right after.
-    const budgetMs = await getKbExtractBudgetMs(db);
     // A misconfigured lane (bad URL, refused OCR engine) never breaks an
     // upload: the reason is named loudly here and the lane stays off for
     // this document — baseline answers, exactly as LANE 1.
@@ -203,6 +209,21 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
   });
 
   if (document.textStatus === "EXTRACTED") {
+    // ext-04: the typed-fact pass is a STEP AFTER CHUNKING, run in kb-05's
+    // forked worker under the same caps — never on this process. It sits
+    // outside the transaction for the same reason the graph pass does: the
+    // chunks are committed, and enrichment that fails must not un-ingest a
+    // document that extracted cleanly. A document that lands FAILED never
+    // reaches this line, so a failed document is never left holding a
+    // partial set of facts.
+    await persistFactsForDocument(db, document.documentId, { budgetMs }).catch(
+      (err: unknown) => {
+        console.error(
+          `[servo] fact extraction skipped for ${document.documentId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+      },
+    );
     await rebuildEdgesFor(document.documentId).catch(() => 0);
   }
 
