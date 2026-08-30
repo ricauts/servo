@@ -182,13 +182,27 @@ export async function silos(): Promise<SiloWorld> {
       // A fresh database needs the app schema before anything can be
       // seeded; an existing one may predate a migration, and deploy is
       // a no-op when current — so it runs on every setup, under lock.
+      // Bounded retry: a P1017-class dropped connection (CI runners see
+      // them while the server is still warming) is transient, and the
+      // advisory lock already serializes every caller.
       const { execSync } = await import("node:child_process");
       const isWin = process.platform === "win32";
-      execSync(`${isWin ? "npx.cmd" : "npx"} prisma migrate deploy`, {
-        env: { ...process.env, DATABASE_URL: urlForDatabase(WAREHOUSE_DB) },
-        stdio: "pipe",
-        timeout: 120_000,
-      });
+      const deploy = () =>
+        execSync(`${isWin ? "npx.cmd" : "npx"} prisma migrate deploy`, {
+          env: { ...process.env, DATABASE_URL: urlForDatabase(WAREHOUSE_DB) },
+          stdio: "pipe",
+          timeout: 120_000,
+        });
+      let deployed = false;
+      for (let attempt = 1; attempt <= 3 && !deployed; attempt++) {
+        try {
+          deploy();
+          deployed = true;
+        } catch (err) {
+          if (attempt === 3) throw err;
+          await new Promise((r) => setTimeout(r, attempt * 1_000));
+        }
+      }
       const catalogUser = await db.user.upsert({
         where: { email: "catalog@servo.ai" },
         create: { name: "Servo Catalog", email: "catalog@servo.ai", role: "AI_AGENT", aiKind: "CATALOG" },
