@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 /** The most facts one document's chip panel renders. A cap on OUR OWN
  *  document's rows — nothing about entitlement — so saying it was reached is
  *  not a disclosure. */
-export const FACTS_PAGE_CAP = 500;
+const FACTS_PAGE_CAP = 500;
 
 export interface FactChipRow {
   id: string;

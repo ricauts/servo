@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { QUERY_INPUT_CAP } from "@/lib/kb/query-filters";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
-import type { KbSearchResponse } from "@/app/api/kb/search/route";
+import type { KbSearchResponse } from "@/lib/kb/filter-view";
 
 /**
  * The KB search box, with the parse made visible (ext-08).
