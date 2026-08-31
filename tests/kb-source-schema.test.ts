@@ -590,9 +590,24 @@ describe("assertNotServoDatabase, against two real Postgres servers", () => {
     }
   });
 
-  it("proves 0.0.0.0 and 127.0.0.1 really are the same server before refusing them", async () => {
+  it("proves two spellings of one address really are the same server, before folding them", async () => {
+    // The premise the address INTERSECTION rests on: two spellings that
+    // resolve to the same address are the same postmaster, so refusing the
+    // second because the first matched is not over-refusal. Proven with
+    // pg_control_system().system_identifier, which is the server's identity
+    // and not merely its database name.
+    //
+    // `localhost` and `127.0.0.1` are the pair, deliberately, and NOT
+    // `0.0.0.0`. Dialling `0.0.0.0` as a DESTINATION is a kernel courtesy —
+    // Linux routes it to the local host — and not every stack extends it:
+    // on a WSL host Prisma's Rust engine refuses the dial where node's own
+    // socket succeeds. That made this assertion fail on a developer machine
+    // for a reason that has nothing to do with the code under test. The
+    // guard's BEHAVIOUR on `0.0.0.0` is asserted just above, by refusal,
+    // which needs no socket at all — and refusing an address a platform
+    // cannot dial costs that platform nothing.
     const ids: string[] = [];
-    for (const host of ["0.0.0.0", "127.0.0.1"]) {
+    for (const host of ["localhost", "127.0.0.1"]) {
       const url = new URL(testUrl);
       url.hostname = host;
       const c = new PrismaClient({ datasourceUrl: withLimit(url.toString()) });
@@ -606,6 +621,17 @@ describe("assertNotServoDatabase, against two real Postgres servers", () => {
       }
     }
     expect(ids[0]).toBe(ids[1]);
+    // And they are genuinely a different server from the 5434 one, so the
+    // comparison above is not trivially true of any two endpoints.
+    const other = new PrismaClient({ datasourceUrl: withLimit(EXTERNAL_URL) });
+    try {
+      const r = await other.$queryRawUnsafe<{ id: bigint }[]>(
+        `SELECT system_identifier AS id FROM pg_control_system()`,
+      );
+      expect(String(r[0].id)).not.toBe(ids[0]);
+    } finally {
+      await other.$disconnect();
+    }
   });
 
   it("REFUSES a config that names a database but no usable host — it never skips itself", async () => {
