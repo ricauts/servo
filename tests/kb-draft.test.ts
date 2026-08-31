@@ -33,6 +33,12 @@ vi.mock("@/lib/ai/provider", () => ({
 import { draftReply } from "@/lib/ai/draft";
 import { ingestDocument } from "@/lib/kb/ingest";
 import { mockEmbed, MOCK_EMBEDDER_MODEL } from "@/lib/kb/mock-embedder";
+import { KB_EMBED_SETTING_KEYS } from "@/lib/kb/embed";
+import { KB_EXTRACT_BUDGET_ENV } from "@/lib/kb/settings";
+
+// The same tightening ext-04's and ext-06's own files make: fixtures must not
+// wait out the shipped extraction budget.
+process.env[KB_EXTRACT_BUDGET_ENV] = "20000";
 
 const handles: TmpDb[] = [];
 afterAll(async () => {
@@ -68,6 +74,12 @@ async function ticket(title: string, description: string) {
   return db.ticket.create({
     data: { number: Math.floor(Math.random() * 100000) + 2000, title, description, requesterId: requester.id },
   });
+}
+
+/** The document ids behind a draft's citations, deduped. */
+function citedDocs(draft: { sources: unknown }): string[] {
+  const sources = (draft.sources ?? []) as { docId: string }[];
+  return [...new Set(sources.map((s) => s.docId))].sort();
 }
 
 describe("draftReply — deterministic pre-retrieval", () => {
@@ -120,6 +132,117 @@ describe("draftReply — deterministic pre-retrieval", () => {
     expect(holder.prompts.at(-1)!.user).not.toContain("locked.md");
     expect(holder.prompts.at(-1)!.user).not.toContain("GARDEN-PATH-42");
   });
+
+  it("ticket-derived filters narrow the drafter's retrieval, and only narrow it (ext-07)", async () => {
+    // NO EMBEDDINGS: this runs on the DEFAULT install, so the keyword half
+    // does the selecting and the assertion is substantive rather than carried
+    // by a vector branch that matches every entitled chunk. Both documents
+    // say "invoices cover", so both are keyword candidates for both tickets;
+    // the only thing that separates them is the filter the ticket carries.
+    const big = await ingestDocument({
+      name: "big-invoices.md", contentType: "text/markdown", ownerId: admin.id, visibility: "PUBLIC",
+      bytes: Buffer.from("# Ledger\n\nConsulting invoices cover the period. Total $3,000.00 due on receipt."),
+    });
+    const small = await ingestDocument({
+      name: "small-invoices.md", contentType: "text/markdown", ownerId: admin.id, visibility: "PUBLIC",
+      bytes: Buffer.from("# Ledger\n\nConsulting invoices cover the period. Total $500.00 due on receipt."),
+    });
+    for (const doc of [big, small]) {
+      await db.kbGrant.create({
+        data: { documentId: doc.documentId, subjectType: "AGENT", subjectId: "builtin:drafter", grantedById: admin.id },
+      });
+    }
+
+    const filtered = await draftReply(
+      (await ticket("Invoices", "What do the invoices over $2,000 cover?")).id,
+    );
+    const unfiltered = await draftReply(
+      (await ticket("Invoices", "What do the invoices cover?")).id,
+    );
+
+    // Only the document that satisfies the filter is cited...
+    expect(citedDocs(filtered)).toEqual([big.documentId]);
+    // ...and the same ticket with the filter phrase removed draws from
+    // STRICTLY MORE documents, never fewer: a filter can only remove rows.
+    expect(citedDocs(unfiltered)).toEqual([big.documentId, small.documentId].sort());
+    expect(citedDocs(filtered).every((id) => citedDocs(unfiltered).includes(id))).toBe(true);
+
+    // Provenance is unchanged on the filtered path too, asserted the way
+    // kb-12 asserts it: every stored source's chunk text was in the prompt.
+    const prompts = holder.prompts.map((p) => p.user);
+    for (const s of filtered.sources as { chunkId: string }[]) {
+      const chunk = await db.documentChunk.findUniqueOrThrow({ where: { id: s.chunkId } });
+      expect(prompts.at(-2)).toContain(chunk.text.slice(0, 40));
+    }
+    // ...and the small ledger's text never reached the filtered prompt.
+    expect(prompts.at(-2)).not.toContain("$500.00");
+    expect(prompts.at(-1)).toContain("$500.00");
+  }, 60_000);
+
+  it("a MENTION is not a constraint: ordinary ticket prose never empties the drafter's retrieval (ext-07)", async () => {
+    // The shape this rule exists for. An address, an order id, a URL or an
+    // amount in passing all make the extractor type a fact; ANDed as a gate,
+    // each one takes the draft from cited to uncited, silently, and then
+    // disables kb-14 auto-delivery, which requires a citation. Only a
+    // COMPARATOR-bound filter is treated as something the requester asked for.
+    //
+    // The mock embedder is ON here on purpose: it makes every entitled chunk a
+    // candidate, so the keyword half cannot be what decides the outcome and
+    // the assertion is about the filters alone.
+    await db.setting.create({ data: { key: KB_EMBED_SETTING_KEYS.model, value: "mock" } });
+    const doc = await ingestDocument({
+      name: "Pricing.md", contentType: "text/markdown", ownerId: admin.id, visibility: "PUBLIC",
+      bytes: Buffer.from("# Pricing\n\nThe renewal window for pricing is March and carries a 5% late fee."),
+    });
+    await db.kbGrant.create({
+      data: { documentId: doc.documentId, subjectType: "AGENT", subjectId: "builtin:drafter", grantedById: admin.id },
+    });
+    await embedDoc(doc.documentId);
+
+    const plain = await draftReply((await ticket("Pricing renewal window", "When is the pricing renewal window?")).id);
+    expect(citedDocs(plain)).toEqual([doc.documentId]);
+
+    for (const sentence of [
+      "Please reply to bob@acme.example.",
+      "My order is INV-2024-113.",
+      "See https://example.invalid/help for context.",
+      "I was charged $49.99.",
+      "I signed up on 2026-01-05.",
+      "It took 30 days.",
+    ]) {
+      const t = await ticket("Pricing renewal window", `When is the pricing renewal window? ${sentence}`);
+      const draft = await draftReply(t.id);
+      expect(citedDocs(draft), sentence).toEqual([doc.documentId]);
+    }
+  }, 120_000);
+
+  it("a stated constraint is still honoured when it selects nothing — no silent widening (ext-07)", async () => {
+    // Embeddings on for the same reason: the $500 ledger IS a candidate, so
+    // the empty result below is the filter and nothing else.
+    await db.setting.create({ data: { key: KB_EMBED_SETTING_KEYS.model, value: "mock" } });
+    const doc = await ingestDocument({
+      name: "small-invoices.md", contentType: "text/markdown", ownerId: admin.id, visibility: "PUBLIC",
+      bytes: Buffer.from("# Ledger\n\nConsulting invoices cover the period. Total $500.00 due on receipt."),
+    });
+    await db.kbGrant.create({
+      data: { documentId: doc.documentId, subjectType: "AGENT", subjectId: "builtin:drafter", grantedById: admin.id },
+    });
+    await embedDoc(doc.documentId);
+
+    // The control: without the constraint the same ticket DOES cite it.
+    const control = await draftReply(
+      (await ticket("Invoices", "What do the invoices cover?")).id,
+    );
+    expect(citedDocs(control)).toEqual([doc.documentId]);
+
+    // The only entitled document is a $500 ledger; the requester asked about
+    // invoices over $2,000. Citing it anyway would be worse than citing none.
+    const draft = await draftReply(
+      (await ticket("Invoices", "What do the invoices over $2,000 cover?")).id,
+    );
+    expect(citedDocs(draft)).toEqual([]);
+    expect(holder.prompts.at(-1)!.user).not.toContain("$500.00");
+  }, 60_000);
 
   it("non-entitled-for-the-drafter documents never enter the prompt", async () => {
     const doc = await ingestDocument({

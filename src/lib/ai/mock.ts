@@ -7,6 +7,9 @@
 import { randomUUID } from "crypto";
 import type { Ticket, User } from "@prisma/client";
 import type { Category, ConversationMessage, Priority } from "@/lib/types";
+import { DEFAULT_RULESET } from "@/lib/kb/facts";
+import { parseQueryFilters } from "@/lib/kb/query-filters";
+import { MAX_FILTERS, statedFromFilter } from "@/lib/ai/tools/kb";
 import type { AssistantTurn, ChatProvider, ToolSpec } from "./provider";
 
 export interface MockContext {
@@ -242,11 +245,52 @@ export class MockProvider implements ChatProvider {
     // KB-shaped tickets exercise the knowledge base (kb-11): a ticket that
     // names the knowledge base, a manual or a document gets a search_knowledge
     // call before anything else, so the offline loop exercises the tool.
+    //
+    // The word boundaries below were literal U+0008 BACKSPACE characters in
+    // the shipped file rather than \b escapes, so this branch could only fire
+    // on "knowledge base" or "pricing.md" and never on the three words it
+    // names. ext-07's acceptance is that a mock run ACTUALLY issues a filtered
+    // search, so the escapes are restored. That necessarily WIDENS what fires
+    // relative to the mangled form — a ticket saying "manual" now gets a KB
+    // search, which is what the comment above always claimed happened — and
+    // the words stay exactly as written: singular, so "documents" and
+    // "manuals" still do not match. The test below is the proof.
+    // (src/lib/ai/tools/federation.ts:270 carries the same mangling in a
+    // result string; it is outside this item's files and is reported, not
+    // touched.)
     if (
       available.has("search_knowledge") &&
-      /knowledge base|manual|documentation|document|pricing\.md/i.test(text)
+      /knowledge base|\bmanual\b|\bdocumentation\b|\bdocument\b|pricing\.md/i.test(text)
     ) {
-      steps.push({
+      // ext-07: a KB-shaped ticket whose title also carries a filterable
+      // value ("invoices over $2,000", "renewals in Q1 2026") is searched
+      // WITH THE FILTER STATED, which is what a model handed the `filters`
+      // field would do. The parse is ext-06's shared one and the statement is
+      // its documented inverse, so the mock owns no rules of its own; a title
+      // with nothing filterable produces the byte-identical call it always
+      // did. refDate is the ticket's createdAt, so a fixture's script is
+      // deterministic rather than a function of the day it runs.
+      const parsed = parseQueryFilters(ticket.title, {
+        ...DEFAULT_RULESET,
+        refDate: ticket.createdAt.toISOString().slice(0, 10),
+      });
+      // Capped like the tool caps it: a title that parsed into more than
+      // MAX_FILTERS filters would otherwise script a call the tool refuses
+      // outright, turning an offline demo run into an error.
+      const stated = parsed.filters
+        .map(statedFromFilter)
+        .filter((f): f is NonNullable<typeof f> => f !== null)
+        .slice(0, MAX_FILTERS);
+      // A title that is ENTIRELY a filter phrase leaves no residue, and the
+      // tool requires a query — so that case keeps the plain call rather than
+      // scripting one the tool would refuse.
+      if (stated.length > 0 && parsed.residue !== "") {
+        steps.push({
+          name: "search_knowledge",
+          input: { query: parsed.residue, filters: stated },
+          plan: "This looks like a documentation question with a value to filter on. I'll search the knowledge base and state the filter rather than leave it to be inferred.",
+        });
+      } else steps.push({
         name: "search_knowledge",
         input: { query: ticket.title },
         plan: "This looks like a documentation question — I'll search the knowledge base for an authoritative source before answering.",

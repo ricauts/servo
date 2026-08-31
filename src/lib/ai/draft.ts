@@ -19,6 +19,8 @@ import { pickAgentProfile } from "@/lib/agent-profiles";
 import { draftPrincipalId } from "@/lib/kb/principals";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import { kbSearch } from "@/lib/kb/search";
+import { parseQueryFilters, type QueryFilter } from "@/lib/kb/query-filters";
+import { DEFAULT_RULESET } from "@/lib/kb/facts";
 import { getEmbedSettings, embedWithEndpoint } from "@/lib/kb/embed";
 import { mockEmbed, MOCK_EMBEDDER_MODEL } from "@/lib/kb/mock-embedder";
 import { settingsForProfile, withUsage } from "./credentials";
@@ -59,7 +61,7 @@ export interface DraftSource {
  * passages AND nothing else — the drafter has no other way to reach KB text.
  */
 async function retrieveSources(
-  ticket: { title: string; description: string; requesterId: string; category: string },
+  ticket: { title: string; description: string; requesterId: string; category: string; createdAt: Date },
   comments: { body: string }[],
   profile: { id: string } | null,
 ): Promise<{ passages: string[]; sources: DraftSource[] }> {
@@ -67,9 +69,58 @@ async function retrieveSources(
     agentId: draftPrincipalId(profile),
     humanId: ticket.requesterId,
   };
-  const raw = [ticket.title, ticket.description, ...comments.map((c) => c.body)]
-    .join(" ")
-    .slice(0, 400);
+
+  // ext-07: ticket-derived filters. The SAME extractor ext-06 runs over a
+  // query runs over the ticket's title and description, and the filters it
+  // returns ride into the kbSearch call BELOW — the one that already exists,
+  // under the chain resolved just above. Nothing here widens access: a filter
+  // can only remove rows from a set the entitlement fragment already bounded,
+  // so the worst it can do is retrieve less.
+  //
+  // A CONSTRAINT, NOT A MENTION — and this line is why the drafter is usable.
+  // A ticket is prose written by a requester, not a query written by an
+  // operator. "Please reply to bob@acme.example", "my order is INV-2024-113",
+  // "see https://…/help" all make the extractor type a fact, and an ANDed fact
+  // the corpus happens not to contain takes retrieval from some passages to
+  // NONE: measured over ordinary ticket sentences, the filtered pass came back
+  // empty in sixteen cases out of sixteen. A draft has no readback to say so
+  // (the tool has one; a reply draft cannot), so that failure reaches a human
+  // reviewer as an uncited draft and quietly disables kb-14 auto-delivery,
+  // which requires a citation.
+  //
+  // So the drafter applies only the filters the ticket bound to a COMPARATOR —
+  // ">=", "<=", "between", ext-06's own closed table. "invoices over $2,000"
+  // is a constraint the author stated; an address in the signature is a
+  // mention. Dropping a mention can only WIDEN retrieval, which is the safe
+  // direction here, and it is why this path needs no second query and no
+  // fallback: when the ticket states nothing, the retrieval is byte-identical
+  // to what it was before this item. See §14 question 60 — the owner may want
+  // relative dates ("last quarter", which ext-06 emits as "=") in this set too.
+  //
+  // refDate is the TICKET'S createdAt, resolved the way ingestion resolves a
+  // document's: "last quarter" in a ticket means the quarter before the
+  // ticket was written, not before the draft happened to be generated. A
+  // regenerated draft therefore filters identically to the first one.
+  let parsed: { filters: QueryFilter[]; residue: string } = { filters: [], residue: "" };
+  try {
+    parsed = parseQueryFilters(`${ticket.title} ${ticket.description}`, {
+      ...DEFAULT_RULESET,
+      refDate: ticket.createdAt.toISOString().slice(0, 10),
+    });
+  } catch {
+    /* a throw in the shared extractor degrades to unfiltered retrieval — the
+       same posture the embeddings block below takes, and the same reason: a
+       retrieval aid must never be able to fail a draft. */
+  }
+  const filters = parsed.filters.filter(
+    (f) => f.comparator === ">=" || f.comparator === "<=" || f.comparator === "between",
+  );
+  // The same exchange the tool makes: text leaves the keyword pass only when a
+  // filter takes its place. Without this the phrase would be applied twice —
+  // structurally as the filter AND as ANDed tokens ("over", "2 <-> 000") that
+  // no chunk contains. With no filter applied the text is exactly what it was.
+  const ticketText = filters.length > 0 ? parsed.residue : `${ticket.title} ${ticket.description}`;
+  const raw = [ticketText, ...comments.map((c) => c.body)].join(" ").slice(0, 400);
   // The 'simple' text-search config has no stopwords, so a natural-language
   // query would AND every filler word and match nothing. Drop them (the
   // same stopword list the keyword pass uses) and dedupe.
@@ -99,7 +150,16 @@ async function retrieveSources(
     /* keyword-only on any configuration failure — same path */
   }
 
-  const hits = await kbSearch(db, chain, query, { limit: 6, queryVector: vector, embeddingModel: model });
+  // ONE statement, as before this item: the filters ride into the call that
+  // was already here. A constraint the requester stated is honoured even when
+  // it selects nothing — citing $500 invoices to someone asking about
+  // invoices over $2,000 would be worse than citing none.
+  const hits = await kbSearch(db, chain, query, {
+    limit: 6,
+    queryVector: vector,
+    embeddingModel: model,
+    filters,
+  });
   const passages: string[] = [];
   const sources: DraftSource[] = [];
   let budget = KB_CONTEXT_LIMIT;
