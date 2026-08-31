@@ -11,6 +11,7 @@ import { AUTH_SETTING_KEYS } from "@/lib/authjs";
 import { getMcpConfig, MCP_SETTING_KEYS } from "@/lib/mcp";
 import { EGRESS_SETTING_KEYS, getEgressConfig } from "@/lib/egress";
 import { forbid } from "@/lib/permissions";
+import { isSensitiveSettingKey } from "@/lib/secret-store";
 import { SETTING_KEYS } from "@/lib/types";
 
 /** Shared GET/PUT response. Stored secrets (API key, SMTP URL) are NEVER returned. */
@@ -18,6 +19,12 @@ async function settingsPayload() {
   const rows = await db.setting.findMany();
   const settings: Record<string, string> = {};
   for (const row of rows) {
+    // The predicate first, because it covers the keys whose NAMES are not
+    // known ahead of time — a data source's credential lives at
+    // `datasource.<id>.secret` (xds-01), which no line below can name. The
+    // explicit checks stay: two independent reasons to withhold a secret is
+    // the right number.
+    if (isSensitiveSettingKey(row.key)) continue;
     if (row.key === SETTING_KEYS.apiKey) continue; // never leak the key
     if (row.key === SETTING_KEYS.smtpUrl) continue; // may embed credentials
     if (row.key === GITHUB_SETTING_KEYS.token) continue; // never leak the token

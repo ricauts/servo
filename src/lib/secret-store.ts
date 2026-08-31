@@ -84,3 +84,25 @@ export const SENSITIVE_SETTING_KEYS = new Set([
   "auth.oidc.clientSecret",
   "integration.mcp.token",
 ]);
+
+/**
+ * Setting keys whose value is a secret, INCLUDING the ones whose names are not
+ * known ahead of time. A data source's credential (xds-01) lives at
+ * `datasource.<id>.secret`, so the fixed set above cannot name it — and a
+ * denylist that cannot name a key does not seal it on write and does not
+ * withhold it from `GET /api/settings`, which returns every row it was not
+ * told to skip. The seal-on-write extension in src/lib/db.ts and the settings
+ * route both use this predicate; `scripts/encrypt-secrets.cjs` does NOT — it
+ * is CommonJS with its own hardcoded list, and spec.md question 67 records
+ * what that means for a plaintext row that predates the encryption key.
+ */
+export function isSensitiveSettingKey(key: string): boolean {
+  // A PREFIX/SUFFIX test, not a regex with `[^.]+` in the middle: an id that
+  // contains a dot — a namespaced id from a seed or an import, nothing a cuid
+  // would produce but nothing the column forbids either — would slip past the
+  // stricter form and land its credential in the settings body.
+  return (
+    SENSITIVE_SETTING_KEYS.has(key) ||
+    (key.startsWith("datasource.") && key.endsWith(".secret"))
+  );
+}

@@ -18,3 +18,32 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+
+  # The "external" SQL server. docs/design/external-sources.md's offline-
+  # testability table assigns this service to the xds-* area and xds-04's
+  # acceptance describes it; it lands HERE, at xds-01, because xds-01's last
+  # acceptance criterion is "against a second local Postgres on 5434", and a
+  # criterion that names a second live endpoint cannot be met without one.
+  # Deliberately a DIFFERENT
+  # instance from the 5433 test database, because "a data source may never
+  # point at Servo's own database" is only provable against two real
+  # endpoints — one that must be accepted and one that must be refused.
+  # POSTGRES_DB is `erp` rather than `postgres` so the two servers differ by
+  # database NAME as well as by port: the guard matches on resolved host
+  # addresses and the parsed name, and both hosts here are loopback.
+  extdb:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: servo
+      POSTGRES_PASSWORD: servo
+      POSTGRES_DB: erp
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servo -d erp"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped

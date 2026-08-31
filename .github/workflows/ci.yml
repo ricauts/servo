@@ -30,6 +30,25 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # The "external" SQL server, mirroring docker-compose.test.yml's extdb
+      # (xds-01). CI declares its services by hand rather than invoking the
+      # compose file, so a service added there does not reach here on its own —
+      # and without it tests/kb-source-schema.test.ts cannot prove the
+      # never-Servo's-own-database guard against two real endpoints, which is
+      # xds-01's last acceptance criterion. `npm test` exits 1 without it.
+      extdb:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: servo
+          POSTGRES_PASSWORD: servo
+          POSTGRES_DB: erp
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U servo -d erp"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v5
 

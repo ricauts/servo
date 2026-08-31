@@ -30,6 +30,7 @@ model User {
   memberships      GroupMember[]
   ownedDocuments   Document[]
   grantedKb        KbGrant[]     @relation("kbGranter")
+  createdSources   DataSource[]
 }
 
 model Group {
@@ -400,7 +401,15 @@ model Document {
   // CatalogEntry.profile and its data is NULL by the migration's CHECK —
   // every redaction made in the renderer would be bypassed by one download.
   data        Bytes? // bytea; never selected outside the download route
-  textStatus  String   @default("PENDING") // PENDING | EXTRACTING | EXTRACTED | FAILED | UNSUPPORTED
+  // GONE (xds-01) is the tombstone deletion propagation will write: the record
+  // was indexed once and has since been removed upstream. textStatus has never
+  // carried a CHECK, so the value was always STORABLE and this item does not
+  // change that; what it adds is the name. Nothing WRITES it and nothing
+  // EXCLUDES it yet
+  // — the read-path exclusion arrives with xds-02's source clause and the
+  // writer with xds-06. Like every other textStatus value it is a documented
+  // String, not a CHECK, so a typo stores identically.
+  textStatus  String   @default("PENDING") // PENDING | EXTRACTING | EXTRACTED | FAILED | UNSUPPORTED | GONE
   textError   String?
   // Extractor provenance (dcl-01): which extractor id produced the chunks,
   // the exact library versions it names, which extractor answered instead
@@ -431,6 +440,18 @@ model Document {
   // back-linked by catalogEntryId. FILE is every ordinary upload.
   kind           String   @default("FILE") // FILE | CATALOG
   catalogEntryId String?  @unique
+
+  // The connection layer (xds-01). A crawled record IS a Document, which is
+  // why INDEX mode needs no second retrieval path. onDelete: Restrict because
+  // deleting a source while its documents remain would orphan every citation
+  // that names them — disable is the reversible action, purge the deliberate
+  // one. externalVersion is the S3 ETag or the sha256 of a rendered row;
+  // externalSeenAt is the generation stamp deletion propagation reads.
+  sourceId        String?
+  source          DataSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  externalLocator Json?
+  externalVersion String?
+  externalSeenAt  DateTime?
 }
 
 
@@ -519,12 +540,54 @@ model KbGrant {
   document     Document?   @relation(fields: [documentId], references: [id], onDelete: Cascade)
   collectionId String?
   collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  // The third target type (xds-01). A DataSource grant is a CEILING, not a
+  // floor: it is applied once outside the entitlement union, so it never
+  // grants the documents a source fed — both a source grant and a document
+  // path are required. The one-target CHECK is widened to num_nonnulls(...) = 1.
+  sourceId     String?
+  source       DataSource? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   subjectType  String // USER | GROUP | AGENT
   subjectId    String // User.id | Group.id | AgentProfile.id | "builtin:*"
   access       String      @default("READ") // READ | MANAGE
   grantedById  String
   grantedBy    User        @relation("kbGranter", fields: [grantedById], references: [id])
   createdAt    DateTime    @default(now())
+}
+
+// An external store Servo does not own (xds-01, canonized in
+// docs/design/external-sources.md). INDEX is the only mode in v1 — crawled
+// content becomes ordinary Document rows, so the one entitlement statement
+// keeps working and there is no second retrieval path. Every union below is a
+// String pinned by a CHECK in the migration, never a Prisma enum and never a
+// JavaScript-only validator: a row written by a seed, a migration or a direct
+// write is as constrained as one written by the route.
+//
+// configJson is NON-SECRET only (endpoint, region, host, port, database, ssl);
+// the credential lives in the sealed store under secretRef. scopeJson is the
+// whole security model of the connection — an explicit allowlist with no
+// wildcard and no free-text `where`, EMPTY by default, which reaches nothing.
+model DataSource {
+  id                 String    @id @default(cuid())
+  name               String    @unique
+  kind               String // S3 | POSTGRES              (CHECK-pinned)
+  mode               String    @default("INDEX") // INDEX only in v1        (CHECK-pinned)
+  configJson         Json      @default("{}")
+  secretRef          String // a Setting key — never the credential itself
+  scopeJson          Json      @default("[]")
+  status             String    @default("DISABLED") // DISABLED | READY | SYNCING | ERROR | UNREACHABLE | PURGED
+  statusError        String?
+  lastSyncAt         DateTime?
+  lastCompleteSyncAt DateTime? // only a COMPLETE crawl may propagate deletions
+  cursorJson         Json      @default("{}")
+  syncEveryMin       Int       @default(0) // a HINT for the external caller; Servo has no scheduler
+  maxRows            Int       @default(20000)
+  createdById        String
+  createdBy          User      @relation(fields: [createdById], references: [id])
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  documents Document[]
+  grants    KbGrant[]
 }
 
 // The catalog (cat-01, canonized verbatim in docs/design/data-fabric.md):
