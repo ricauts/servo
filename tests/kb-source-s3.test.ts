@@ -6,7 +6,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
 import { tmpDb, type TmpDb } from "./helpers/tmp-db";
 
@@ -50,6 +50,9 @@ beforeAll(async () => {
     endpoint: ENDPOINT, region: "us-east-1", forcePathStyle: true,
     credentials: { accessKeyId: "test", secretAccessKey: "test" },
   });
+  // The bucket may or may not pre-exist (initialBuckets support varies by
+  // image tag) — create-if-absent is idempotent either way.
+  await uploader.send(new CreateBucketCommand({ Bucket: BUCKET })).catch(() => undefined);
   // Seed the bucket: three in-scope objects and two out-of-scope ones.
   await uploader.send(new PutObjectCommand({ Bucket: BUCKET, Key: "notes/readme.md", Body: "# Readme\n\nThe support roster is on page two.", ContentType: "text/markdown" }));
   await uploader.send(new PutObjectCommand({ Bucket: BUCKET, Key: "docs/manual.pdf", Body: readFileSync("tests/fixtures/kb/manual.pdf"), ContentType: "application/pdf" }));
