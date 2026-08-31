@@ -47,3 +47,15 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+
+  # xds-03: the object-store fixture endpoint. s3mock (Apache-2.0) speaks
+  # the S3 API on 9090; the crawler's tests put fixture objects into it.
+  s3:
+    image: adobe/s3mock:latest
+    ports:
+      - "9090:9090"
+    environment:
+      # s3mock accepts any credentials; the crawler still REFUSES to run
+      # without its own sealed pair — the refusal is the test's, not the
+      # mock's permissiveness.
+      initialBuckets: "fixtures"
