@@ -22,7 +22,8 @@ vi.mock("@/lib/db", () => ({ get db() { return holder.db; } }));
 vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => holder.user }));
 
 import { GET as getFacts, type FactsResponse } from "@/app/api/kb/documents/[id]/facts/route";
-import { GET as search, describeFilter, operandText, parseDropped, type KbSearchResponse } from "@/app/api/kb/search/route";
+import { GET as search } from "@/app/api/kb/search/route";
+import { describeFilter, operandText, parseDropped, type KbSearchResponse } from "@/lib/kb/filter-view";
 import { assumptionNote, factValue } from "@/components/kb/fact-assumptions";
 import { parseQueryFilters } from "@/lib/kb/query-filters";
 import { ingestDocument } from "@/lib/kb/ingest";
