@@ -68,9 +68,19 @@ function entitledCteSql(
     UNION
     SELECT COALESCE(g."documentId", d.id) AS id FROM "KbGrant" g
       LEFT JOIN "Document" d ON d."collectionId" = g."collectionId"
-     WHERE (g."subjectType" = 'USER' AND g."subjectId" = ${lit(humanId)})
+     -- A SOURCE-target grant (xds-01's third target type) reaches this branch
+     -- with BOTH target columns NULL, so the LEFT JOIN misses and
+     -- COALESCE(NULL, NULL) would put a NULL id into the entitled set — which
+     -- entitledDocumentIds() then hands to an id-IN filter as a non-string.
+     -- A source grant entitles NOTHING on its own (it is a CEILING applied
+     -- outside this union, at xds-02), so it is excluded here rather than
+     -- coalesced away. Delete this line and any principal holding a source
+     -- grant breaks every read path that goes through entitledDocumentIds()
+     -- — the paths that JOIN this CTE structurally just never match the NULL.
+     WHERE g."sourceId" IS NULL
+       AND ((g."subjectType" = 'USER' AND g."subjectId" = ${lit(humanId)})
         OR (g."subjectType" = 'GROUP' AND g."subjectId" IN
-              (SELECT "groupId" FROM "GroupMember" WHERE "userId" = ${lit(humanId)}))
+              (SELECT "groupId" FROM "GroupMember" WHERE "userId" = ${lit(humanId)})))
     ${catalogBranch(lit(humanId), "datasource_readable_by_human", "userId")}
   )
 ${
@@ -78,7 +88,9 @@ ${
     ? `, agent_docs AS (
     SELECT COALESCE(g."documentId", d.id) AS id FROM "KbGrant" g
       LEFT JOIN "Document" d ON d."collectionId" = g."collectionId"
-     WHERE g."subjectType" = 'AGENT' AND g."subjectId" = ${lit(agentId)}
+     -- Same exclusion as the human leg above, for the same reason.
+     WHERE g."sourceId" IS NULL
+       AND g."subjectType" = 'AGENT' AND g."subjectId" = ${lit(agentId)}
     ${catalogBranch(lit(agentId), "datasource_readable_by_agent", "agentId")}
   ), entitled AS (
     SELECT id FROM human_docs

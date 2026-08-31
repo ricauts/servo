@@ -15,7 +15,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { forbid } from "@/lib/permissions";
 import { MCP_TRANSPORTS, syncMcpServerTools } from "@/lib/mcp-client";
-import { isHttpUrl, MAX_HEADERS, validHeaderObject, view } from "../route";
+import { isHttpUrl, MAX_HEADERS, validHeaderObject, view } from "@/lib/mcp-server-view";
 
 export const dynamic = "force-dynamic";
 

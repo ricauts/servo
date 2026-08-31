@@ -47,12 +47,8 @@ import {
   syncMcpServerTools,
   toolHash,
 } from "@/lib/mcp-client";
-import {
-  GET as listServers,
-  MAX_HEADERS,
-  POST as createServerRoute,
-  validHeaderObject,
-} from "@/app/api/mcp-servers/route";
+import { GET as listServers, POST as createServerRoute } from "@/app/api/mcp-servers/route";
+import { MAX_HEADERS, validHeaderObject } from "@/lib/mcp-server-view";
 import {
   DELETE as deleteServer,
   PATCH as patchServer,

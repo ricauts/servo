@@ -22,7 +22,12 @@ export type Action =
   | "kb.view"
   | "kb.upload"
   | "kb.share"
-  | "kb.manage";
+  | "kb.manage"
+  // External data sources (xds-01): viewing a connection is a staff read;
+  // creating or editing one is an admin act, because a source's scope is the
+  // whole security model of the connection.
+  | "kb.sources.view"
+  | "kb.sources.manage";
 
 const MATRIX: Record<Action, Role[]> = {
   "ticket.create": ["ADMIN", "AGENT", "REQUESTER"],
@@ -47,6 +52,9 @@ const MATRIX: Record<Action, Role[]> = {
   "kb.upload": ["ADMIN", "AGENT"],
   "kb.share": ["ADMIN", "AGENT"],
   "kb.manage": ["ADMIN"],
+  // Additive exactly as rbac-01's rows are: never REQUESTER, never AI_AGENT.
+  "kb.sources.view": ["ADMIN", "AGENT"],
+  "kb.sources.manage": ["ADMIN"],
 };
 
 export function can(user: Pick<User, "role">, action: Action): boolean {

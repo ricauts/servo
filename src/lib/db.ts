@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { open, seal, SENSITIVE_SETTING_KEYS } from "@/lib/secret-store";
+import { open, seal, isSensitiveSettingKey } from "@/lib/secret-store";
 
 // Secrets are encrypted at the write boundary (Setting values for sensitive
 // keys; AiCredential.apiKey, CustomTool.secret, Webhook.secret, and
@@ -18,13 +18,22 @@ function sealSetting<T extends { key?: string; value?: string }>(
 ): void {
   if (!data || typeof data.value !== "string") return;
   const settingKey = data.key ?? key;
-  if (settingKey && SENSITIVE_SETTING_KEYS.has(settingKey)) {
+  if (settingKey && isSensitiveSettingKey(settingKey)) {
     data.value = seal(data.value);
   }
 }
 
 function openSetting<T extends SettingRow>(row: T): T {
-  if (row && SENSITIVE_SETTING_KEYS.has(row.key)) row.value = open(row.value);
+  // BOTH fields are guarded, because either can be absent: a caller that projects
+  // `select: { key: true }` has no `value` for open() to read, and one that
+  // projects `select: { value: true }` has no `key` for the predicate. Either
+  // way the old code read .startsWith of undefined and 500'd the request. A
+  // projection is a perfectly ordinary thing for a caller to do —
+  // src/app/api/kb/sources/route.ts does it to learn whether a credential
+  // EXISTS without ever reading it — so this boundary has to be total.
+  if (row && typeof row.key === "string" && typeof row.value === "string" && isSensitiveSettingKey(row.key)) {
+    row.value = open(row.value);
+  }
   return row;
 }
 
