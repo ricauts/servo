@@ -398,10 +398,17 @@ export const SERVO_DATABASE_URL_VARS = [
  *
  * EVERY LOOPBACK AND UNSPECIFIED ADDRESS FOLDS TO ONE TOKEN. Address-set
  * intersection is not host identity: `0.0.0.0`, `::`, `::1` and any
- * `127.x.x.x` all reach the local machine, and a set-intersection that keeps
- * them apart accepts `0.0.0.0` as "a different server" from `localhost` while
- * both connect to the same postmaster (proven with pg_control_system's
- * system_identifier). Folding can only produce refusals, never acceptances.
+ * `127.x.x.x` name the local machine, and a set-intersection that keeps them
+ * apart would accept `0.0.0.0` as "a different server" from `localhost`.
+ *
+ * `0.0.0.0` as a DESTINATION is a kernel courtesy — Linux routes it to the
+ * local host — and not every stack extends it: a WSL host will accept the
+ * dial from node's socket and refuse it from Prisma's Rust engine. So the
+ * folding is justified by that kernel behaviour rather than by a test that
+ * dials it, and the test asserts the two things that ARE portable: the guard
+ * refuses every one of these spellings, and two spellings resolving to one
+ * address really are one postmaster. Folding can only produce refusals, never
+ * acceptances, so a platform that cannot reach `0.0.0.0` loses nothing by it.
  */
 function normalizeAddress(address: string): string {
   const lower = address.toLowerCase().split("%")[0];
