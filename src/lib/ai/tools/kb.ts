@@ -584,7 +584,7 @@ export const kbTools: Record<string, ToolDef> = {
          SELECT c.id, c.name, count(e.id) AS n
            FROM "Collection" c
            JOIN "Document" d ON d."collectionId" = c.id
-           JOIN entitled e ON e.id = d.id
+           JOIN readable e ON e.id = d.id
           GROUP BY c.id, c.name
           HAVING count(e.id) > 0
           ORDER BY c.name`,

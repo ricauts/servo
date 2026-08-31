@@ -122,7 +122,7 @@ export async function routeSources(
         ) AS alt,
         ${entityTs ? `BOOL_OR(c.tsv @@ to_tsquery('simple', ${entityTs}))` : "FALSE"} AS entity_hit
       FROM "Document" d
-      JOIN entitled e ON e.id = d.id
+      JOIN readable e ON e.id = d.id
       LEFT JOIN "DocumentChunk" c ON c."documentId" = d.id
         AND (c.tsv @@ websearch_to_tsquery('simple', ${q})
              ${entityTs ? `OR c.tsv @@ to_tsquery('simple', ${entityTs})` : ""})
@@ -175,7 +175,7 @@ export async function routeSources(
             ON sibling."dataSourceId" = ce_s."dataSourceId"
            AND sibling."documentId" IS NOT NULL
            AND sibling."documentId" <> s.id
-          JOIN entitled e2 ON e2.id = sibling."documentId"
+          JOIN readable e2 ON e2.id = sibling."documentId"
         UNION ALL
         -- Seed anchors (hop 0, carried 1) so edge walks have a base.
         SELECT s.id, s.id, 0, 1.0::float FROM seeds s
@@ -201,7 +201,7 @@ export async function routeSources(
           -- a post-filter over the final rows makes the fed-02 red-team test
           -- fail: the expansion would traverse B and disclose its id, its
           -- name and the edge evidence to a principal not entitled to B.
-          JOIN entitled eN ON eN.id = nxt.id
+          JOIN readable eN ON eN.id = nxt.id
          WHERE g.hop < 2  -- depth capped BY THE CTE, not by a JS slice
            AND k.weight > 0
            AND nxt.id <> g.seed_id

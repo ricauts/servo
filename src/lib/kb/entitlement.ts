@@ -100,7 +100,53 @@ ${
     : `, entitled AS (
     SELECT id FROM human_docs
   )`
-}`;
+}, readable AS (
+    -- THE SOURCE CEILING (xds-02), applied ONCE, OUTSIDE the union — never
+    -- AND-ed into human_docs or agent_docs, where the LEFT JOINed Document
+    -- is all-NULL for a direct document grant and both predicates would
+    -- give the wrong answer. Deleting this clause makes the source tests
+    -- fail — mirroring kb-10's JOIN-entitled comment, this is the gate a
+    -- source-backed document cannot be read without.
+    --
+    -- Two legs, deliberately NOT one OR-block over all subject types: the
+    -- human leg EXISTSes over USER/GROUP source grants for $1 alone, the
+    -- agent leg over AGENT source grants for $2 alone, skipped when the
+    -- agent is NULL. One block would let the requester's grant satisfy
+    -- the agent leg — the opposite of A INTERSECT B.
+    --
+    -- Status: NOT IN ('DISABLED','PURGED') — NOT = 'READY'. A full crawl
+    -- (SYNCING) and an UNREACHABLE source leave every indexed document
+    -- retrievable; a pending kb-13 send is not refused by a routine sync.
+    SELECT e.id FROM entitled e
+      JOIN "Document" d ON d.id = e.id
+     WHERE d."sourceId" IS NULL
+        OR (
+          d."textStatus" <> 'GONE'
+          AND NOT EXISTS (
+            SELECT 1 FROM "DataSource" s
+             WHERE s.id = d."sourceId"
+               AND s.status IN ('DISABLED','PURGED')
+          )
+          AND EXISTS (
+            SELECT 1 FROM "KbGrant" sg
+             WHERE sg."sourceId" = d."sourceId"
+               AND sg."subjectType" IN ('USER','GROUP')
+               AND (sg."subjectId" = ${lit(humanId)}
+                    OR (sg."subjectType" = 'GROUP' AND sg."subjectId" IN
+                         (SELECT "groupId" FROM "GroupMember" WHERE "userId" = ${lit(humanId)})))
+          )${
+            agentId
+              ? `
+          AND EXISTS (
+            SELECT 1 FROM "KbGrant" sg2
+             WHERE sg2."sourceId" = d."sourceId"
+               AND sg2."subjectType" = 'AGENT'
+               AND sg2."subjectId" = ${lit(agentId)}
+          )`
+              : ""
+          }
+        )
+  )`;
 }
 
 /** The resolved principal pair every KB read needs. */
@@ -123,6 +169,6 @@ export async function entitledDocumentIds(
     chain.agentId !== null
       ? agentChainCte(chain.humanId, chain.agentId)
       : humanChainCte(chain.humanId);
-  const rows = await db.$queryRawUnsafe<{ id: string }[]>(`${cte} SELECT id FROM entitled`);
+  const rows = await db.$queryRawUnsafe<{ id: string }[]>(`${cte} SELECT id FROM readable`);
   return rows.map((r) => r.id);
 }

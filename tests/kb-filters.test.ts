@@ -276,13 +276,15 @@ describe("filters inside kb-10's single statement", () => {
 
     expect(rec.calls).toHaveLength(1); // no second query, no post-filter pass
     const sql = rec.calls[0];
-    expect(sql.match(/EXISTS \(/g)).toHaveLength(2);
+    // xds-02's readable CTE contributes its own EXISTS pair to the
+    // composed statement; the filter compiler's is scoped by alias below.
+    expect((sql.match(/f_\d+\."documentId" = c\."documentId"/g) ?? []).length).toBe(2);
     // Correlated to a documentId the outer query already constrained...
     expect(sql).toContain('f_0."documentId" = c."documentId"');
     expect(sql).toContain('f_1."documentId" = c."documentId"');
     // ...and joined to the entitlement fragment as well.
-    expect(sql).toContain('JOIN entitled e_0 ON e_0.id = f_0."documentId"');
-    expect(sql).toContain('JOIN entitled e_1 ON e_1.id = f_1."documentId"');
+    expect(sql).toContain('JOIN readable e_0 ON e_0.id = f_0."documentId"');
+    expect(sql).toContain('JOIN readable e_1 ON e_1.id = f_1."documentId"');
     // The EXISTS clauses are ANDed onto the WHERE, not a separate SELECT.
     expect(sql.match(/SELECT \* FROM \(/g)).toHaveLength(1);
 
@@ -297,7 +299,9 @@ describe("filters inside kb-10's single statement", () => {
     await kbSearch(rec.client, { humanId: requester.id, agentId: null }, "invoices");
     expect(rec.calls).toHaveLength(1);
     expect(rec.calls[0]).not.toContain("DocumentFact");
-    expect(rec.calls[0]).not.toContain("EXISTS (");
+    // No FILTER aliases when no filters parse (readable's own EXISTS
+    // is part of the ceiling now, not the filter compiler).
+    expect(rec.calls[0]).not.toMatch(/f_\d+\./);
   });
 
   it("FILTERS NARROW, NEVER WIDEN — with and without embeddings, the identical code path", async () => {

@@ -124,7 +124,7 @@ describe("one statement, CTE outermost, no JS scoring", () => {
     // entitled, and no JS-side sort/scoring happened — the SELECT carries
     // the full ORDER BY.
     expect(statements[0].trimStart().startsWith("WITH RECURSIVE human_docs")).toBe(true);
-    expect(statements[0]).toMatch(/JOIN entitled e ON e\.id = d\.id/);
+    expect(statements[0]).toMatch(/JOIN readable e ON e\.id = d\.id/); // xds-02: the source ceiling wraps entitled
     expect(statements[0]).toMatch(/ORDER BY entity_hit DESC NULLS LAST, score DESC, document_id ASC/);
     expect(result.sources.length).toBeGreaterThan(0);
   });
