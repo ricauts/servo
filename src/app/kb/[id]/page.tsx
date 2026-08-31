@@ -9,6 +9,7 @@ import { relatedDocuments } from "@/lib/kb/graph";
 import { statusCopy } from "@/components/kb/KbDocumentList";
 import KbSharePanel from "@/components/kb/KbSharePanel";
 import KbReextractButton from "@/components/kb/KbReextractButton";
+import KbFactChips from "@/components/kb/KbFactChips";
 import PageHeader from "@/components/shell/PageHeader";
 import EmptyState from "@/components/legacy/EmptyState";
 
@@ -127,13 +128,24 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
         </p>
       )}
 
+      {/* ext-08: the typed values this document's text carried, as chips that
+          link to the chunk and offset they were read from. A document with no
+          facts renders NOTHING here — absence is the ordinary case on prose. */}
+      <KbFactChips documentId={doc.id} />
+
       <div className="mt-6 grid gap-6 md:grid-cols-[1fr_240px]">
         <div className="flex flex-col gap-2">
           <h2 className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
             Chunks · {chunks.length}
           </h2>
           {chunks.map((chunk) => (
-            <article key={chunk.id} className="rounded-md border border-border bg-card p-3">
+            <article
+              key={chunk.id}
+              // The anchor a fact chip links to (ext-08). scroll-mt clears the
+              // sticky header so the chunk a chip names is actually visible.
+              id={`chunk-${chunk.id}`}
+              className="scroll-mt-20 rounded-md border border-border bg-card p-3"
+            >
               <p className="font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">
                 {describeLocator(chunk.locator)}
               </p>

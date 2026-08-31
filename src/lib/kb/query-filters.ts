@@ -71,6 +71,18 @@ export interface QueryFilter {
   confidence: FactConfidence;
   /** The surface text this filter was read from — the readback's material. */
   text: string;
+  /**
+   * The two operand surfaces of a TWO-SIDED filter, present only there.
+   *
+   * `text` on a two-sided filter is the whole span from the first operand to
+   * the second — "$1,000 and $2,000", "2025-01-05 y 2025-03-01" — because
+   * that is what a readback should show the operator. A reader that needs
+   * the VALUES without the join word cannot recover them from `text`: the
+   * join is an ordinary word, and a DATE range carries comparator "=" like
+   * any other date, so the shape is not inferable from the other fields
+   * either. Recording them here is the only place that knows.
+   */
+  operands?: [string, string];
 }
 
 export interface ParsedQuery {
@@ -442,11 +454,16 @@ export function parseQueryFilters(query: string, ruleset: FactRuleset): ParsedQu
     if (second === -1) continue;
     const a = facts[first].fact;
     const b = facts[second].fact;
+    const operands: [string, string] = [
+      surfaceOf(text, facts[first].span),
+      surfaceOf(text, facts[second].span),
+    ];
     if (a.kind === "DATE" && b.kind === "DATE") {
       filters.push({
         kind: "DATE", comparator: "=", ts: Math.min(a.ts, b.ts), tsEnd: Math.max(a.tsEnd, b.tsEnd),
         confidence: a.confidence === "ASSUMED" || b.confidence === "ASSUMED" ? "ASSUMED" : "EXACT",
         text: text.slice(facts[first].span.start, facts[second].span.end),
+        operands,
       });
     } else if (numericKind(a.kind) && numericKind(b.kind)) {
       const an = a as Extract<Fact, { num: number }>;
@@ -456,6 +473,7 @@ export function parseQueryFilters(query: string, ruleset: FactRuleset): ParsedQu
         kind: a.kind, comparator: "between", num: Math.min(an.num, bn.num), num2: Math.max(an.num, bn.num), unit: an.unit,
         confidence: confidenceOf(a) === "ASSUMED" || confidenceOf(b) === "ASSUMED" ? "ASSUMED" : "EXACT",
         text: text.slice(facts[first].span.start, facts[second].span.end),
+        operands,
       });
     } else {
       continue;
