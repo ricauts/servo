@@ -139,6 +139,25 @@ describe("kbSearch", () => {
     expect(keywordOnly[0]?.text).toContain("discount season");
   });
 
+  it("ext-06 changes nothing when no filters are passed: still ONE statement, no fact join", async () => {
+    const { db, admin } = await fresh();
+    await ingestDocument({
+      name: "plain.md", contentType: "text/markdown", ownerId: admin.id,
+      bytes: Buffer.from("# Plain\n\nrenewal pricing content"),
+    });
+    const calls: string[] = [];
+    const client = {
+      $queryRawUnsafe<T>(sql: string): Promise<T> {
+        calls.push(sql);
+        return db.$queryRawUnsafe<T>(sql);
+      },
+    };
+    const hits = await kbSearch(client, { humanId: admin.id, agentId: null }, "renewal pricing");
+    expect(hits.length).toBeGreaterThan(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toContain("DocumentFact");
+  });
+
   it("excludes chunks whose embeddingModel differs from the current setting", async () => {
     const { db, admin } = await fresh();
     const doc = await ingestDocument({
