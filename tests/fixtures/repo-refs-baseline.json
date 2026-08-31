@@ -110,12 +110,6 @@
       "finding": "unreferenced",
       "reason": "type-only devDependency for validator's subpath imports (validator/lib/isEmail has no bundled types); required by tsc, never imported at runtime",
       "owner": "ext-02"
-    },
-    {
-      "name": "@aws-sdk/client-s3",
-      "finding": "unreferenced",
-      "reason": "imported by src/lib/kb/sources/s3.ts through a path the scanner's import walk does not follow into the sources/ subdirectory in this check's configuration; the xds-03 suite pins the exact three-command import line instead",
-      "owner": "xds-03"
     }
   ]
 }
