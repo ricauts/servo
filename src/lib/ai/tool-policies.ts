@@ -156,6 +156,49 @@ export const DEFAULT_TOOL_POLICIES: DefaultToolPolicy[] = [
     requiresApproval: false,
   },
   {
+    toolName: "search_knowledge",
+    description: "Search the company knowledge base for cited passages (entitlement-filtered).",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "read_document",
+    description: "Read one knowledge-base document, paginated by locator cursor.",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "list_collections",
+    description: "List knowledge-base collections with readable-document counts.",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "find_sources",
+    description: "Rank the readable datasets for a question and return short briefs.",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "open_dataset",
+    description: "Read one dataset's card section by section, with a cursor.",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "discard_source",
+    description: "Drop a dataset or source from consideration; returns the next candidates.",
+    riskLevel: "LOW",
+    requiresApproval: false,
+  },
+  {
+    toolName: "query_dataset",
+    description:
+      "Run ONE read-only SQL statement against a dataset's silo. Every row crosses an approval gate first.",
+    riskLevel: "HIGH",
+    requiresApproval: true,
+  },
+  {
     toolName: "escalate_to_human",
     description:
       "Hand the ticket to a human teammate when the main objective could not be completed.",

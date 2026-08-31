@@ -1,11 +1,38 @@
 services:
+  db:
+    # The official `postgres` image does NOT ship pgvector — this one does.
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: servo
+      POSTGRES_PASSWORD: servo # override in production
+      POSTGRES_DB: servo
+    volumes:
+      - servo-db:/var/lib/postgresql/data
+      # Idempotent setup for the ops sandbox; filled by db-05, and only
+      # ever runs on an EMPTY data directory.
+      - ./scripts/postgres-init.sql:/docker-entrypoint-initdb.d/10-servo.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servo -d servo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   servo:
     build: .
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: "file:/data/servo.db"
-      OPS_DATABASE_URL: "file:/data/ops.db"
+      DATABASE_URL: "postgresql://servo:servo@db:5432/servo?schema=public"
+      # The ops sandbox (db-05): its own Postgres database behind two roles —
+      # rw for the gated mutating tool, ro for every read. postgres-init.sql
+      # creates both on a fresh volume; upgrades apply the same SQL by hand
+      # (docs/migrating-to-postgres.md).
+      OPS_DATABASE_URL: "postgresql://servo_ops_rw:servo_ops_rw@db:5432/servo_ops?schema=public"
+      OPS_DATABASE_READONLY_URL: "postgresql://servo_ops_ro:servo_ops_ro@db:5432/servo_ops?schema=public"
       # Production checklist (see SECURITY.md):
       # AUTH_SECRET: "any-long-random-string"            # session signing
       # SERVO_ENCRYPTION_KEY: "64-hex-or-passphrase"     # secrets encrypted at rest
@@ -16,8 +43,12 @@ services:
       # clean install (never combine with real use):
       # SERVO_DEMO: "1"
     volumes:
+      # Legacy SQLite volume: kept one release so upgraders can run the
+      # one-shot import (db-07) against /data/servo.db; removable after.
+      # The app itself no longer reads it.
       - servo-data:/data
     restart: unless-stopped
 
 volumes:
+  servo-db:
   servo-data:

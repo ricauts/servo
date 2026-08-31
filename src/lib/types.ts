@@ -1,9 +1,11 @@
-// Shared enum-like unions and API payload shapes. SQLite has no enums, so
-// these unions are the single source of truth for the string values stored in
-// the database. Keep prisma/seed.ts and all agents consistent with them.
+// Shared enum-like unions and API payload shapes. Enum-like fields are strings
+// BY CHOICE, not by dialect — see prisma/schema.prisma: a Prisma enum would turn
+// every new status or role into a migration. These unions are the single source
+// of truth for the string values stored in the database. Keep prisma/seed-core.ts
+// and all agents consistent with them.
 
 export type Role = "ADMIN" | "AGENT" | "REQUESTER" | "AI_AGENT";
-export type AiKind = "TRIAGE" | "RESOLVER" | "QA";
+export type AiKind = "TRIAGE" | "RESOLVER" | "QA" | "DRAFT";
 
 export type TicketStatus =
   | "OPEN"
@@ -25,6 +27,10 @@ export type Category =
   | "OTHER";
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
+
+/** Outcome of one MCP tools/call, recorded on every McpCall row. ERROR exists
+ * because a tool that throws must still leave a trail. */
+export type McpCallDecision = "EXECUTED" | "REFUSED_POLICY" | "REFUSED_UNKNOWN" | "ERROR";
 
 /** Escalation tiers within a group, lowest to highest. */
 export type Seniority = "JUNIOR" | "MID" | "SENIOR";
@@ -52,6 +58,11 @@ export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type DraftStatus = "PENDING" | "SENT" | "REJECTED";
 
+/** How a ticket entered the desk (ux-03). CHAT is in the union for the
+ *  roadmap chat surface (ux-07) — nothing may stamp it in v1, and it must
+ *  survive here until that surface ships. */
+export type TicketChannel = "WEB" | "EMAIL" | "MCP" | "CHAT";
+
 export const TICKET_STATUSES: TicketStatus[] = [
   "OPEN",
   "TRIAGED",
@@ -60,6 +71,7 @@ export const TICKET_STATUSES: TicketStatus[] = [
   "RESOLVED",
   "CLOSED",
 ];
+export const TICKET_CHANNELS: TicketChannel[] = ["WEB", "EMAIL", "MCP", "CHAT"];
 export const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 export const CATEGORIES: Category[] = [
   "ACCESS",
@@ -85,6 +97,14 @@ export interface ConversationMessage {
   role: "user" | "assistant";
   content: ContentBlock[];
 }
+
+/**
+ * Content provenance (cnp-06): bundled with the desk ("local") or shipped by
+ * an installed plugin ("plugin:<name>", the plugin.json's kebab-case name).
+ * Plugin content is namespaced <plugin>--<slug> and arrives DISABLED; the
+ * kind is recorded so the UI can say where a skill or profile came from.
+ */
+export type OriginKind = "local" | `plugin:${string}`;
 
 // ---------------------------------------------------------------------------
 // Settings keys (Setting table). Values are strings; booleans are "true"/"false".
@@ -128,4 +148,11 @@ export interface KpiResponse {
   // sentAsIs vs edited is the AI acceptance signal for drafted replies.
   draftStats: { pending: number; sentAsIs: number; edited: number; discarded: number };
   topRequesters: { name: string; count: number }[]; // last 30d, top 5
+  // Skill KPIs (reb-06). null = "not applicable" (no runs / no enabled
+  // skills), rendered "n/a" - never NaN.
+  skills: {
+    skillInformedRunRate: number | null; // share of completed resolver runs (30d) with >=1 read_skill step
+    skillsDistilledThisMonth: number; // Skill rows with sourceTicketId created this calendar month
+    skillCoverage: number | null; // share of ticket categories claimed by >=1 enabled skill
+  };
 }

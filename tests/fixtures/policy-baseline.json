@@ -1,0 +1,125 @@
+{
+  "$comment": "Quarantine-rail baseline (loop-06). Snapshots the DEFAULT_TOOL_POLICIES rows\nas of 2026-08-27. A tool present here may keep its snapshotted policy; a tool\nABSENT from here must carry the triple { enabled: false, requiresApproval: true,\nriskLevel: \"HIGH\" } until a human downgrades it. Changing this file is an owner\nsign-off event: the commit message must flag it, and policy-guard fails on\nvalue drift or removals.\nAdditions 2026-08-28 (fed-04, owner sign-off in the commit message): the four\nfederation tools — find_sources/open_dataset/discard_source LOW+no-approval,\nquery_dataset HIGH+approval (all enabled:false by the DB default on intake).",
+  "tools": {
+    "query_ops_database": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "execute_ops_sql": {
+      "riskLevel": "HIGH",
+      "requiresApproval": true
+    },
+    "get_device_info": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "reset_password": {
+      "riskLevel": "MEDIUM",
+      "requiresApproval": false
+    },
+    "github_create_repo": {
+      "riskLevel": "MEDIUM",
+      "requiresApproval": false
+    },
+    "github_create_branch": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "github_open_pr": {
+      "riskLevel": "MEDIUM",
+      "requiresApproval": false
+    },
+    "azure_list_resources": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "cloud_plan_deployment": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "cloud_apply_deployment": {
+      "riskLevel": "HIGH",
+      "requiresApproval": true
+    },
+    "post_comment": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "resolve_ticket": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "take_screenshot": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "fetch_url": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "github_list_repos": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "github_read_file": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "github_edit_file": {
+      "riskLevel": "HIGH",
+      "requiresApproval": true
+    },
+    "github_merge_pr": {
+      "riskLevel": "HIGH",
+      "requiresApproval": true
+    },
+    "search_tickets": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "read_ticket": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "requester_history": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "read_skill": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "escalate_to_human": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "search_knowledge": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "read_document": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "list_collections": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "find_sources": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "open_dataset": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "discard_source": {
+      "riskLevel": "LOW",
+      "requiresApproval": false
+    },
+    "query_dataset": {
+      "riskLevel": "HIGH",
+      "requiresApproval": true
+    }
+  }
+}

@@ -35,6 +35,7 @@ import { getProvider, type ChatProvider, type ToolSpec } from "./provider";
 import { getAiSettings, type AiSettings } from "./settings";
 import { ensureToolPolicies, getToolRegistry } from "./custom-tools";
 import type { ToolDef } from "./tools";
+import { agentPrincipalId } from "@/lib/kb/principals";
 
 const MAX_ITERATIONS = 12;
 
@@ -44,6 +45,8 @@ interface LoopContext {
   runId: string;
   ticket: TicketWithRequester;
   agentUser: User;
+  /** KB principal chain (kb-11): agentPrincipalId(run) ∩ ticket requester. */
+  principals: { agentId: string; humanId: string | null };
   settings: AiSettings;
   /** Pool credential the run bills to ("default"/"mock" otherwise). */
   credentialName: string;
@@ -54,6 +57,9 @@ interface LoopContext {
   registry: Record<string, ToolDef>;
   messages: ConversationMessage[];
   nextIndex: number;
+  /** Datasets whose federation results were already compacted (fed-05):
+   *  at most once per dataset per run. */
+  compactedDatasets: Set<string>;
 }
 
 // -- small shared helpers ----------------------------------------------------
@@ -121,6 +127,29 @@ async function addStep(
  * assistant turn must share a single user message, so we extend the trailing
  * tool_result message when there is one.
  */
+/**
+ * The ENGINE BOUNDARY CAP (fed-04): every tool result is charged to the
+ * run's federation ledger BEFORE it re-enters the conversation — the
+ * engine otherwise appends tool strings verbatim (RESULT_LIMIT is an
+ * ad-hoc cap four tools apply; it was never an engine backstop). This is
+ * added at BOTH execute sites: the driveResolverLoop site and the
+ * resume-after-approval site; deleting either call makes the ledger stop
+ * charging while the conversation keeps growing — the test pins both.
+ */
+async function capToolResult(ctx: LoopContext, toolName: string, result: string): Promise<string> {
+  try {
+    const { chargeChars } = await import("./retrieval-budget");
+    const res = await chargeChars(db, ctx.runId, `tool:${toolName}`, result.length, {
+      overview: result.slice(0, Math.min(400, result.length)),
+      requested: result,
+      withheldName: "the remainder of the tool result",
+    });
+    return res.ok ? res.text : res.text;
+  } catch {
+    return result; // a ledger failure must not eat the tool's answer
+  }
+}
+
 function appendToolResult(
   messages: ConversationMessage[],
   block: Extract<ContentBlock, { type: "tool_result" }>,
@@ -217,6 +246,11 @@ async function buildLoopContext(
     runId,
     ticket,
     agentUser,
+    compactedDatasets: new Set<string>(),
+    principals: {
+      agentId: agentPrincipalId({ profileId: profile?.id ?? null }),
+      humanId: ticket.requesterId,
+    },
     settings,
     credentialName: settings.provider === "mock" ? "mock" : credentialName,
     provider: withUsage(getProvider(settings, { ticket, kind: "RESOLVE" }), {
@@ -473,10 +507,16 @@ async function runResolverInner(ticketId: string): Promise<AgentRun> {
  */
 async function driveResolverLoop(ctx: LoopContext): Promise<"completed" | "paused"> {
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+    // The graceful last turn (fed-05): no tools on the final iteration,
+    // so the model must answer with what it holds and the run COMPLETES.
+    const lastTurn = iteration === MAX_ITERATIONS - 1;
     const turn = await ctx.provider.complete({
       system: ctx.system,
       messages: ctx.messages,
-      tools: ctx.toolSpecs,
+      // The graceful last turn (fed-05): tools withdrawn, so the provider
+      // cannot call another tool and must produce the final summary — the
+      // run COMPLETES where it used to throw "exceeded iterations".
+      tools: lastTurn ? [] : ctx.toolSpecs,
     });
 
     const assistantBlocks: ContentBlock[] = [];
@@ -585,10 +625,29 @@ async function driveResolverLoop(ctx: LoopContext): Promise<"completed" | "pause
           ticketId: ctx.ticket.id,
           runId: ctx.runId,
           agentUser: ctx.agentUser,
+          principals: ctx.principals,
         });
       } catch (err) {
         result = errorMessage(err);
         isError = true;
+      }
+      // THE CAP, site 1 of 2 (driveResolverLoop). The twin call sits in
+      // resumeAfterApproval — deleting either makes the ledger-charging
+      // test fail; keep them together.
+      result = await capToolResult(ctx, call.name, result);
+      // Compaction (fed-05): only discard_source fires it, only past 60%
+      // of the budget, once per dataset per run, never refunding the
+      // ledger. The audit split: steps keep the originals.
+      if (call.name === "discard_source") {
+        const id = String((call.input as Record<string, unknown>)?.datasetId ?? "");
+        if (id) {
+          const { compactionDue, compactFederationResults } = await import("./compaction");
+          const { readLedger, FED_CONTEXT_BUDGET } = await import("./retrieval-budget");
+          const ledger = await readLedger(db, ctx.runId);
+          if (compactionDue(true, ledger.chars, FED_CONTEXT_BUDGET, ctx.compactedDatasets.has(id))) {
+            compactFederationResults(ctx.messages, id, ctx.compactedDatasets);
+          }
+        }
       }
       await addStep(ctx, { type: "TOOL_RESULT", toolName: call.name, content: result });
       appendToolResult(ctx.messages, {
@@ -662,6 +721,10 @@ export async function resumeAfterApproval(approvalId: string): Promise<AgentRun>
           isError = true;
         }
       }
+      // THE CAP, site 2 of 2 (resumeAfterApproval). The twin call sits in
+      // driveResolverLoop — deleting either makes the ledger-charging test
+      // fail; keep them together.
+      result = await capToolResult(ctx, approval.toolName, result);
       await addStep(ctx, { type: "TOOL_RESULT", toolName: approval.toolName, content: result });
       appendToolResult(ctx.messages, {
         type: "tool_result",

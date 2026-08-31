@@ -1,0 +1,53 @@
+[
+  [
+    {
+      "kind": "DATE",
+      "text": "2026-01-31",
+      "offset": 51,
+      "length": 10,
+      "extractor": "facts@1",
+      "ts": 1769817600000,
+      "tsEnd": 1769904000000,
+      "norm": "2026-01-31/2026-02-01",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DATE",
+      "text": "01/02/2026",
+      "offset": 23,
+      "length": 10,
+      "extractor": "facts@1",
+      "ts": 1769904000000,
+      "tsEnd": 1769990400000,
+      "norm": "2026-02-01/2026-02-02",
+      "confidence": "ASSUMED"
+    }
+  ],
+  [
+    {
+      "kind": "DATE",
+      "text": "enero de 2026",
+      "offset": 18,
+      "length": 13,
+      "extractor": "facts@1",
+      "ts": 1767225600000,
+      "tsEnd": 1769904000000,
+      "norm": "2026-01-01/2026-02-01",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DATE",
+      "text": "Q3 2026",
+      "offset": 38,
+      "length": 7,
+      "extractor": "facts@1",
+      "ts": 1782864000000,
+      "tsEnd": 1790812800000,
+      "norm": "2026-07-01/2026-10-01",
+      "confidence": "EXACT"
+    }
+  ],
+  []
+]

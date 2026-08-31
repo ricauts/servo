@@ -100,7 +100,7 @@ describe("search_tickets", () => {
     expect(args.where.id).toEqual({ not: "ticket-current" });
     expect(args.where.category).toBe("NETWORK");
     expect(args.where.status).toEqual({ in: ["RESOLVED", "CLOSED"] });
-    expect(args.where.OR).toContainEqual({ title: { contains: "vpn" } });
+    expect(args.where.OR).toContainEqual({ title: { contains: "vpn", mode: "insensitive" } });
   });
 
   it("caps the number of results at the documented maximum", async () => {

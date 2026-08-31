@@ -1,0 +1,42 @@
+{
+  "schema_name": "docling-core/v1.24.0",
+  "name": "messy-workbook.pdf",
+  "pages": [{ "page_no": 4, "size": { "width": 842, "height": 595 } }],
+  "body": { "children": ["#/tables/0", "#/tables/1"] },
+  "items": [
+    {
+      "item_type": "table",
+      "self_ref": "#/tables/0",
+      "label": "q2-spend",
+      "prov": [{ "page_no": 4, "bbox": { "l": 40, "t": 60, "r": 400, "b": 200 } }],
+      "data": {
+        "num_rows": 2,
+        "num_cols": 2,
+        "table_cells": [
+          { "row": 0, "col": 0, "text": "Region" },
+          { "row": 0, "col": 1, "text": "Spend" },
+          { "row": 1, "col": 0, "text": "North" },
+          { "row": 1, "col": 1, "text": "12000" }
+        ]
+      }
+    },
+    {
+      "item_type": "table",
+      "self_ref": "#/tables/1",
+      "label": "q3-spend",
+      "prov": [{ "page_no": 4, "bbox": { "l": 420, "t": 60, "r": 780, "b": 200 } }],
+      "data": {
+        "num_rows": 2,
+        "num_cols": 3,
+        "table_cells": [
+          { "row": 0, "col": 0, "text": "Region" },
+          { "row": 0, "col": 1, "text": "Spend" },
+          { "row": 0, "col": 2, "text": "Delta" },
+          { "row": 1, "col": 0, "text": "South" },
+          { "row": 1, "col": 1, "text": "9800" },
+          { "row": 1, "col": 2, "text": "-2200" }
+        ]
+      }
+    }
+  ]
+}

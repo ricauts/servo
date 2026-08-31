@@ -1,6 +1,10 @@
 # Continuous integration: every push and PR must typecheck, pass the unit
-# tests, and produce a production build. SQLite means no services are needed;
-# every page is force-dynamic, so `next build` never touches a database.
+# tests, and produce a production build. The throwaway-Postgres harness
+# (db-02) runs DB-touching tests against a real pgvector service container —
+# the same image docker-compose.test.yml runs locally, on the same port — and
+# the rest of the suite still mocks the database. The build step needs no
+# service of its own: every page is force-dynamic, so `next build` never
+# touches a database.
 name: CI
 
 on:
@@ -12,6 +16,20 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: servo
+          POSTGRES_PASSWORD: servo
+          POSTGRES_DB: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U servo -d postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v5
 
@@ -23,6 +41,17 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      # The backup-restore check (db-07) shells out to pg_dump/psql; the
+      # runner's default client lags the pgvector:pg17 service, and
+      # pg_dump refuses a version mismatch — and CI's `services:` container
+      # cannot be docker-exec'd the way the local fallback does. Install
+      # the matching client from pgdg.
+      - name: Install PostgreSQL 17 client
+        run: |
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor --yes -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update && sudo apt-get install -y postgresql-client-17
+
       - name: Generate Prisma client
         run: npx prisma generate
 
@@ -31,6 +60,17 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      - name: No hardcoded colours (design tokens only)
+        run: npm run lint:hex
+
+      - name: Claims audit (banned phrases from docs/POSITIONING.md)
+        run: npm run claims:audit
+
+      # hyg-04: nothing may become unreferenced without a reason. The keep-list
+      # is tests/fixtures/repo-refs-baseline.json; this step deletes nothing.
+      - name: Hygiene check (unreferenced files and dependencies)
+        run: npm run hygiene:check
 
       - name: Production build
         run: npm run build

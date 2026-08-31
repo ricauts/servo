@@ -1,0 +1,8 @@
+import { cn } from "@/lib/utils";
+import Widget from "@/components/Widget";
+import { helper } from "./helper";
+import "tw-animate-css";
+
+export default function Page() {
+  return <Widget className={cn("x", helper())} />;
+}

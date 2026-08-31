@@ -15,7 +15,7 @@ Report a vulnerability) rather than a public issue.
 **Where they live.** Integration credentials (model API keys, GitHub PAT,
 Azure client secret, SMTP URL, OIDC client secret, MCP/inbound tokens,
 credential-pool keys, custom-tool secrets, webhook signing secrets) are
-stored in the SQLite database. They are **never returned by any API** — the
+stored in the application database. They are **never returned by any API** — the
 settings endpoints redact them structurally (`tokenSet: true`, never the
 value).
 
@@ -61,8 +61,10 @@ Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
 - Every tool carries a risk level and an optional **human-approval gate**
   (defaults in `src/lib/ai/tool-policies.ts`, editable per install); HIGH-risk
   approvals are admin-only, and QA reviews risky runs.
-- Read-only SQL is enforced at the driver (`PRAGMA query_only`), not just by
-  keyword filtering; mutating SQL defaults to requiring approval.
+- Read-only SQL is enforced by a read-only Postgres role and a read-only
+  transaction (`SET TRANSACTION READ ONLY` over the `servo_ops_ro` role,
+  whose `default_transaction_read_only` is on), not just by keyword
+  filtering; mutating SQL defaults to requiring approval.
 - Agents that cannot complete an objective **escalate to a human** — an
   unmet objective is never marked resolved.
 - The MCP endpoint and the inbound-email webhook are disabled until you set
@@ -90,8 +92,18 @@ Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
 ## Transport & deployment
 
 - Run behind HTTPS (reverse proxy); set `APP_URL` so links are correct.
-- SQLite files (`/data` in Docker) hold your tickets and sealed secrets —
-  restrict filesystem access and back them up accordingly.
+- The PostgreSQL volume (`servo-db` in Docker) holds your tickets and sealed
+  secrets — restrict access to it, and back it up with `pg_dump` against the
+  `db` service, covering **both** databases the app uses: `servo` (everything)
+  and `servo_ops` (the sandbox the agent's SQL tools operate on, once db-05
+  moves it to Postgres). Restore with `pg_restore`/`psql` into a fresh
+  database — the procedure is proven by `tests/backup-restore.test.ts`. A
+  dump contains sealed secrets and is only as safe as your
+  `SERVO_ENCRYPTION_KEY`: the dump is ciphertext for those values, so treat
+  the dump file with the same care as the key itself.
+- Coming from a pre-Postgres install? [docs/migrating-to-postgres.md](docs/migrating-to-postgres.md)
+  is the one-command import — and until it has run, the `servo-data` volume
+  holds the only copy of your data.
 - Webhook payloads are HMAC-SHA256 signed (`x-servo-signature`); verify on
   the receiving end.
 

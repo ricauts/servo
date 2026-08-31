@@ -1,0 +1,2 @@
+steps:
+  - run: node src/lib/utils.ts

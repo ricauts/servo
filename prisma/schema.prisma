@@ -1,12 +1,15 @@
-// Servo data model. SQLite does not support Prisma enums, so enum-like fields
-// are strings constrained by the union types in src/lib/types.ts.
+// Servo data model. Enum-like fields are strings BY CHOICE, not by dialect:
+// a Prisma enum turns "add a status / a role / a category" into a migration
+// plus a deploy, and the extensibility story (installed packs contributing
+// categories, custom roles) depends on those values being data. The union
+// types in src/lib/types.ts are the single source of truth for the values.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -25,6 +28,8 @@ model User {
   decisions        Approval[]    @relation("decider")
   draftDecisions   ReplyDraft[]  @relation("draftDecider")
   memberships      GroupMember[]
+  ownedDocuments   Document[]
+  grantedKb        KbGrant[]     @relation("kbGranter")
 }
 
 model Group {
@@ -55,6 +60,11 @@ model Ticket {
   title           String
   description     String
   status          String    @default("OPEN") // OPEN | TRIAGED | IN_PROGRESS | WAITING_APPROVAL | RESOLVED | CLOSED
+  // Where the ticket entered the desk (ux-03): WEB form, inbound EMAIL, or
+  // the MCP create_ticket tool. CHAT exists in the TicketChannel union but
+  // is deliberately unused until the chat surface ships (ux-07) — nobody
+  // deletes it, nobody claims it ships.
+  channel         String    @default("WEB") // TicketChannel: WEB | EMAIL | MCP | CHAT
   priority        String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
   category        String    @default("OTHER") // ACCESS | HARDWARE | SOFTWARE | DATABASE | DEVOPS | NETWORK | OTHER
   requesterId     String
@@ -97,6 +107,10 @@ model ReplyDraft {
   decidedAt DateTime?
   deciderId String?
   decider   User?     @relation("draftDecider", fields: [deciderId], references: [id])
+  // Provenance by construction (kb-12): exactly the chunks injected into the
+  // drafter's prompt — {docId, docName, locator, chunkId}[].
+  sources      Json    @default("[]")
+  autoDelivered Boolean @default(false) // sent by policy with deciderId null (kb-14)
 }
 
 // A file produced while working a ticket — today, screenshots captured by the
@@ -141,6 +155,10 @@ model AgentRun {
   qaNotes      String?
   createdAt    DateTime  @default(now())
   completedAt  DateTime?
+  // The retrieval ledger (cat-01, canonized in docs/design/data-fabric.md):
+  // {probed, opened, discarded, perDataset, chars, hops, finds, compacted} —
+  // every charge is a read-modify-write inside a transaction on this row.
+  retrieval    Json      @default("{}")
 
   steps     AgentStep[]
   approvals Approval[]
@@ -195,6 +213,14 @@ model Skill {
   body        String // the procedure, loaded by read_skill
   markdown    String // raw SKILL.md source (frontmatter + body)
   enabled     Boolean  @default(true)
+  // The ticket this skill was distilled from (reb-05), when it was: the
+  // KPIs count the COLUMN (reb-06), never the frontmatter. Bare FK by
+  // design, like AgentRun.agentUserId — nothing navigates the reverse edge.
+  sourceTicketId String?
+  // cnp-06 provenance: bundled ("local") or plugin-originated ("plugin:<name>").
+  // Distillation provenance is sourceTicketId (reb-05) — orthogonal; there is
+  // no third column.
+  origin        String   @default("local")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -212,6 +238,8 @@ model AgentProfile {
   systemPrompt String // markdown body appended to the resolver system prompt
   markdown     String // raw .md source (frontmatter + body)
   enabled      Boolean  @default(true)
+  // cnp-06 provenance, same shape as Skill.origin.
+  origin       String   @default("local")
   // Which pool credential this agent runs on; null = the default BYOK config.
   credentialId String?
   credential   AiCredential? @relation(fields: [credentialId], references: [id])
@@ -257,6 +285,46 @@ model ToolPolicy {
   riskLevel        String // LOW | MEDIUM | HIGH
   enabled          Boolean @default(true)
   requiresApproval Boolean @default(false)
+}
+
+// One row per MCP tools/call — executed, refused or thrown. External MCP
+// clients run outside the engine loop, so they leave no AgentRun/AgentStep
+// trail; this is the audit record for that surface. `decision` is the
+// McpCallDecision union in src/lib/types.ts.
+model McpCall {
+  id            String   @id @default(cuid())
+  toolName      String
+  inputJson     String // JSON string, parsed defensively on read
+  resultPreview String // truncated to RESULT_LIMIT (4000)
+  decision      String // EXECUTED | REFUSED_POLICY | REFUSED_UNKNOWN | ERROR
+  callerLabel   String   @default("mcp-external")
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// An external MCP server Servo connects to as a CLIENT (cnp-02). v1 is
+// Streamable HTTP only, tools only, static header auth only — `transport` is
+// a String so "stdio" is data rather than a migration when it arrives.
+// `toolsJson` is the last tools/list snapshot: [{name, description,
+// inputSchema, hash}], where hash is sha256(name+description+inputSchema) and
+// drives the tighten-only re-quarantine. `secret` is sealed by the $extends
+// write hook in src/lib/db.ts and opened only inside src/lib/mcp-client.ts.
+// Tools materialise as ToolPolicy rows named mcp__<slug>__<tool>, always with
+// the §0.8 rail-4 quarantine triple.
+model McpServer {
+  id         String    @id @default(cuid())
+  slug       String    @unique // ^[a-z][a-z0-9-]{1,30}$ — becomes the mcp__<slug>__ prefix
+  name       String
+  transport  String    @default("http") // "http" in v1; "stdio" reserved for roadmap
+  url        String
+  headers    String    @default("{}") // JSON object; values may contain {secret}
+  secret     String    @default("") // bearer token / API key; never returned by the API
+  enabled    Boolean   @default(false)
+  toolsJson  String    @default("[]") // last tools/list snapshot
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 // An admin-defined HTTP tool/integration the resolver can call. Enable/disable
@@ -316,4 +384,205 @@ model SlaPolicy {
   resolutionMinutes Int
   // Raise the ticket one escalation tier when a target is missed.
   escalateOnBreach  Boolean @default(true)
+}
+
+
+// The company knowledge base (spec §5). Access control is not a feature of
+// this area — it IS the area: retrieval is entitlement-filtered in SQL before
+// candidate selection, before scoring, before anything reaches model context.
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  contentType String // application/pdf | xlsx mime | text/markdown | text/plain
+  byteSize    Int
+  sha256      String // dedupe + "this file changed" detection
+  // Nullable since cat-01: a catalog card's canonical profile lives in
+  // CatalogEntry.profile and its data is NULL by the migration's CHECK —
+  // every redaction made in the renderer would be bypassed by one download.
+  data        Bytes? // bytea; never selected outside the download route
+  textStatus  String   @default("PENDING") // PENDING | EXTRACTING | EXTRACTED | FAILED | UNSUPPORTED
+  textError   String?
+  // Extractor provenance (dcl-01): which extractor id produced the chunks,
+  // the exact library versions it names, which extractor answered instead
+  // when the preferred one was unavailable (NULL on every successful
+  // non-fallback extraction — the "the sidecar was down" queue drains by
+  // this being NULL again), and when the chunks were made.
+  extractor         String    @default("baseline")
+  extractorVersion  String    @default("")
+  extractorFallback String?
+  extractedAt       DateTime?
+  summary     String   @default("") // deterministic extract — no model call at ingest
+  keywords    Json     @default("[]") // string[]
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  collectionId String?
+  collection  Collection? @relation(fields: [collectionId], references: [id])
+  visibility  String   @default("PRIVATE") // PRIVATE | STAFF | PUBLIC
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chunks   DocumentChunk[]
+  facts    DocumentFact[]
+  edgesOut KnowledgeEdge[] @relation("edgeFrom")
+  edgesIn  KnowledgeEdge[] @relation("edgeTo")
+  grants   KbGrant[]
+  // The catalog split (cat-01): a rendered catalog card is a Document whose
+  // data is NULL — the canonical profile lives in CatalogEntry.profile —
+  // back-linked by catalogEntryId. FILE is every ordinary upload.
+  kind           String   @default("FILE") // FILE | CATALOG
+  catalogEntryId String?  @unique
+}
+
+
+// ext-01: a typed fact extracted from a chunk (dates, money, identifiers,
+// quantities, emails, URLs — the ext-02/03 rulesets). String unions, no
+// Prisma enums; a fact is a fragment of document content, so the RLS
+// backstop covers it from birth (see 0011's header).
+model DocumentFact {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkId    String
+  chunk      DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  kind       String // DATE | MONEY | DURATION | IDENTIFIER | QUANTITY | EMAIL | URL
+  norm       String // the normalized value — the joinable form
+  num        Decimal? @db.Decimal(38, 6)
+  unit       String // ISO currency code, "s", the quantity unit, or ""
+  ts         BigInt?
+  tsEnd      BigInt?
+  text       String
+  offset     Int
+  length     Int
+  confidence String   @default("EXACT")
+  extractor  String // e.g. "facts@1" (ext-03)
+  createdAt  DateTime @default(now())
+
+  @@unique([chunkId, offset, kind])
+  @@index([documentId, kind])
+  @@index([kind, norm])
+  @@index([kind, num])
+  @@index([kind, ts])
+}
+
+model DocumentChunk {
+  id        String   @id @default(cuid())
+  documentId String
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  index     Int
+  text      String
+  locator   Json // {"sheet":"2026","range":"B4:D9"} | {"page":12} | {"lines":"120-180"} | {"entry":"...","section":"columns","from":"net_pay"} (cat-01)
+  keywords  Json     @default("[]")
+  // pgvector. Nullable so keyword-only installs are a normal state rather
+  // than a failure; the tsvector/generated + GIN + HNSW objects live in the
+  // hand-written migration (Prisma cannot express them).
+  embedding      Unsupported("vector(1536)")?
+  embeddingModel String @default("") // "" = none, "mock" = deterministic mock embedder
+  embeddingDims  Int     @default(0) // native dimension before zero-padding
+  createdAt      DateTime @default(now())
+
+  @@unique([documentId, index])
+  @@index([documentId])
+  facts     DocumentFact[]
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @default("")
+  createdAt   DateTime @default(now())
+
+  documents Document[]
+  grants    KbGrant[]
+}
+
+model KnowledgeEdge {
+  id        String   @id @default(cuid())
+  fromId    String
+  from      Document @relation("edgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId      String
+  to        Document @relation("edgeTo", fields: [toId], references: [id], onDelete: Cascade)
+  kind      String // SHARED_ENTITY | SHARED_KEYWORD | SAME_COLLECTION
+  weight    Float    @default(0)
+  evidence  Json     @default("[]") // the shared entities/keywords — withheld unless both nodes entitled
+  createdAt DateTime @default(now())
+
+  @@unique([fromId, toId, kind])
+}
+
+// One grant of `access` on one target to one subject. Nullable FKs keep
+// referential integrity; the real uniqueness and the exactly-one rule are
+// the partial indexes and the CHECK in the migration — Prisma cannot
+// express either.
+model KbGrant {
+  id           String      @id @default(cuid())
+  documentId   String?
+  document     Document?   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  collectionId String?
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  subjectType  String // USER | GROUP | AGENT
+  subjectId    String // User.id | Group.id | AgentProfile.id | "builtin:*"
+  access       String      @default("READ") // READ | MANAGE
+  grantedById  String
+  grantedBy    User        @relation("kbGranter", fields: [grantedById], references: [id])
+  createdAt    DateTime    @default(now())
+}
+
+// The catalog (cat-01, canonized verbatim in docs/design/data-fabric.md):
+// CatalogEntry is the structured fact, Document its rendered description,
+// written in one transaction. String unions, no Prisma enums; Json for
+// locator/profile/exemplars/signature/provenance/cursor/stats. dataSourceId
+// is a PLAIN STRING with no FK until the connection-layer merge — see
+// src/lib/catalog/datasource-contract.ts, the only shared surface.
+model CatalogEntry {
+  id              String    @id @default(cuid())
+  dataSourceId    String // the connection layer's row; contract fragment until the merge
+  level           String // SOURCE | DATASET | FIELD
+  parentId        String? // FIELD -> DATASET -> SOURCE; null at SOURCE
+  fqn             String // "pg://warehouse/public.payroll#net_pay" | "s3://exports/finance/2026/"
+  displayName     String
+  locator         Json      @default("{}") // {schema,table} | {schema,table,column} | {prefix} | {prefix,field}
+  physicalType    String    @default("") // "numeric(12,2)" | "text" | "text/csv" | ""
+  semanticType    String    @default("UNKNOWN") // deterministic classifier (cat-02)
+  semanticScore   Float     @default(0)
+  sensitivity     String    @default("UNKNOWN") // SHAPE_ONLY | INTERNAL | UNKNOWN — gates exemplars
+  profile         Json      @default("{}") // shape signals only; never a row, never a rare value
+  exemplars       Json      @default("[]") // [] unless the k-anonymity + INTERNAL gate passed
+  signature       Json      @default("{}") // salted MinHash + LSH bands; read by the edge builder ONLY
+  provenance      Json      @default("{}") // {runId, tier, method, exact, sampledRows, sampleKind, at}
+  fingerprint     String    @default("") // sha256 over the STRUCTURAL part — drift detection
+  valuesStatus    String    @default("ABSENT") // ABSENT | PARTIAL | COMPLETE — did tier 2 reach this entry
+  note            String    @default("") // human-authored; a profile run NEVER overwrites this
+  noteById        String?
+  inferredPurpose String    @default("") // optional model call; a profile run NEVER overwrites this
+  inferredBy      String    @default("") // "" | "mock" | model id
+  profileStatus   String    @default("PENDING") // PENDING | PROFILING | PROFILED | PARTIAL | FAILED | DROPPED | UNREADABLE
+  profileError    String?
+  documentId      String? // the rendered card — SOURCE and DATASET only
+  firstSeenAt     DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  droppedAt       DateTime?
+
+  @@unique([dataSourceId, fqn])
+  @@index([dataSourceId, level])
+  @@index([parentId])
+  @@index([documentId])
+}
+
+// One profiling pass over one DataSource (cat-01). A budget breach is
+// PARTIAL with budgetHit naming the cap and cursor naming where to resume —
+// never a FAILED run that leaves an operator with nothing.
+model CatalogRun {
+  id           String    @id @default(cuid())
+  dataSourceId String
+  trigger      String // CONNECT | SCHEDULED | MANUAL
+  tier         String // TIER1 | TIER2 | EDGES
+  status       String    @default("RUNNING") // RUNNING | COMPLETE | PARTIAL | FAILED
+  cursor       Json      @default("{}") // resume point: {lastFqn, pass}
+  stats        Json      @default("{}") // {datasets, fields, added[], removed[], retyped[], bytesRead, objectsOpened, rowsSampled, pairsCompared, elapsedMs}
+  budgetHit    String? // WALL_CLOCK | BYTES | OBJECTS | ROWS | PAIRS | STATEMENT_TIMEOUT
+  error        String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+
+  @@index([dataSourceId, startedAt])
 }

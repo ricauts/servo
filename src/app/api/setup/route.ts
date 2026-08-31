@@ -6,7 +6,8 @@ import { USER_COOKIE } from "@/lib/auth";
 import { AUTH_SETTING_KEYS, needsSetup } from "@/lib/authjs";
 import { ensureToolPolicies } from "@/lib/ai/custom-tools";
 import { ensureSlaPolicies } from "@/lib/sla";
-import { ensureOpsSchema, syncAgentProfiles, syncSkills } from "@/lib/bootstrap";
+import { ensureOpsSchema, syncAgentProfiles, syncPlugins, syncSkills } from "@/lib/bootstrap";
+import { AI_AGENT_COLORS, SETUP_ADMIN_COLOR } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -47,13 +48,13 @@ export async function POST(req: NextRequest) {
 
   const admin = await db.$transaction(async (tx) => {
     const created = await tx.user.create({
-      data: { name: data.adminName, email, role: "ADMIN", color: "#4A3AA7" },
+      data: { name: data.adminName, email, role: "ADMIN", color: SETUP_ADMIN_COLOR },
     });
     // System AI agents: the engine looks these up by aiKind.
     const agents = [
-      { name: "Servo Triage", email: "triage@servo.ai", aiKind: "TRIAGE", color: "#0A6E66" },
-      { name: "Servo Resolver", email: "resolver@servo.ai", aiKind: "RESOLVER", color: "#14625D" },
-      { name: "Servo QA", email: "qa@servo.ai", aiKind: "QA", color: "#52514E" },
+      { name: "Servo Triage", email: "triage@servo.ai", aiKind: "TRIAGE", color: AI_AGENT_COLORS.TRIAGE },
+      { name: "Servo Resolver", email: "resolver@servo.ai", aiKind: "RESOLVER", color: AI_AGENT_COLORS.RESOLVER },
+      { name: "Servo QA", email: "qa@servo.ai", aiKind: "QA", color: AI_AGENT_COLORS.QA },
     ];
     for (const agent of agents) {
       await tx.user.upsert({
@@ -91,6 +92,9 @@ export async function POST(req: NextRequest) {
   await ensureSlaPolicies();
   await syncAgentProfiles();
   await syncSkills();
+  // cnp-06: plugins install beside the bundled skills — everything they
+  // ship arrives disabled.
+  await syncPlugins();
   await ensureOpsSchema();
 
   // Demo-mode installs act as the new admin immediately; OIDC installs go

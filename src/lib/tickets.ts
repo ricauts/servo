@@ -55,10 +55,15 @@ export const ticketDetailInclude = {
   },
 } as const;
 
-/** Next sequential ticket number: (max number) + 1. */
+/** Next sequential ticket number, from the Postgres sequence
+ *  `ticket_number_seq` (db-03, migration 0002): a sequence hands out
+ *  distinct numbers to concurrent creates by construction, where
+ *  max(number)+1 raced and one create always died on the unique
+ *  constraint. The three creation sites (POST /api/tickets, the MCP
+ *  create_ticket tool, inbound email) all route through here. */
 export async function nextTicketNumber(): Promise<number> {
-  const agg = await db.ticket.aggregate({ _max: { number: true } });
-  return (agg._max.number ?? 1000) + 1;
+  const [row] = await db.$queryRaw<{ n: bigint }[]>`SELECT nextval('ticket_number_seq') AS n`;
+  return Number(row.n);
 }
 
 /** Local-date YYYY-MM-DD (KPI series buckets use local calendar days). */
@@ -74,7 +79,8 @@ export async function getKpis(): Promise<KpiResponse> {
   // Last 30 calendar days inclusive of today, from local midnight.
   const since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
 
-  const [openTickets, resolved30, created30, allApprovals, drafts30] = await Promise.all([
+  const [openTickets, resolved30, created30, allApprovals, drafts30, completedRuns30, distilledSkills, enabledSkills] =
+    await Promise.all([
     db.ticket.findMany({
       where: { status: { notIn: ["RESOLVED", "CLOSED"] } },
       select: {
@@ -108,7 +114,21 @@ export async function getKpis(): Promise<KpiResponse> {
     // Pending drafts (whenever created) + decisions of the last 30 days.
     db.replyDraft.findMany({
       where: { OR: [{ status: "PENDING" }, { decidedAt: { gte: since } }] },
-      select: { status: true, edited: true },
+      select: { status: true, edited: true, decidedAt: true },
+    }),
+    // Skill KPIs (reb-06): completed resolver runs in-window, the
+    // read_skill steps among them, and the enabled skills' categories.
+    db.agentRun.findMany({
+      where: { kind: "RESOLVE", status: "COMPLETED", createdAt: { gte: since } },
+      select: { id: true },
+    }),
+    db.skill.findMany({
+      where: { sourceTicketId: { not: null } },
+      select: { createdAt: true },
+    }),
+    db.skill.findMany({
+      where: { enabled: true },
+      select: { categories: true },
     }),
   ]);
 
@@ -195,6 +215,47 @@ export async function getKpis(): Promise<KpiResponse> {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
+  // --- skill KPIs (reb-06) ------------------------------------------------
+  // Informed share: completed resolver runs with >=1 read_skill TOOL_CALL;
+  // a run that read several skills counts once (set).
+  const runIds = completedRuns30.map((r) => r.id);
+  const informedRunIds = new Set(
+    runIds.length === 0
+      ? []
+      : (
+          await db.agentStep.findMany({
+            where: { runId: { in: runIds }, type: "TOOL_CALL", toolName: "read_skill" },
+            select: { runId: true },
+          })
+        ).map((step) => step.runId),
+  );
+  const skillInformedRunRate =
+    runIds.length === 0 ? null : informedRunIds.size / runIds.length;
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const skillsDistilledThisMonth = distilledSkills.filter(
+    (s) => s.createdAt >= monthStart,
+  ).length;
+
+  // Coverage: the share of ticket categories at least one ENABLED skill
+  // claims ([] = every category, which is full coverage).
+  const claimed = new Set<string>();
+  for (const s of enabledSkills) {
+    let cats: string[] = [];
+    try {
+      cats = JSON.parse(s.categories) as string[];
+    } catch {
+      cats = [];
+    }
+    if (cats.length === 0) {
+      for (const c of CATEGORIES) claimed.add(c);
+    } else {
+      for (const c of cats) claimed.add(c);
+    }
+  }
+  const skillCoverage =
+    enabledSkills.length === 0 ? null : claimed.size / CATEGORIES.length;
+
   return {
     totals: {
       open: openTickets.length,
@@ -223,5 +284,6 @@ export async function getKpis(): Promise<KpiResponse> {
     approvalStats,
     draftStats,
     topRequesters,
+    skills: { skillInformedRunRate, skillsDistilledThisMonth, skillCoverage },
   };
 }

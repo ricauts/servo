@@ -1,106 +1,81 @@
 "use client";
 
+// Renders whatever entries arrive as props — the registry in nav-items.ts,
+// filtered once by the server, is the single owner of what appears here.
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  BookOpen,
-  Bot,
-  LayoutDashboard,
-  Inbox,
-  ShieldCheck,
-  Plug,
-  Settings2,
-  Users2,
-  type LucideIcon,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NAV_ICONS } from "@/components/shell/nav-icons";
+import type { NavEntry } from "@/components/shell/nav-items";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  count?: number;
-  countTone?: "neutral" | "attention";
-}
+const SECTION_LABELS: Partial<Record<NavEntry["section"], string>> = {
+  fleet: "Fleet",
+  admin: "Admin",
+};
 
 export default function SidebarNav({
+  entries,
   counts,
-  showTeamNav = false,
-  showIntegrations = false,
   onNavigate,
 }: {
-  counts: { tickets: number; approvals: number };
-  /** Groups/Agents are only visible to admin and agent roles. */
-  showTeamNav?: boolean;
-  /** Integrations are admin-only. */
-  showIntegrations?: boolean;
+  entries: NavEntry[];
+  counts?: { tickets: number; approvals?: number };
   /** Called when a nav link is clicked (used to close the mobile sheet). */
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-
-  const items: NavItem[] = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    {
-      href: "/tickets",
-      label: "Tickets",
-      icon: Inbox,
-      count: counts.tickets,
-      countTone: "neutral",
-    },
-    {
-      href: "/approvals",
-      label: "Approvals",
-      icon: ShieldCheck,
-      count: counts.approvals,
-      countTone: "attention",
-    },
-    ...(showTeamNav
-      ? [
-          { href: "/groups", label: "Groups", icon: Users2 } as NavItem,
-          { href: "/agents", label: "Agents", icon: Bot } as NavItem,
-          { href: "/skills", label: "Skills", icon: BookOpen } as NavItem,
-        ]
-      : []),
-    ...(showIntegrations
-      ? [{ href: "/integrations", label: "Integrations", icon: Plug } as NavItem]
-      : []),
-    { href: "/settings", label: "Settings", icon: Settings2 },
-  ];
+  let lastSection: NavEntry["section"] | null = null;
 
   return (
     <nav className="flex flex-col gap-0.5 px-3">
-      {items.map((item) => {
+      {entries.map((item) => {
+        const Icon = NAV_ICONS[item.icon];
         const active =
           pathname === item.href || pathname.startsWith(item.href + "/");
+        const showSection = item.section !== "work" && item.section !== lastSection;
+        lastSection = item.section;
+        const count =
+          item.href === "/tickets"
+            ? counts?.tickets
+            : item.href === "/approvals"
+              ? counts?.approvals
+              : undefined;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "group flex items-center gap-2.5 rounded-md px-2.5 py-2 font-heading text-[13.5px] font-medium transition-colors",
-              active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+          <div key={item.href}>
+            {showSection && (
+              <p className="mt-3 px-2.5 pb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/45">
+                {SECTION_LABELS[item.section]}
+              </p>
             )}
-          >
-            <item.icon size={16} strokeWidth={2} className="shrink-0" />
-            <span className="flex-1">{item.label}</span>
-            {item.count !== undefined && item.count > 0 && (
-              <span
-                className={cn(
-                  "rounded-full px-1.5 py-px font-mono text-[10.5px] leading-4",
-                  item.countTone === "attention"
-                    ? "bg-primary font-semibold text-primary-foreground"
-                    : "bg-sidebar-accent text-sidebar-foreground/70",
-                )}
-              >
-                {item.count}
-              </span>
-            )}
-          </Link>
+            <Link
+              href={item.href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "group flex items-center gap-2.5 rounded-md px-2.5 py-2 font-heading text-[13.5px] font-medium transition-colors",
+                active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+              )}
+            >
+              <Icon size={16} strokeWidth={2} className="shrink-0" />
+              <span className="flex-1">{item.label}</span>
+              {count !== undefined && count > 0 && (
+                <span
+                  className={cn(
+                    "rounded-full border px-1.5 py-px font-mono text-[10.5px] leading-4",
+                    item.href === "/approvals"
+                      ? // Pending approvals read as critical: the ds chip triple.
+                        "border-[color:var(--critical-chip-line)] bg-[color:var(--critical-chip)] font-semibold text-[color:var(--critical-chip-ink)]"
+                      : "border-transparent bg-sidebar-accent text-sidebar-foreground/70",
+                  )}
+                >
+                  {count}
+                </span>
+              )}
+            </Link>
+          </div>
         );
       })}
     </nav>

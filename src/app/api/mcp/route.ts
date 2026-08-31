@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getMcpConfig, getMcpTools, mcpToolContext, mcpToolWithholdReason } from "@/lib/mcp";
+import { executeMcpToolCall, getMcpConfig, getMcpTools } from "@/lib/mcp";
 
 export const dynamic = "force-dynamic";
 
@@ -86,33 +86,19 @@ export async function POST(req: NextRequest) {
     }
 
     case "tools/call": {
+      // The route resolves nothing itself: executeMcpToolCall owns the policy
+      // re-check at the execute site and the McpCall audit row, so no call can
+      // reach a tool without leaving a trail.
       const name = String(message.params?.name ?? "");
       const args = (message.params?.arguments ?? {}) as Record<string, unknown>;
-      const tools = await getMcpTools();
-      const tool = tools[name];
-      if (!tool) {
-        // A tool Servo has but withholds (approval-gated, disabled, ticket-bound)
-        // answers as a tool error so the caller can read why and adapt.
-        const withheld = await mcpToolWithholdReason(name);
-        if (withheld) {
-          return rpcResult(id, { content: [{ type: "text", text: withheld }], isError: true });
-        }
-        return rpcError(id, -32602, `Unknown tool: ${name}`);
+      const outcome = await executeMcpToolCall(name, args);
+      if (outcome.rpcErrorCode !== undefined) {
+        return rpcError(id, outcome.rpcErrorCode, outcome.text);
       }
-      const ctx = await mcpToolContext();
-      if (!ctx) return rpcError(id, -32603, "Servo has no system agents yet — run setup.");
-      try {
-        const text = await tool.execute(args, ctx);
-        const isError = text.startsWith("Error:");
-        return rpcResult(id, { content: [{ type: "text", text }], isError });
-      } catch (err) {
-        return rpcResult(id, {
-          content: [
-            { type: "text", text: err instanceof Error ? err.message : "Tool crashed." },
-          ],
-          isError: true,
-        });
-      }
+      return rpcResult(id, {
+        content: [{ type: "text", text: outcome.text }],
+        isError: outcome.isError,
+      });
     }
 
     default:

@@ -107,3 +107,9 @@ export const APPROVAL_STATUS_TONE: Record<ApprovalStatus, BadgeTone> = {
   APPROVED: "good",
   REJECTED: "critical",
 };
+
+/** A 0..1 share as a percentage string; null is "n/a" — the not-applicable
+ *  case (no runs, no enabled skills) is a WORD, never NaN (reb-06). */
+export function shareAsPct(share: number | null): string {
+  return share === null ? "n/a" : `${Math.round(share * 100)}%`;
+}

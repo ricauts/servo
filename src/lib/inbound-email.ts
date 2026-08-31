@@ -284,6 +284,7 @@ export async function ingestEmail(message: InboundMessage): Promise<InboundResul
       title: subject.replace(/^\s*(re|fwd|rv)\s*:\s*/i, "").trim() || "(no subject)",
       description: body,
       status: "OPEN",
+      channel: "EMAIL",
       priority: "MEDIUM",
       category: "OTHER",
       requesterId: sender.id,

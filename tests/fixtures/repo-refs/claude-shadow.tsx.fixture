@@ -1,0 +1,3 @@
+import { DeadWidget } from "@/components/DeadWidget";
+
+export const Shadow = DeadWidget;

@@ -2,146 +2,98 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* ---------------------------------------------------------------------------
+   Servo design system — the semantic token source of truth (spec ds-01, §0.5).
+
+   Every colour, font, radius, shadow and motion value the app renders comes
+   from servo_design_system/tokens/. The ds ships dark semantics at :root and
+   light semantics under .servo-light; ThemeProvider applies `servo-light` as
+   the light-mode class (dark mode keeps Tailwind's `.dark`, which strips it),
+   so both modes resolve through the ds's own blocks — no values are copied
+   here. Below, the shadcn/legacy vocabulary is MAPPED onto ds tokens: this
+   file contains var() references only, never a literal colour.
+--------------------------------------------------------------------------- */
+@import "../../servo_design_system/tokens/fonts.css";
+@import "../../servo_design_system/tokens/colors.css";
+@import "../../servo_design_system/tokens/effects.css";
+@import "../../servo_design_system/tokens/motion.css";
+@import "../../servo_design_system/tokens/spacing.css";
+@import "../../servo_design_system/tokens/typography.css";
+@import "../../servo_design_system/tokens/themes.css";
+@import "../../servo_design_system/tokens/base.css";
+
 @custom-variant dark (&:is(.dark *));
 
-/* ---------------------------------------------------------------------------
-   Servo theme — shadcn/ui, light by default, green primary ("Spotify style").
-   Token values provided by the project owner.
---------------------------------------------------------------------------- */
 :root {
-  --radius: 0.625rem;
+  --radius: var(--radius-3);
 
-  --background: oklch(0.988 0.004 160);
-  --foreground: oklch(0.35 0.02 165.48);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.35 0.02 165.48);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.35 0.02 165.48);
-  --primary: oklch(0.64 0.165 154);
-  /* Dark ink on the vibrant green (Spotify-style) — white on this green only
-     reaches ~2.7:1; dark ink reaches ~7:1. */
-  --primary-foreground: oklch(0.16 0.035 168);
-  /* Darker companion for green used AS TEXT on light surfaces (links, hovers). */
-  --primary-strong: oklch(0.46 0.12 157);
-  --secondary: oklch(0.9 0.02 238.66);
-  --secondary-foreground: oklch(0.2 0.02 266.02);
-  --muted: oklch(0.9 0.02 240.73);
-  --muted-foreground: oklch(0.47 0.03 268.53);
-  --accent: oklch(0.93 0.045 158);
-  --accent-foreground: oklch(0.32 0.06 163);
-  --destructive: oklch(0.55 0.22 22);
-  --border: oklch(0.94 0.01 238.46);
-  --input: oklch(0.85 0.02 240.75);
-  --ring: oklch(0.64 0.165 154);
-  /* Chart marks need ≥3:1 against the white card. */
-  --chart-1: oklch(0.62 0.16 154);
-  --chart-2: oklch(0.5 0.1 270.06);
-  --chart-3: oklch(0.58 0.11 202);
-  --chart-4: oklch(0.63 0.11 90);
-  --chart-5: oklch(0.6 0.15 300.14);
-  /* Deep-green brand panel (the "Servo side panel"), fixed across modes. */
-  --sidebar: oklch(0.26 0.055 158);
-  --sidebar-foreground: oklch(0.94 0.014 160);
-  --sidebar-primary: oklch(0.64 0.165 154);
-  --sidebar-primary-foreground: oklch(0.13 0.03 170);
-  --sidebar-accent: oklch(0.33 0.065 158);
-  --sidebar-accent-foreground: oklch(0.97 0.014 160);
-  --sidebar-border: oklch(0.34 0.055 158);
-  --sidebar-ring: oklch(0.64 0.165 154);
+  /* shadcn semantic vocabulary → design-system tokens. */
+  --background: var(--bg);
+  --foreground: var(--text-body);
+  --card: var(--surface);
+  --card-foreground: var(--text-body);
+  --popover: var(--surface);
+  --popover-foreground: var(--text-body);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-ink);
+  --primary-strong: var(--text-brand);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text-body);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--text-strong);
+  --destructive: var(--critical);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--brand);
 
-  /* Semantic status tones (badges, QA verdicts, highlights) — mode-aware. */
-  --tone-good: oklch(0.45 0.13 155);
-  --tone-good-soft: oklch(0.94 0.05 153);
-  --tone-warn: oklch(0.49 0.1 78);
-  --tone-warn-soft: oklch(0.96 0.06 90);
-  --tone-serious: oklch(0.5 0.14 42);
-  --tone-serious-soft: oklch(0.95 0.04 45);
-  --tone-critical: oklch(0.5 0.2 25);
-  --tone-critical-soft: oklch(0.95 0.03 20);
-  --tone-violet: oklch(0.48 0.15 295);
-  --tone-violet-soft: oklch(0.94 0.04 295);
+  --sidebar: var(--bg-elevated);
+  --sidebar-foreground: var(--text-body);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-ink);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--text-strong);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--brand);
 
-  --shadow-2xs: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.02);
-  --shadow-xs: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.02);
-  --shadow-sm: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.04),
-    0px 1px 2px -1px oklch(0.35 0.05 163.5 / 0.04);
-  --shadow: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.04),
-    0px 1px 2px -1px oklch(0.35 0.05 163.5 / 0.04);
-  --shadow-md: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.04),
-    0px 2px 4px -1px oklch(0.35 0.05 163.5 / 0.04);
-  --shadow-lg: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.04),
-    0px 4px 6px -1px oklch(0.35 0.05 163.5 / 0.04);
-  --shadow-xl: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.04),
-    0px 8px 10px -1px oklch(0.35 0.05 163.5 / 0.04);
-  --shadow-2xl: 0px 1px 3px 0px oklch(0.35 0.05 163.5 / 0.1);
-}
+  /* Status tones (badges, QA verdicts, highlights) — the ds status pairs. */
+  --tone-good: var(--good);
+  --tone-good-soft: var(--good-soft);
+  --tone-warn: var(--warn);
+  --tone-warn-soft: var(--warn-soft);
+  --tone-serious: var(--serious);
+  --tone-serious-soft: var(--serious-soft);
+  --tone-critical: var(--critical);
+  --tone-critical-soft: var(--critical-soft);
+  --tone-violet: var(--info);
+  --tone-violet-soft: var(--info-soft);
 
-.dark {
-  --background: oklch(0.15 0.006 170);
-  --foreground: oklch(0.95 0.008 165);
-  --card: oklch(0.2 0.007 170);
-  --card-foreground: oklch(0.95 0.008 165);
-  --popover: oklch(0.2 0.007 170);
-  --popover-foreground: oklch(0.95 0.008 165);
-  --primary: oklch(0.64 0.165 154);
-  --primary-foreground: oklch(0.15 0.006 170);
-  --primary-strong: oklch(0.75 0.15 155);
-  --secondary: oklch(0.3 0.012 170);
-  --secondary-foreground: oklch(0.95 0.008 165);
-  --muted: oklch(0.3 0.012 170);
-  --muted-foreground: oklch(0.68 0.015 170);
-  --accent: oklch(0.32 0.05 168);
-  --accent-foreground: oklch(0.95 0.02 160);
-  --destructive: oklch(0.64 0.25 19.69);
-  --border: oklch(0.95 0.008 165 / 15%);
-  --input: oklch(0.95 0.008 165 / 20%);
-  --ring: oklch(0.64 0.165 154);
-  --chart-1: oklch(0.67 0.17 153.85);
-  --chart-2: oklch(0.6 0.1 269.83);
-  --chart-3: oklch(0.72 0.12 201.79);
-  --chart-4: oklch(0.8 0.1 100.65);
-  --chart-5: oklch(0.6 0.15 300.14);
-  --sidebar: oklch(0.2 0.042 162);
-  --sidebar-foreground: oklch(0.94 0.014 160);
-  --sidebar-primary: oklch(0.64 0.165 154);
-  --sidebar-primary-foreground: oklch(0.13 0.03 170);
-  --sidebar-accent: oklch(0.27 0.055 160);
-  --sidebar-accent-foreground: oklch(0.97 0.014 160);
-  --sidebar-border: oklch(0.28 0.048 160);
-  --sidebar-ring: oklch(0.64 0.165 154);
+  /* Dataviz (hand-rolled SVG charts) — ds chart + status tokens. */
+  --status-good: var(--good);
+  --status-warning: var(--warn);
+  --status-serious: var(--serious);
+  --status-critical: var(--critical);
 
-  /* Dark-mode status tones: deep tinted chips with light text. */
-  --tone-good: oklch(0.8 0.14 155);
-  --tone-good-soft: oklch(0.26 0.05 155);
-  --tone-warn: oklch(0.85 0.11 90);
-  --tone-warn-soft: oklch(0.28 0.05 85);
-  --tone-serious: oklch(0.8 0.12 50);
-  --tone-serious-soft: oklch(0.27 0.05 45);
-  --tone-critical: oklch(0.82 0.14 22);
-  --tone-critical-soft: oklch(0.28 0.08 25);
-  --tone-violet: oklch(0.82 0.09 295);
-  --tone-violet-soft: oklch(0.29 0.06 295);
-
-  --shadow-2xs: 0px 1px 2px 0px oklch(0 0 0 / 0.01);
-  --shadow-xs: 0px 1px 2px 0px oklch(0 0 0 / 0.01);
-  --shadow-sm: 0px 1px 2px 0px oklch(0 0 0 / 0.01),
-    0px 1px 2px -1px oklch(0 0 0 / 0.01);
-  --shadow: 0px 1px 2px 0px oklch(0 0 0 / 0.01),
-    0px 1px 2px -1px oklch(0 0 0 / 0.01);
-  --shadow-md: 0px 1px 2px 0px oklch(0 0 0 / 0.01),
-    0px 2px 4px -1px oklch(0 0 0 / 0.01);
-  --shadow-lg: 0px 1px 2px 0px oklch(0 0 0 / 0.01),
-    0px 4px 6px -1px oklch(0 0 0 / 0.01);
-  --shadow-xl: 0px 1px 2px 0px oklch(0 0 0 / 0.01),
-    0px 8px 10px -1px oklch(0 0 0 / 0.01);
-  --shadow-2xl: 0px 1px 2px 0px oklch(0 0 0 / 0.03);
+  /* shadcn shadow scale → the ds elevation scale. */
+  --shadow-2xs: var(--shadow-0);
+  --shadow-xs: var(--shadow-1);
+  --shadow-sm: var(--shadow-1);
+  --shadow: var(--shadow-2);
+  --shadow-md: var(--shadow-2);
+  --shadow-lg: var(--shadow-3);
+  --shadow-xl: var(--shadow-3);
+  --shadow-2xl: var(--shadow-3);
 }
 
 @theme inline {
-  --font-sans: var(--font-lato), system-ui, sans-serif;
-  --font-heading: var(--font-lato), system-ui, sans-serif;
-  --font-body: var(--font-merriweather), Georgia, serif;
-  --font-mono: var(--font-roboto-mono), ui-monospace, monospace;
+  /* Type — the ds faces (Chivo + IBM Plex Mono). next/font vars remain on
+     <html> for any pre-migration markup but no longer drive utilities. */
+  --font-sans: var(--font-core);
+  --font-heading: var(--font-display);
+  --font-body: var(--font-core);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -192,8 +144,8 @@
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
 
-  /* -- Legacy Servo aliases (pre-shadcn markup keeps rendering during the
-        migration; new code must use the shadcn tokens above) -------------- */
+  /* Legacy Servo aliases (pre-shadcn markup keeps rendering during the
+     migration; new code must use the shadcn tokens above). */
   --color-bg: var(--background);
   --color-surface: var(--card);
   --color-surface-2: var(--muted);
@@ -203,8 +155,8 @@
   --color-ink-2: var(--muted-foreground);
   --color-ink-3: var(--muted-foreground);
   --color-brand: var(--primary);
-  --color-brand-deep: oklch(0.28 0.05 160);
-  --color-brand-soft: oklch(0.93 0.05 155);
+  --color-brand-deep: var(--accent-700);
+  --color-brand-soft: var(--brand-soft);
   --color-brand-ink: var(--primary-foreground);
   --color-primary-strong: var(--primary-strong);
   --color-good: var(--tone-good);
@@ -217,25 +169,9 @@
   --color-critical-soft: var(--tone-critical-soft);
   --color-violet: var(--tone-violet);
   --color-violet-soft: var(--tone-violet-soft);
-  --font-display: var(--font-lato), system-ui, sans-serif;
   --radius-card: var(--radius);
   --shadow-card: var(--shadow-sm);
   --shadow-pop: var(--shadow-lg);
-}
-
-/* ---------------------------------------------------------------------------
-   Dataviz tokens for any hand-rolled SVG charts (status colors are semantic
-   and reserved — never used as series colors).
---------------------------------------------------------------------------- */
-:root {
-  --status-good: oklch(0.67 0.17 153.85);
-  --status-warning: oklch(0.8 0.15 85);
-  --status-serious: oklch(0.7 0.15 45);
-  --status-critical: oklch(0.61 0.24 20.96);
-  --chart-grid: var(--border);
-  --chart-axis: var(--input);
-  --chart-muted: var(--muted-foreground);
-  --chart-surface: var(--card);
 }
 
 @layer base {
@@ -244,8 +180,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-body);
-    line-height: 1.65;
+    line-height: var(--leading-normal);
   }
   h1,
   h2,
@@ -253,41 +188,8 @@
   h4,
   h5,
   h6 {
-    font-family: var(--font-heading);
-  }
-  h1 {
-    font-size: 2.25rem;
-    line-height: 1.2;
-    letter-spacing: -0.025em;
-    font-weight: 700;
-  }
-  h2 {
-    font-size: 1.875rem;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
-    font-weight: 600;
-  }
-  h3 {
-    font-size: 1.5rem;
-    line-height: 1.3;
-    letter-spacing: -0.015em;
-    font-weight: 600;
-  }
-  h4 {
-    font-size: 1.25rem;
-    line-height: 1.4;
-    letter-spacing: -0.01em;
-    font-weight: 500;
-  }
-  h5 {
-    font-size: 1.125rem;
-    line-height: 1.5;
-    font-weight: 500;
-  }
-  h6 {
-    font-size: 1rem;
-    line-height: 1.5;
-    font-weight: 500;
+    font-family: var(--font-display);
+    letter-spacing: var(--tracking-heading);
   }
   code,
   pre {

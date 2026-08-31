@@ -1,0 +1,74 @@
+[
+  [
+    {
+      "kind": "DURATION",
+      "text": "30 days",
+      "offset": 15,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 2592000,
+      "unit": "s",
+      "norm": "P30D",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DURATION",
+      "text": "2 hours",
+      "offset": 42,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 7200,
+      "unit": "s",
+      "norm": "PT2H",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DURATION",
+      "text": "45 minutes",
+      "offset": 16,
+      "length": 10,
+      "extractor": "facts@1",
+      "num": 2700,
+      "unit": "s",
+      "norm": "PT45M",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DURATION",
+      "text": "90 seconds",
+      "offset": 43,
+      "length": 10,
+      "extractor": "facts@1",
+      "num": 90,
+      "unit": "s",
+      "norm": "PT90S",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DURATION",
+      "text": "PT1H30M",
+      "offset": 26,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 5400,
+      "unit": "s",
+      "norm": "PT1H30M",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DURATION",
+      "text": "3 weeks",
+      "offset": 55,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 1814400,
+      "unit": "s",
+      "norm": "P3W",
+      "confidence": "EXACT"
+    }
+  ]
+]

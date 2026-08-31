@@ -1,7 +1,7 @@
 // Ops database & asset inventory tools: read-only SQL, gated mutating SQL,
 // and device lookups against the sandboxed ops database.
 
-import { opsDb, opsExecute, opsSelect } from "@/lib/opsdb";
+import { opsExecute, opsSelect } from "@/lib/opsdb";
 import { jsonSafe } from "@/lib/utils";
 import { errorMessage, RESULT_LIMIT, str, type ToolDef } from "./types";
 
@@ -18,9 +18,11 @@ function singleStatement(sql: string): string | null {
 }
 
 // Courtesy pre-check for the read-only tool so the model gets an actionable
-// error message. Real enforcement is the query_only connection in opsdb.ts.
+// error message. Real enforcement is the ro ROLE plus the read-only
+// TRANSACTION in opsdb.ts. No "pragma" — that was SQLite; Postgres has
+// none. Added the Postgres mutation verbs the courtesy check should know.
 const MUTATING_KEYWORD =
-  /\b(insert|update|delete|drop|alter|create|replace|attach|detach|pragma|vacuum|reindex)\b/i;
+  /\b(insert|update|delete|drop|alter|create|replace|truncate|grant|revoke|call|copy|attach|detach|vacuum|reindex)\b/i;
 
 function looksMutating(sql: string): boolean {
   const withoutLiterals = sql.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, "");
@@ -92,10 +94,11 @@ export const opsDbTools: Record<string, ToolDef> = {
       const assetTag = str(input.assetTag).trim();
       if (!assetTag) return "Error: assetTag is required.";
       try {
-        const rows = (await opsDb.$queryRawUnsafe(
-          "SELECT * FROM devices WHERE asset_tag = ?",
-          assetTag,
-        )) as unknown[];
+        const rows = await opsSelect(
+          // $1 placeholder — the value never touches the SQL text (db-05).
+          "SELECT * FROM devices WHERE asset_tag = $1",
+          [assetTag],
+        );
         if (rows.length === 0) return `No device found with asset tag ${assetTag}.`;
         return jsonSafe(rows[0]);
       } catch (err) {

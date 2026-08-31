@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     where.assigneeId = assigneeId;
   }
   if (q) {
-    where.OR = [{ title: { contains: q } }, { description: { contains: q } }];
+    where.OR = [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }];
   }
 
   const tickets = await db.ticket.findMany({
@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       title: parsed.data.title,
       description: parsed.data.description,
       status: "OPEN",
+      channel: "WEB", // explicit: the form is the WEB entry (ux-03)
       priority: "MEDIUM",
       category: "OTHER",
       requesterId: user.id,

@@ -10,16 +10,168 @@
 // additionally serialized per ticket, mirroring the resolver-run guard.
 
 import type { ReplyDraft, User } from "@prisma/client";
+import { formatLocator } from "@/lib/kb/locator";
 import { db } from "@/lib/db";
 import { sendMail } from "@/lib/notify";
 import { isEditedReply, replySubject } from "@/lib/reply-format";
 import { emitEvent } from "@/lib/webhooks";
 import { pickAgentProfile } from "@/lib/agent-profiles";
+import { draftPrincipalId } from "@/lib/kb/principals";
+import { entitledDocumentIds } from "@/lib/kb/entitlement";
+import { kbSearch } from "@/lib/kb/search";
+import { parseQueryFilters, type QueryFilter } from "@/lib/kb/query-filters";
+import { DEFAULT_RULESET } from "@/lib/kb/facts";
+import { getEmbedSettings, embedWithEndpoint } from "@/lib/kb/embed";
+import { mockEmbed, MOCK_EMBEDDER_MODEL } from "@/lib/kb/mock-embedder";
 import { settingsForProfile, withUsage } from "./credentials";
 import { draftSystem, draftUser } from "./prompts";
 import { getProvider } from "./provider";
 
 const CONVERSATION_LIMIT = 12; // most recent public comments fed to the model
+
+/** Character budget for injected KB passages (kb-12). The drafter gets
+ *  retrieval, not a tool loop — provenance by construction: nothing outside
+ *  this budget can be quoted, because nothing outside it is in the prompt. */
+/** Filler words stripped from drafter retrieval queries: the 'simple'
+ *  tsquery config ANDs every term and knows no stopwords of its own. */
+const DRAFT_QUERY_STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with",
+  "at", "by", "from", "is", "are", "was", "were", "be", "been", "it",
+  "its", "this", "that", "these", "those", "as", "if", "then", "than",
+  "so", "we", "you", "they", "he", "she", "our", "their", "your",
+  "not", "no", "yes", "all", "any", "can", "will", "may", "must",
+  "should", "would", "could", "into", "per", "via", "due", "when",
+  "what", "why", "how", "who", "does", "did", "has", "have", "had",
+  "tell", "me", "about", "please", "and", "its",
+]);
+
+export const KB_CONTEXT_LIMIT = 3000;
+
+export interface DraftSource {
+  docId: string;
+  docName: string;
+  locator: unknown;
+  chunkId: string;
+}
+
+/**
+ * The deterministic pre-retrieval step: resolve the chain
+ * (A = draftPrincipalId(profile), B = ticket.requesterId) and search the
+ * knowledge base over title + description + recent comments. Returns the
+ * passages AND nothing else — the drafter has no other way to reach KB text.
+ */
+async function retrieveSources(
+  ticket: { title: string; description: string; requesterId: string; category: string; createdAt: Date },
+  comments: { body: string }[],
+  profile: { id: string } | null,
+): Promise<{ passages: string[]; sources: DraftSource[] }> {
+  const chain = {
+    agentId: draftPrincipalId(profile),
+    humanId: ticket.requesterId,
+  };
+
+  // ext-07: ticket-derived filters. The SAME extractor ext-06 runs over a
+  // query runs over the ticket's title and description, and the filters it
+  // returns ride into the kbSearch call BELOW — the one that already exists,
+  // under the chain resolved just above. Nothing here widens access: a filter
+  // can only remove rows from a set the entitlement fragment already bounded,
+  // so the worst it can do is retrieve less.
+  //
+  // A CONSTRAINT, NOT A MENTION — and this line is why the drafter is usable.
+  // A ticket is prose written by a requester, not a query written by an
+  // operator. "Please reply to bob@acme.example", "my order is INV-2024-113",
+  // "see https://…/help" all make the extractor type a fact, and an ANDed fact
+  // the corpus happens not to contain takes retrieval from some passages to
+  // NONE: measured over ordinary ticket sentences, the filtered pass came back
+  // empty in sixteen cases out of sixteen. A draft has no readback to say so
+  // (the tool has one; a reply draft cannot), so that failure reaches a human
+  // reviewer as an uncited draft and quietly disables kb-14 auto-delivery,
+  // which requires a citation.
+  //
+  // So the drafter applies only the filters the ticket bound to a COMPARATOR —
+  // ">=", "<=", "between", ext-06's own closed table. "invoices over $2,000"
+  // is a constraint the author stated; an address in the signature is a
+  // mention. Dropping a mention can only WIDEN retrieval, which is the safe
+  // direction here, and it is why this path needs no second query and no
+  // fallback: when the ticket states nothing, the retrieval is byte-identical
+  // to what it was before this item. See §14 question 60 — the owner may want
+  // relative dates ("last quarter", which ext-06 emits as "=") in this set too.
+  //
+  // refDate is the TICKET'S createdAt, resolved the way ingestion resolves a
+  // document's: "last quarter" in a ticket means the quarter before the
+  // ticket was written, not before the draft happened to be generated. A
+  // regenerated draft therefore filters identically to the first one.
+  let parsed: { filters: QueryFilter[]; residue: string } = { filters: [], residue: "" };
+  try {
+    parsed = parseQueryFilters(`${ticket.title} ${ticket.description}`, {
+      ...DEFAULT_RULESET,
+      refDate: ticket.createdAt.toISOString().slice(0, 10),
+    });
+  } catch {
+    /* a throw in the shared extractor degrades to unfiltered retrieval — the
+       same posture the embeddings block below takes, and the same reason: a
+       retrieval aid must never be able to fail a draft. */
+  }
+  const filters = parsed.filters.filter(
+    (f) => f.comparator === ">=" || f.comparator === "<=" || f.comparator === "between",
+  );
+  // The same exchange the tool makes: text leaves the keyword pass only when a
+  // filter takes its place. Without this the phrase would be applied twice —
+  // structurally as the filter AND as ANDed tokens ("over", "2 <-> 000") that
+  // no chunk contains. With no filter applied the text is exactly what it was.
+  const ticketText = filters.length > 0 ? parsed.residue : `${ticket.title} ${ticket.description}`;
+  const raw = [ticketText, ...comments.map((c) => c.body)].join(" ").slice(0, 400);
+  // The 'simple' text-search config has no stopwords, so a natural-language
+  // query would AND every filler word and match nothing. Drop them (the
+  // same stopword list the keyword pass uses) and dedupe.
+  const query = [
+    ...new Set(
+      (raw.toLowerCase().match(/[a-z0-9][a-z0-9-]{2,}/g) ?? []).filter(
+        (t) => !DRAFT_QUERY_STOPWORDS.has(t),
+      ),
+    ),
+  ]
+    .slice(0, 12)
+    .join(" ");
+
+  let vector: number[] | undefined;
+  let model: string | undefined;
+  try {
+    const settings = await getEmbedSettings();
+    if (settings.kind === "mock") {
+      vector = mockEmbed(query);
+      model = MOCK_EMBEDDER_MODEL;
+    } else if (settings.kind === "openai-compatible") {
+      const [embedded] = await embedWithEndpoint(settings, [query]);
+      vector = embedded.vector;
+      model = embedded.model;
+    }
+  } catch {
+    /* keyword-only on any configuration failure — same path */
+  }
+
+  // ONE statement, as before this item: the filters ride into the call that
+  // was already here. A constraint the requester stated is honoured even when
+  // it selects nothing — citing $500 invoices to someone asking about
+  // invoices over $2,000 would be worse than citing none.
+  const hits = await kbSearch(db, chain, query, {
+    limit: 6,
+    queryVector: vector,
+    embeddingModel: model,
+    filters,
+  });
+  const passages: string[] = [];
+  const sources: DraftSource[] = [];
+  let budget = KB_CONTEXT_LIMIT;
+  for (const [i, hit] of hits.entries()) {
+    const marker = `[${i + 1}] ${hit.docName} · ${formatLocator(hit.locator)}`;
+    if (marker.length + hit.text.length > budget) break;
+    budget -= marker.length + hit.text.length;
+    passages.push(`${marker}\n${hit.text}`);
+    sources.push({ docId: hit.documentId, docName: hit.docName, locator: hit.locator, chunkId: hit.chunkId });
+  }
+  return { passages, sources };
+}
 
 // In-process guard: one draft generation per ticket at a time (same pattern
 // as the resolver's activeResolverTickets set).
@@ -73,9 +225,19 @@ async function draftReplyInner(ticketId: string): Promise<ReplyDraft> {
     model: settings.model,
   });
 
+  // Deterministic pre-retrieval (kb-12): cited passages injected with
+  // numbered markers; sources IS the injected set. NO tool loop — a model
+  // with tools can quote a passage it never logged, which would destroy
+  // provenance. Retrieval defaults ON: it only makes drafts better and
+  // changes nothing about sending.
+  const { passages, sources } = await retrieveSources(ticket, conversation, profile);
+  const userText = passages.length
+    ? `Knowledge base sources (cite as [n]):\n\n${passages.join("\n\n")}\n\n---\n\n${draftUser(ticket, conversation)}`
+    : draftUser(ticket, conversation);
+
   const turn = await provider.complete({
     system: draftSystem,
-    messages: [{ role: "user", content: [{ type: "text", text: draftUser(ticket, conversation) }] }],
+    messages: [{ role: "user", content: [{ type: "text", text: userText }] }],
     tools: [],
   });
   const body = turn.text.trim();
@@ -84,18 +246,142 @@ async function draftReplyInner(ticketId: string): Promise<ReplyDraft> {
   const pending = await db.replyDraft.findFirst({
     where: { ticketId, status: "PENDING" },
   });
-  if (pending) {
-    // Guarded update: if the draft was approved/rejected while the model was
-    // writing, leave the decided row untouched and store a fresh one instead.
-    const { count } = await db.replyDraft.updateMany({
-      where: { id: pending.id, status: "PENDING" },
-      data: { body, agentName, createdAt: new Date() },
+  const stored = pending
+    ? (await db.replyDraft.updateMany({
+        where: { id: pending.id, status: "PENDING" },
+        data: { body, agentName, sources: sources as unknown as never, createdAt: new Date() },
+      }).then(({ count }) =>
+        count === 1 ? db.replyDraft.findUniqueOrThrow({ where: { id: pending.id } }) : null,
+      ))
+    : null;
+  const draft =
+    stored ??
+    (await db.replyDraft.create({
+      data: { ticketId, body, agentName, sources: sources as unknown as never },
+    }));
+
+  // Auto-delivery (kb-14): default OFF, per category, capped per day. Any
+  // condition failing leaves the draft PENDING in the ordinary queue —
+  // nothing auto-sends on a fresh install.
+  await maybeAutoDeliver(draft);
+  return db.replyDraft.findUniqueOrThrow({ where: { id: draft.id } });
+}
+
+export const AUTODELIVER_SETTING_PREFIX = "kb.autodeliver.";
+export const AUTODELIVER_CAP_KEY = "kb.autodeliver.dailyCap";
+export const AUTODELIVER_DEFAULT_CAP = 20;
+
+/**
+ * The five preconditions, in order (spec kb-14): the per-category setting is
+ * ON; the draft has at least one citation; re-verification passes; the QA
+ * reviewer has not flagged the ticket's latest run; the daily cap is not
+ * exhausted. The automatic path then fires the SAME atomic claim through
+ * approveDraft with decider null — inheriting kb-13's guard rather than
+ * owning a second one.
+ */
+async function maybeAutoDeliver(draft: ReplyDraft): Promise<void> {
+  const settings = await db.setting.findMany({
+    where: { key: { startsWith: AUTODELIVER_SETTING_PREFIX } },
+  });
+  const map = new Map(settings.map((s) => [s.key, s.value]));
+
+  const ticket = await db.ticket.findUniqueOrThrow({
+    where: { id: draft.ticketId },
+    select: { category: true, status: true },
+  });
+  if (ticket.status === "CLOSED") return;
+
+  // 1. Per-category opt-in: absent = OFF.
+  if (map.get(`${AUTODELIVER_SETTING_PREFIX}${ticket.category}`) !== "true") return;
+
+  // 2. At least one citation — an uncited answer is never auto-sent.
+  const sources = Array.isArray(draft.sources) ? (draft.sources as unknown[]) : [];
+  if (sources.length === 0) return;
+
+  // 3. Send-time re-verification passes (kb-13 runs again inside approveDraft,
+  //    but checking first keeps the failure visible as a parked draft).
+  const fresh = await db.replyDraft.findUniqueOrThrow({
+    where: { id: draft.id },
+    include: { ticket: true },
+  });
+  if ((await reverifyCitations(fresh)) !== null) return;
+
+  // 4. The QA reviewer has not flagged the ticket's latest run.
+  const flagged = await db.agentRun.findFirst({
+    where: { ticketId: draft.ticketId, qaVerdict: "FAIL" },
+    select: { id: true },
+  });
+  if (flagged) return;
+
+  // 5. The daily cap (default 20) bounds the blast radius.
+  const cap = Number.parseInt(map.get(AUTODELIVER_CAP_KEY) ?? "", 10);
+  const dailyCap = Number.isFinite(cap) && cap >= 0 ? cap : AUTODELIVER_DEFAULT_CAP;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const sentToday = await db.replyDraft.count({
+    where: { status: "SENT", autoDelivered: true, decidedAt: { gte: since } },
+  });
+  if (sentToday >= dailyCap) return;
+
+  try {
+    await approveDraft(draft.id, null);
+  } catch {
+    // A lost race or a just-revoked citation parks the draft — the queue
+    // keeps it, a human sees it. Never crash draft generation over delivery.
+  }
+}
+
+/**
+ * Send-time re-verification (kb-13): every citation in ReplyDraft.sources
+ * re-checks the full chain BEFORE the atomic claim — a grant revoked between
+ * drafting and approval blocks the send regardless of who pressed the
+ * button, and the human and (kb-14) automatic paths inherit the same guard.
+ */
+async function reverifyCitations(
+  draft: ReplyDraft & { ticket: { requesterId: string; category: string } },
+): Promise<string | null> {
+  const sources = Array.isArray(draft.sources)
+    ? (draft.sources as { docId: string; docName: string }[])
+    : [];
+  if (sources.length === 0) return null; // nothing cited, nothing to verify
+
+  // The chain the draft was built on: the drafter principal ∩ requester.
+  const profile = await pickAgentProfile(draft.ticket.category);
+  const chain = {
+    agentId: draftPrincipalId(profile ?? null),
+    humanId: draft.ticket.requesterId,
+  };
+  const readable = new Set(await entitledDocumentIds(db, chain));
+  const dark = sources.filter((s) => !readable.has(s.docId));
+  if (dark.length > 0) {
+    return (
+      `Cannot send: a cited source is no longer readable by the requester — ` +
+      `${dark.map((s) => s.docName).join(", ")} went dark (access was revoked ` +
+      `after the draft was written). Regenerate the draft.`
+    );
+  }
+
+  // dcl-09: a citation whose CHUNK no longer exists went dark too —
+  // re-extraction replaces chunk rows, so a draft built before one dangles.
+  // The refusal names the citation; the atomic claim is never attempted, so
+  // the draft stays PENDING with no comment, no mail and no webhook.
+  const cited = sources.filter((s) => typeof (s as { chunkId?: string }).chunkId === "string");
+  if (cited.length > 0) {
+    const chunkIds = cited.map((s) => (s as unknown as { chunkId: string }).chunkId);
+    const rows = await db.documentChunk.findMany({
+      where: { id: { in: chunkIds } },
+      select: { id: true },
     });
-    if (count === 1) {
-      return db.replyDraft.findUniqueOrThrow({ where: { id: pending.id } });
+    const live = new Set(rows.map((r) => r.id));
+    const vanished = cited.filter((s) => !live.has((s as unknown as { chunkId: string }).chunkId));
+    if (vanished.length > 0) {
+      return (
+        `Cannot send: a citation went dark — ${vanished.map((s) => s.docName).join(", ")} ` +
+        `was re-extracted after this draft was written, and the passage it cited ` +
+        `no longer exists. Regenerate the draft.`
+      );
     }
   }
-  return db.replyDraft.create({ data: { ticketId, body, agentName } });
+  return null;
 }
 
 /**
@@ -107,7 +393,7 @@ async function draftReplyInner(ticketId: string): Promise<ReplyDraft> {
  */
 export async function approveDraft(
   draftId: string,
-  decider: User,
+  decider: User | null,
   finalBody?: string,
 ): Promise<ReplyDraft> {
   const draft = await db.replyDraft.findUnique({
@@ -120,20 +406,43 @@ export async function approveDraft(
     throw new Error("The ticket is closed — replies cannot be sent on it.");
   }
 
+  // Before ANY state change: a revoked citation blocks the send, whoever
+  // pressed the button. On refusal the atomic claim is never attempted —
+  // the draft stays PENDING, nothing is posted, mailed or recorded.
+  const citationError = await reverifyCitations(draft);
+  if (citationError) throw new Error(citationError);
+
   const body = (finalBody ?? "").trim() || draft.body;
   // Feeds the dashboard's AI acceptance metric: sent as-is vs edited first.
   const edited = isEditedReply(draft.body, body);
 
   // Atomic claim: only one concurrent decision wins; the rest see 0 rows and
   // never send anything. The row records the body that actually went out.
+  // decider === null means the AUTOMATIC path (kb-14): autoDelivered true and
+  // the timeline comment is authored by the Servo Drafter system user.
+  const automatic = decider === null;
   const { count } = await db.replyDraft.updateMany({
     where: { id: draftId, status: "PENDING" },
-    data: { status: "SENT", body, edited, decidedAt: new Date(), deciderId: decider.id },
+    data: {
+      status: "SENT",
+      body,
+      edited,
+      decidedAt: new Date(),
+      ...(automatic ? { autoDelivered: true } : { deciderId: decider.id }),
+    },
   });
   if (count === 0) throw new Error("Draft was already decided.");
 
+  // The timeline comment needs an author: the approving human, or Servo
+  // Drafter when policy sent it without one.
+  let commentAuthorId = automatic ? null : decider.id;
+  if (automatic) {
+    const drafter = await db.user.findFirst({ where: { role: "AI_AGENT", aiKind: "DRAFT" } });
+    if (!drafter) throw new Error("Servo Drafter system user missing — run the core bootstrap.");
+    commentAuthorId = drafter.id;
+  }
   await db.comment.create({
-    data: { ticketId: draft.ticketId, authorId: decider.id, body, kind: "COMMENT" },
+    data: { ticketId: draft.ticketId, authorId: commentAuthorId!, body, kind: "COMMENT" },
   });
   // Guarded so a concurrent first reply's earlier timestamp is never overwritten.
   await db.ticket.updateMany({
@@ -156,7 +465,8 @@ export async function approveDraft(
     ticketNumber: draft.ticket.number,
     draftId,
     emailed,
-    decidedBy: decider.name,
+    decidedBy: automatic ? "Servo Drafter (auto-delivered)" : (decider as User).name,
+    autoDelivered: automatic,
   });
   return updated;
 }

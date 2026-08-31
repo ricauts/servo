@@ -5,16 +5,56 @@ mainly [Paperclip](https://github.com/paperclipai/paperclip) (MIT) and the
 Claude Code ecosystem — so no run repeats work already done, and so every
 rejection stays rejected for a stated reason.
 
+**How to read this file** *(header added 2026-08-28 by `hyg-02`)*
+
+This ledger is part live rules and part history, and the two halves are read
+differently.
+
+- **`## Shipped` and `## Rejected` are the history sections.** Every entry in
+  them is true **as of its own entry date**, which is the date in its heading,
+  and entries are **never rewritten** to match how the repository looks later.
+  An entry describing what Servo was in August 2026 stays as written even once
+  that is no longer the case; correcting it would destroy the only record of
+  what a past run actually decided and why. These two headings are what
+  `docs/POSITIONING.md`'s banned-phrase exemptions and the `db-10` backlog item
+  cite as "the marked history section of the porting ledger", by these exact
+  names. Rename either heading and the exemption stops resolving —
+  loudly, not silently: `scripts/claims-audit.mjs` validates that every section
+  an exemption names exists, and fails the build naming the heading it could
+  not find. Rename one only together with the canon entry that points at it.
+- **Everything outside those two sections is live and present-tense**: the
+  intro above, the rules block below, and `## Candidates for a future run`.
+  Those are maintained, and a claim in them that stops being true is a defect.
+
+One exception is on record, and it names itself in full. `hyg-02` made exactly
+three edits inside the history sections, all on the same subject — a filename
+this ledger cites:
+
+1. `THIRD-PARTY.md` → `THIRD_PARTY.md`, the spelling the adopt-first gate uses,
+   at both sites that reference it.
+2. The removal of a parenthetical asserting that the file does not exist, which
+   `hyg-02` itself falsified by creating it.
+3. On that same sentence, the surrounding predicate was reworded from "is
+   therefore unchanged" to "therefore gains no entry", because with the
+   parenthetical gone the original read as a claim about a file that now
+   exists. This one *is* a rewrite of a line that was accurate on its entry
+   date, and it is recorded here rather than absorbed silently.
+
+Nothing else in any dated entry was touched: the finding, the reasoning and the
+attribution verdict of every entry stand exactly as written. A correction of
+this kind names itself here; it is not a licence to revise history, and edit 3
+is the outer bound of what "correcting a citation" is allowed to reach.
+
 **Rules this ledger enforces**
 
 - Read this file and `gh pr list --state all` before starting. Never redo an
   item recorded here, and never restart work an open PR already covers.
 - One high-value item per run, shipped end to end (code + tests + docs).
-- Copied code keeps its copyright notice and is recorded in `THIRD-PARTY.md`
+- Copied code keeps its copyright notice and is recorded in `THIRD_PARTY.md`
   with the upstream path. Reimplementing an observed *design* needs no
   attribution — but say so here.
 - Nothing lands that assumes Paperclip's pnpm monorepo, its Node+React split
-  or its database. Servo is one Next.js app on Prisma + SQLite.
+  or its database. Servo is one Next.js app on Prisma + PostgreSQL.
 - No new mandatory environment variables. Anything configurable is
   configurable from the existing Settings/Integrations UI, with defaults that
   work on a fresh install, and documented in `docs/USER-GUIDE.md`.
@@ -83,7 +123,7 @@ are served.
 text rather than markup) and the same search-then-read shape Paperclip uses in
 `packages/mcp-server`. **Reimplemented, no code copied** — the HTML flattener,
 the address classifier and the allowlist grammar are written against Servo's
-own settings and tool contract, so `THIRD-PARTY.md` gains no entry.
+own settings and tool contract, so `THIRD_PARTY.md` gains no entry.
 
 - `src/lib/ai/tools/web.ts` — `fetch_url` (LOW, no approval; it reads and
   never writes) returns status, title and the page as text.
@@ -124,7 +164,7 @@ confirmed it survives contact with a real product.
 **Attribution.** None required — no upstream code was copied. The parser is
 Servo's own (`gray-matter` + the `CATEGORIES` union), and the catalogue
 ordering, the applicability rule and the QA review section were written against
-Servo's schema. `THIRD-PARTY.md` is therefore unchanged (it does not exist).
+Servo's schema. `THIRD_PARTY.md` therefore gains no entry.
 
 **Why this and not something else.** It was the top "candidate for a future
 run" left by the desk-memory PR, and it is the missing half of that feature:
@@ -197,7 +237,7 @@ rendered in a real browser at 1400×1000.
   value in Servo is already served by custom HTTP tools plus the MCP server.
   Infrastructure, not breadth.
 - **Paperclip `packages/db`.** Its own schema and migration story; Servo is
-  Prisma + SQLite with string unions in `src/lib/types.ts` as the source of
+  Prisma + PostgreSQL with string unions in `src/lib/types.ts` as the source of
   truth.
 - **Paperclip's pnpm monorepo, its Node+React split and its `PAPERCLIP_*`
   env-var contract.** Servo is one Next.js app configured from its own UI.

@@ -3,7 +3,7 @@
 This document describes how Servo is built: the stack, the data model, the AI
 agent engine, the tool/approval policy system, and the provider abstraction.
 For the build contract that module authors follow, see
-[CONTRACT.md](CONTRACT.md).
+[the superseded build contract](history/CONTRACT.md) — kept for provenance under `docs/history/`.
 
 ## Stack
 
@@ -11,8 +11,8 @@ For the build contract that module authors follow, see
 |---|---|
 | Framework | Next.js 15 (App Router), React 19, server components by default |
 | Language | TypeScript (strict) |
-| Database | Prisma 6 + SQLite (app DB `prisma/dev.db`, sandbox ops DB `prisma/ops.db`) |
-| Styling | Tailwind CSS 3.4 with design tokens (no raw hex in markup) |
+| Database | Prisma 6 + PostgreSQL (pgvector image; app DB `servo`, numbered migrations in `prisma/migrations/`) |
+| Styling | Tailwind 4 via `@tailwindcss/postcss` with design tokens (no `tailwind.config.ts`, no raw hex in markup) |
 | Validation | zod v4 |
 | AI SDK | `@anthropic-ai/sdk` (only used when a key is configured) |
 
@@ -22,8 +22,9 @@ call the JSON API routes under `src/app/api/*` and refresh via
 
 ## Data model
 
-SQLite has no enums, so enum-like columns are strings constrained by the union
-types in `src/lib/types.ts` — that file is the single source of truth for
+Enum-like columns are strings by choice, not by dialect — a Prisma enum would
+turn every new status or role into a migration. The union types in
+`src/lib/types.ts` are the single source of truth for
 values like `TicketStatus`, `Priority`, `RiskLevel`, and `RunStatus`.
 
 - **User** — humans (`ADMIN` / `AGENT` / `REQUESTER`) and AI agents
@@ -88,10 +89,38 @@ values like `TicketStatus`, `Priority`, `RiskLevel`, and `RunStatus`.
   (`ai.provider`, `ai.apiKey`, `ai.baseUrl`, `ai.model`, `ai.autoTriage`,
   `ai.qaEnabled`).
 
-A second SQLite database (`prisma/ops.db`) is the **sandbox ops database** the
-agent operates on: `devices`, `employees`, `employees_backup`,
-`software_licenses`, `campaign_tracking`. It stands in for the real systems a
-production deployment would integrate with.
+The **sandbox ops database** is `servo_ops`, its own database on the same
+Postgres server, reached through two dedicated login roles (`servo_ops_rw`,
+`servo_ops_ro`) whose `CONNECT` on the desk database is revoked
+(`scripts/postgres-init.sql`, db-05). It holds what the agent operates on:
+`devices`, `employees`, `employees_backup`, `software_licenses`,
+`campaign_tracking`. It stands in for the real systems a production deployment
+would integrate with.
+
+### What the database guarantees (db-08)
+
+Four platform contracts the knowledge base builds on, proven against the real
+engine by `tests/pgvector-platform.test.ts` — cite this block instead of
+rediscovering them:
+
+1. **Vector nearest-neighbour.** A `vector(N)` column under an HNSW index
+   (`vector_cosine_ops`) returns the true nearest neighbour by `<=>` cosine
+   distance. `kbSearch` blends this with keyword rank on the same page.
+2. **Full-text matching.** A GIN index over `to_tsvector('simple', …)` is
+   matched by `websearch_to_tsquery` — plain words and quoted phrases, and
+   nothing the query did not name.
+3. **RLS is only a backstop WITH `FORCE`.** `ENABLE ROW LEVEL SECURITY` alone
+   does **not** bind the table's owner — and the app connects as the role
+   that owns the tables. Only `FORCE ROW LEVEL SECURITY` makes the policy
+   apply to the owner too. The entitlement CTE remains the primary gate;
+   RLS is the belt under those braces, and it is a belt only when forced.
+   (Superusers bypass RLS even with `FORCE` — the smoke test demonstrates
+   the owner/force trap through a non-superuser role, which is the
+   production shape.)
+4. **Entitlement policies fail closed.** A policy keyed on
+   `current_setting('app.human_id', true)` returns **zero rows** when the
+   setting is absent — never all rows. A missing identity reads as "see
+   nothing", which is the only safe default.
 
 ## The agent engine
 
@@ -338,23 +367,3 @@ wins over the URL stored in Settings, the URL is never returned by the API
 setup can never break a ticket flow. `POST /api/settings/test-email` sends
 a real test message for the Settings UI.
 
-## From POC to a real deployment
-
-The sandbox ops DB and the simulated tools are deliberate stand-ins. To take
-this architecture to production you would keep the engine, the policy layer,
-and the pause/resume protocol unchanged, and swap tool implementations:
-
-- `query_ops_database` / `execute_ops_sql` → connections to real
-  warehouses/CMDBs, with per-tool credentials and read replicas for the
-  read path.
-- `get_device_info` → your MDM/asset system's API.
-- `reset_password` → your identity provider (Entra ID, Okta, …).
-- `github_*` → the real GitHub API with a scoped app installation.
-- `cloud_*` → Terraform/Bicep pipelines or cloud provider APIs, where the
-  plan/apply split maps naturally onto the approval gate.
-
-Each tool's `execute()` is the only thing that changes — risk levels,
-approval gates, QA review, and the run trace all apply to real integrations
-exactly as they do to the simulations. You would also replace the demo
-cookie auth with SSO, encrypt stored secrets, and move from SQLite to a
-server database, per the security disclaimer in the README.

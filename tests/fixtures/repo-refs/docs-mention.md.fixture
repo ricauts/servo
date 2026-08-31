@@ -1,0 +1,3 @@
+The reference scanner reads `src/lib/utils.ts` and the media rig lives in
+`scripts/record.mjs`. The dead component is `src/components/DeadWidget.tsx`,
+named here precisely because nothing imports it.

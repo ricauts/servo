@@ -1,50 +1,123 @@
+// The ops sandbox (spec db-05): a SEPARATE Postgres database the AI
+// agents operate on via the SQL tools, behind two dedicated roles —
+// servo_ops_ro for every read (with default_transaction_read_only at the
+// server AND an explicit SET TRANSACTION READ ONLY in every read call),
+// servo_ops_rw for the gated mutating tool. It is intentionally separate
+// from Servo's own database so an agent can run DDL/DML without touching
+// ticket data. In a real deployment these URLs point at the customer's
+// actual databases.
+//
+// Read-only is enforced by the ROLE and the TRANSACTION, not just keyword
+// filtering: a smuggled mutation (e.g. "WITH x AS (...) DELETE ...") fails
+// at the server with "cannot execute DELETE in a read-only transaction"
+// no matter how the statement is spelled — the keyword checks in the
+// tools remain a first-line courtesy only.
+
 import { PrismaClient } from "@prisma/client";
-import path from "path";
 
-// The "ops" database is a sandboxed SQLite file that AI agents operate on via
-// the sql tools. It is intentionally separate from Servo's own database so an
-// agent can run DDL/DML without touching ticket data. In a real deployment
-// this adapter would point at the customer's actual database.
-const opsUrl =
-  process.env.OPS_DATABASE_URL ??
-  "file:" + path.join(process.cwd(), "prisma", "ops.db").replace(/\\/g, "/");
+function withLimit(url: string): string {
+  return url.includes("connection_limit") ? url : url + (url.includes("?") ? "&" : "?") + "connection_limit=4";
+}
 
+function opsUrl(): string {
+  const url = process.env.OPS_DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "OPS_DATABASE_URL is not set — the ops sandbox is a Postgres database as of db-05 " +
+        "(docker compose sets it; see scripts/postgres-init.sql for what creates it).",
+    );
+  }
+  return url;
+}
+
+function readOnlyUrl(): string {
+  // The ro role is the default read path; OPS_DATABASE_READONLY_URL lets
+  // an operator point reads elsewhere (a replica) without moving writes.
+  return process.env.OPS_DATABASE_READONLY_URL ?? opsUrl();
+}
+
+// Pooled, module-level. Two clients, one per role; the read-only role is
+// enforced by the database itself (revoked grants), not by any client-side
+// switch.
 const globalForOps = globalThis as unknown as {
-  opsDb?: PrismaClient;
-  opsDbRead?: PrismaClient;
-  opsDbReadReady?: Promise<unknown>;
+  opsRead?: PrismaClient;
+  opsWrite?: PrismaClient;
 };
 
-export const opsDb =
-  globalForOps.opsDb ?? new PrismaClient({ datasourceUrl: opsUrl });
-
-if (process.env.NODE_ENV !== "production") globalForOps.opsDb = opsDb;
-
-// Dedicated single-connection client for reads, pinned to query-only mode at
-// the SQLite level so a smuggled mutation (e.g. "WITH x AS (...) DELETE ...")
-// fails at the driver with "attempt to write a readonly database" no matter
-// how the statement is spelled. Keyword checks in tools.ts are only a
-// first-line courtesy error; this is the actual enforcement.
-const opsDbRead =
-  globalForOps.opsDbRead ??
-  new PrismaClient({ datasourceUrl: `${opsUrl}?connection_limit=1` });
-const opsDbReadReady =
-  globalForOps.opsDbReadReady ??
-  opsDbRead.$executeRawUnsafe("PRAGMA query_only = ON;");
-
-if (process.env.NODE_ENV !== "production") {
-  globalForOps.opsDbRead = opsDbRead;
-  globalForOps.opsDbReadReady = opsDbReadReady;
+function readClient(): PrismaClient {
+  globalForOps.opsRead ??= new PrismaClient({ datasourceUrl: withLimit(readOnlyUrl()) });
+  return globalForOps.opsRead;
 }
 
-/** Run a read-only query against the ops database (enforced via query_only). */
-export async function opsSelect(sql: string): Promise<unknown[]> {
-  await opsDbReadReady;
-  const rows = (await opsDbRead.$queryRawUnsafe(sql)) as unknown[];
-  return rows;
+function writeClient(): PrismaClient {
+  globalForOps.opsWrite ??= new PrismaClient({ datasourceUrl: withLimit(opsUrl()) });
+  return globalForOps.opsWrite;
 }
 
-/** Run a mutating statement against the ops database. Returns affected rows. */
-export async function opsExecute(sql: string): Promise<number> {
-  return opsDb.$executeRawUnsafe(sql);
+/**
+ * q48(b), owner-authorised 2026-08-28: the sandbox refuses to be Servo's
+ * own database. URL-string comparisons fail open — the driver resolves
+ * spellings a parser does not (`?port=`, a repeated `?host=`, `0.0.0.0`,
+ * a socket path, an omitted database) — so the check that holds ASKS THE
+ * DATABASE THE DRIVER ACTUALLY REACHED whether it carries the desk's
+ * application tables. A catalog probe on first connection; the result is
+ * cached per process (the check runs once, not per statement).
+ */
+const APP_TABLES = ['"Ticket"', '"AgentRun"', '"Approval"'] as const;
+let ownDatabaseCheck: Promise<void> | null = null;
+
+function assertNotServoDatabase(client: PrismaClient): Promise<void> {
+  ownDatabaseCheck ??= (async () => {
+    const rows = (await client.$queryRawUnsafe(
+      `SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name IN ('Ticket', 'AgentRun', 'Approval')`,
+    )) as { table_name: string }[];
+    if (rows.length > 0) {
+      ownDatabaseCheck = null; // do not cache the refusal
+      throw new Error(
+        "OPS_DATABASE_URL points at Servo's own database — the ops sandbox " +
+          "must be a separate database. Refusing to run agent SQL against the desk.",
+      );
+    }
+  })();
+  return ownDatabaseCheck;
+}
+
+/**
+ * One read-only query. The statement runs INSIDE a transaction that is
+ * explicitly read-only — belt to the ro role's default_transaction_read_only
+ * braces — so a mutation fails at the server even if the role default was
+ * somehow lifted.
+ */
+export async function opsSelect(sql: string, params: unknown[] = []): Promise<unknown[]> {
+  const client = readClient();
+  await assertNotServoDatabase(client);
+  return client.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+      return ((await tx.$queryRawUnsafe(sql, ...params)) ?? []) as unknown[];
+    },
+    { timeout: 15_000 },
+  );
+}
+
+/** Run a mutating statement against the ops database (rw role). Returns
+ *  affected rows. */
+export async function opsExecute(sql: string, params: unknown[] = []): Promise<number> {
+  const client = writeClient();
+  await assertNotServoDatabase(client);
+  return client.$executeRawUnsafe(sql, ...params);
+}
+
+/** Disconnect both pooled clients (tests and shutdown). */
+export async function opsDisconnect(): Promise<void> {
+  if (globalForOps.opsRead) {
+    await globalForOps.opsRead.$disconnect();
+    delete globalForOps.opsRead;
+  }
+  if (globalForOps.opsWrite) {
+    await globalForOps.opsWrite.$disconnect();
+    delete globalForOps.opsWrite;
+  }
 }

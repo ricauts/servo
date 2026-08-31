@@ -115,16 +115,18 @@ export const historyTools: Record<string, ToolDef> = {
       const current = await currentTicket(ctx.ticketId);
 
       try {
-        // SQLite's LIKE is case-insensitive for ASCII, which is what Prisma's
-        // `contains` compiles to — no `mode: "insensitive"` (unsupported here).
+        // Case-insensitive search is a contract (db-03): `mode:
+        // "insensitive"` is ILIKE on PostgreSQL — plain `contains` would be
+        // case-sensitive LIKE. tests/search-case.test.ts pins vpn/VPN/Vpn
+        // equivalence for this tool and for the queue's ?q= filter.
         const rows = (await db.ticket.findMany({
           where: {
             ...(current ? { id: { not: current.id } } : {}),
             ...(category ? { category } : {}),
             ...(input.resolvedOnly === true ? { status: { in: ["RESOLVED", "CLOSED"] } } : {}),
             OR: terms.flatMap((term) => [
-              { title: { contains: term } },
-              { description: { contains: term } },
+              { title: { contains: term, mode: "insensitive" } },
+              { description: { contains: term, mode: "insensitive" } },
             ]),
           },
           orderBy: { createdAt: "desc" },

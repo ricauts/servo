@@ -1,5 +1,19 @@
 # Servo — Build Contract
 
+> **SUPERSEDED — kept for provenance, not as a live document.** This was the
+> original module-builder work order. What replaced it:
+>
+> - The live work order is the backlog in **`spec.md`** at the repository
+>   root (section 11), enforced by `scripts/spec-lint.mjs`.
+> - `src/lib/ai/tools.ts` is now the directory `src/lib/ai/tools/`
+>   (`src/lib/ai/tools/index.ts:5` names the split).
+> - `tailwind.config.ts` and `prisma/seed.ts` **do not exist** — Tailwind 4
+>   configures itself through `@tailwindcss/postcss`, and the seeds are
+>   `prisma/seed-core.ts` and `prisma/seed-demo.ts`.
+>
+> The body below is the document as it was written, unedited. hyg-08 moved
+> it here; it makes no claim about the current tree.
+
 This document is the source of truth for every module builder. Read it fully
 before writing code. The foundation (configs, schema, shared libs, UI
 primitives, shell, seed) already exists — build on top of it, never modify it.
@@ -16,15 +30,16 @@ a deterministic **mock provider** makes the entire demo work offline.
 
 ## Stack & hard rules
 
-- Next.js 15 (App Router) + React 19 + TypeScript strict. Prisma 6 + SQLite.
+- Next.js 15 (App Router) + React 19 + TypeScript strict. Prisma 6 + PostgreSQL (pgvector).
   Tailwind 3.4. zod **v4** (basic `z.object/z.string/z.enum` usage only).
   `@anthropic-ai/sdk` 0.115. `lucide-react` for icons. `clsx` via `cn()`.
 - **Do NOT** edit: `package.json`, `prisma/schema.prisma`, `prisma/seed.ts`,
   anything under `src/lib/` or `src/components/` that already exists,
   `src/app/layout.tsx`, `src/app/globals.css`, `tailwind.config.ts`. Do not
   add dependencies. If you need a helper, create it inside your own files.
-- SQLite has no enums: enum-like values are strings; the unions in
-  `src/lib/types.ts` are the source of truth. Always import types from there.
+- Enum-like values are strings by choice, not by dialect — extensibility wants
+  them to be data. The unions in `src/lib/types.ts` are the source of truth.
+  Always import types from there.
 - **Next 15 gotchas:** `params` is a Promise in pages and route handlers —
   `const { id } = await params;` with signature
   `{ params }: { params: Promise<{ id: string }> }`. `cookies()` is async.
@@ -168,7 +183,7 @@ export function getProvider(settings: AiSettings, ctx: MockContext): ChatProvide
   - /device|laptop|monitor|asset|warranty|phone/i → `get_device_info
     {assetTag: first /[A-Z]{2}-\d{3,4}/ match in text, else "LT-2043"}`
   - /table|database|sql|schema|query|report|license/i →
-    `query_ops_database {sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"}`
+    `query_ops_database {sql: "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"}`
     then, if /create|add|drop|delete|update|insert|alter/i,
     `execute_ops_sql {sql: derived: "DROP TABLE employees_backup;" if /drop/i
     else a CREATE TABLE derived from slugified title}`

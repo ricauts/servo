@@ -26,6 +26,7 @@ import {
   STATUS_TONE,
 } from "@/lib/labels";
 import type { Category, Priority, TicketStatus } from "@/lib/types";
+import { UNASSIGNED_COLOR } from "@/lib/avatar";
 
 export type TicketRow = {
   id: string;
@@ -33,6 +34,8 @@ export type TicketRow = {
   title: string;
   requesterName: string;
   status: string;
+  /** Entry channel (ux-03); absent renders no badge, like WEB. */
+  channel?: string;
   priority: string;
   category: string;
   assigneeName: string | null;
@@ -96,6 +99,11 @@ export default function TicketsTable({ rows }: { rows: TicketRow[] }) {
           >
             <TableCell className="pl-4 font-mono text-sm font-semibold text-muted-foreground">
               #{t.number}
+              {t.channel && t.channel !== "WEB" && (
+                <Badge tone="neutral" className="ml-1.5 font-mono text-[10px] uppercase tracking-wide">
+                  {t.channel}
+                </Badge>
+              )}
             </TableCell>
             <TableCell className="max-w-0 py-2.5">
               <Link
@@ -129,7 +137,7 @@ export default function TicketsTable({ rows }: { rows: TicketRow[] }) {
                 <span className="flex items-center gap-2">
                   <Avatar
                     name={t.assigneeName}
-                    color={t.assigneeColor ?? "#888888"}
+                    color={t.assigneeColor ?? UNASSIGNED_COLOR}
                     size={20}
                     isAi={t.assigneeIsAi}
                   />

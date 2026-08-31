@@ -1,0 +1,6 @@
+import sharp from "sharp";
+import { readFileSync } from "node:fs";
+
+export function shrink(file) {
+  return sharp(readFileSync(file)).resize(10);
+}

@@ -6,17 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  BookOpen,
-  Bot,
-  Inbox,
-  LayoutDashboard,
-  Plus,
-  Settings2,
-  ShieldCheck,
-  Ticket,
-  Users2,
-} from "lucide-react";
+import { Ticket } from "lucide-react";
 import {
   Command,
   CommandDialog,
@@ -28,6 +18,8 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import Badge from "@/components/legacy/Badge";
+import { NAV_ICONS } from "@/components/shell/nav-icons";
+import type { NavEntry } from "@/components/shell/nav-items";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
 import type { TicketStatus } from "@/lib/types";
 
@@ -38,18 +30,7 @@ interface TicketHit {
   status: string;
 }
 
-const PAGES = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/tickets", label: "Tickets", icon: Inbox },
-  { href: "/tickets/new", label: "New ticket", icon: Plus },
-  { href: "/approvals", label: "Approvals", icon: ShieldCheck },
-  { href: "/groups", label: "Groups", icon: Users2 },
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/skills", label: "Skills", icon: BookOpen },
-  { href: "/settings", label: "Settings", icon: Settings2 },
-];
-
-export default function CommandPalette() {
+export default function CommandPalette({ entries = [] }: { entries?: NavEntry[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -141,20 +122,25 @@ export default function CommandPalette() {
         )}
 
         <CommandGroup heading="Go to">
-          {PAGES.filter(
-            (page) =>
+          {/* The registry filtered by the server — same single owner as the
+              sidebar; no page list lives in this file. */}
+          {entries.filter(
+            (entry) =>
               query.trim() === "" ||
-              page.label.toLowerCase().includes(query.trim().toLowerCase()),
-          ).map((page) => (
-            <CommandItem
-              key={page.href}
-              value={page.href}
-              onSelect={() => go(page.href)}
-            >
-              <page.icon size={15} />
-              {page.label}
-            </CommandItem>
-          ))}
+              entry.label.toLowerCase().includes(query.trim().toLowerCase()),
+          ).map((entry) => {
+            const Icon = NAV_ICONS[entry.icon];
+            return (
+              <CommandItem
+                key={entry.href}
+                value={entry.href}
+                onSelect={() => go(entry.href)}
+              >
+                <Icon size={15} />
+                {entry.label}
+              </CommandItem>
+            );
+          })}
         </CommandGroup>
       </CommandList>
       </Command>

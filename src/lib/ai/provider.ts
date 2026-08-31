@@ -21,7 +21,14 @@ export interface ToolSpec {
 
 export interface AssistantTurn {
   text: string;
-  toolCalls: { id: string; name: string; input: Record<string, unknown> }[];
+  toolCalls: {
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+    /** Mock scripting identity (fed-04): which script-step key fired this
+     *  call — real providers leave it absent and nothing reads it. */
+    stepKey?: string;
+  }[];
   /** Token accounting when the provider reports it (real providers do). */
   usage?: { inputTokens: number; outputTokens: number };
 }

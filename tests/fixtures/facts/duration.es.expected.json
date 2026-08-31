@@ -1,0 +1,50 @@
+[
+  [
+    {
+      "kind": "DURATION",
+      "text": "30 días",
+      "offset": 15,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 2592000,
+      "unit": "s",
+      "norm": "P30D",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DURATION",
+      "text": "2 horas",
+      "offset": 39,
+      "length": 7,
+      "extractor": "facts@1",
+      "num": 7200,
+      "unit": "s",
+      "norm": "PT2H",
+      "confidence": "EXACT"
+    }
+  ],
+  [
+    {
+      "kind": "DURATION",
+      "text": "45 minutos",
+      "offset": 16,
+      "length": 10,
+      "extractor": "facts@1",
+      "num": 2700,
+      "unit": "s",
+      "norm": "PT45M",
+      "confidence": "EXACT"
+    },
+    {
+      "kind": "DURATION",
+      "text": "90 segundos",
+      "offset": 46,
+      "length": 11,
+      "extractor": "facts@1",
+      "num": 90,
+      "unit": "s",
+      "norm": "PT90S",
+      "confidence": "EXACT"
+    }
+  ]
+]

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
+import { BookOpen } from "lucide-react";
 import Avatar from "@/components/legacy/Avatar";
 import Badge from "@/components/legacy/Badge";
 import Timeline from "@/components/tickets/Timeline";
@@ -91,6 +92,16 @@ export default async function TicketDetailPage({
   );
   const railRuns = [...ticket.runs].reverse();
 
+  // reb-05: provenance both ways — the "Distill into skill" action on a
+  // resolved ticket, and the skills already distilled from this one.
+  const distillable =
+    (ticket.status === "RESOLVED" || ticket.status === "CLOSED") && can(currentUser, "skills.manage");
+  const distilled = await db.skill.findMany({
+    where: { sourceTicketId: ticket.id },
+    select: { id: true, slug: true, name: true, enabled: true },
+    orderBy: { createdAt: "asc" },
+  });
+
   return (
     <>
       {/* Header */}
@@ -122,6 +133,26 @@ export default async function TicketDetailPage({
           </Badge>
           {ticket.group && <Badge tone="brand">{ticket.group.name}</Badge>}
           <SlaBadge ticket={ticket} showKind />
+          {distillable && (
+            <Link
+              href={`/skills?distill=${ticket.id}`}
+              className="ml-1 inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Open the skill editor prefilled from this ticket's resolution"
+            >
+              <BookOpen size={11} />
+              Distill into skill
+            </Link>
+          )}
+          {distilled.map((skill) => (
+            <Link
+              key={skill.id}
+              href={`/skills#${skill.slug}`}
+              className="inline-flex items-center gap-1 rounded-md bg-violet-soft px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide text-violet transition-colors hover:bg-violet-soft/70"
+              title={skill.enabled ? "Distilled skill (enabled)" : "Distilled skill (disabled)"}
+            >
+              skill · {skill.name}
+            </Link>
+          ))}
           <span className="ml-1 flex items-center gap-1.5">
             <Avatar
               name={ticket.requester.name}

@@ -1,24 +1,27 @@
 #!/bin/sh
 set -e
 
-DB_FILE="${DATABASE_URL#file:}"
+# The datasource is PostgreSQL: the schema arrives as numbered migrations,
+# never `db push` (db-01). A legacy SQLite URL means someone pointed the new
+# image at an old install — refuse rather than silently start an empty desk.
+case "$DATABASE_URL" in
+  file:*)
+    echo "[servo] DATABASE_URL is a SQLite path ($DATABASE_URL)."
+    echo "[servo] The database is PostgreSQL now — see docs/migrating-to-postgres.md"
+    echo "[servo] for the one-shot import and the new compose stack."
+    exit 1
+    ;;
+esac
 
-if [ ! -f "$DB_FILE" ]; then
-  echo "[servo] No database found at $DB_FILE — running initial setup…"
-  npx prisma db push --skip-generate
-  if [ "$SERVO_DEMO" = "1" ]; then
-    echo "[servo] SERVO_DEMO=1 — loading the showcase dataset…"
-    npx tsx prisma/seed-demo.ts
-  else
-    npx tsx prisma/seed-core.ts
-  fi
-else
-  # Upgrades: db push is idempotent, so applying it every boot keeps an
-  # existing volume in step with a newer image's schema without touching
-  # data; the core seed backfills anything a newer version added.
-  echo "[servo] Using existing database at $DB_FILE — syncing schema…"
-  npx prisma db push --skip-generate
-  npx tsx prisma/seed-core.ts
+echo "[servo] Applying database migrations…"
+npx prisma migrate deploy
+
+# The core seed is create-only and idempotent: it backfills system rows an
+# upgrade may have added without ever touching existing data.
+npx tsx prisma/seed-core.ts
+if [ "$SERVO_DEMO" = "1" ]; then
+  echo "[servo] SERVO_DEMO=1 — loading the showcase dataset…"
+  npx tsx prisma/seed-demo.ts
 fi
 
 exec npm run start
