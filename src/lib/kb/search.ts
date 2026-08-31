@@ -50,7 +50,14 @@ interface QueryClient {
 
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
-/** A number safe to inline: finite, and never in exponent notation. */
+/**
+ * A number safe to inline. `Number.isFinite` does not coerce, so a
+ * non-number arriving from an untyped caller throws here rather than
+ * reaching the statement. Magnitudes beyond ~1e21 render in exponent form
+ * (`1e+24`), which Postgres accepts as a numeric constant — the persist
+ * layer already refuses anything DECIMAL(38,6) cannot hold, so no stored
+ * fact is comparable at that scale anyway.
+ */
 function numLit(value: number): string {
   if (!Number.isFinite(value)) throw new Error("kbSearch: non-finite filter value");
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(6);

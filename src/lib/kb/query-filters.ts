@@ -202,13 +202,24 @@ function escapeRegExp(s: string): string {
 
 /**
  * A lowercase view of the text with the SAME length, so phrase offsets
- * found in it are offsets in the original. A locale-independent
- * `toLowerCase` can in principle change length; when it does, matching
- * falls back to the original text rather than reporting wrong spans.
+ * found in it are offsets in the original.
+ *
+ * Per CHARACTER, not per string, and that is the whole point: `"İ"`
+ * lowercases to two code units, so a whole-string `toLowerCase` changes
+ * length and every offset after it. Folding character by character and
+ * keeping the original wherever the fold would change width means one
+ * exotic character costs its own case-insensitivity and nothing else's —
+ * a whole-string fallback would silently disable the phrase table for the
+ * entire query, which is the shape of bug that turns a filtered search
+ * into a differently-filtered one with no error anywhere.
  */
 function sameLengthLower(text: string): string {
-  const lower = text.toLowerCase();
-  return lower.length === text.length ? lower : text;
+  let out = "";
+  for (const ch of text) {
+    const lower = ch.toLowerCase();
+    out += lower.length === ch.length ? lower : ch;
+  }
+  return out;
 }
 
 /** `1.5` + 3 zeros -> "1500"; null when the mantissa is not expandable. */
@@ -366,12 +377,37 @@ function onlyGap(text: string, from: number, to: number): boolean {
 }
 
 /**
+ * True when the gap holds nothing but whitespace, punctuation and the
+ * connectives table — the widest gap a filter phrase may reach across.
+ *
+ * The two-sided form needs this and the one-sided form does not, because
+ * "between" and "and" are ordinary English words: without an adjacency
+ * rule, "read between the lines about invoice $1,000 and payment $2,000"
+ * becomes a range nobody asked for, and Spanish is worse because "y" is
+ * everywhere. A phrase that cannot reach its operand is not a comparator
+ * in this sentence, so it stays in the residue as the keyword it is.
+ */
+function onlyFillerGap(text: string, from: number, to: number): boolean {
+  if (to < from) return false;
+  for (const token of text.slice(from, to).split(/\s+/)) {
+    const word = token.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    if (word !== "" && !CONNECTIVES.has(word)) return false;
+  }
+  return true;
+}
+
+/**
  * Parse a query into structured filters plus the free-text residue.
  * PURE: the ruleset carries refDate, dateOrder and defaultCurrency, so the
  * same query plus the same ruleset always produces the same result.
  */
 export function parseQueryFilters(query: string, ruleset: FactRuleset): ParsedQuery {
-  const text = query.slice(0, QUERY_INPUT_CAP);
+  // Cap FIRST, then normalize: the cap is on what the caller sent, and
+  // NFC composition can only shorten. The tables are written in composed
+  // form, so a decomposed "más" (m + a + U+0301 + s) would miss every
+  // Spanish row and silently produce a DIFFERENT query rather than a
+  // failed one — the worst outcome available here.
+  const text = query.slice(0, QUERY_INPUT_CAP).normalize("NFC");
   const lower = sameLengthLower(text);
   const { work, pieces } = rewrite(text, ruleset);
 
@@ -387,14 +423,21 @@ export function parseQueryFilters(query: string, ruleset: FactRuleset): ParsedQu
   // Two-sided form first: "between $1,000 and $2,000" must not be read as
   // two independent equality filters.
   for (const hit of findPhrases(lower, BETWEEN_PHRASES.map((b) => ({ ...b, phrase: b.open })))) {
-    const first = facts.findIndex((f, i) => !consumedFacts.has(i) && f.span.start >= hit.end);
+    // Every hop is adjacency-checked: phrase → first operand → join word →
+    // second operand. See onlyFillerGap for why the two-sided form needs it.
+    const first = facts.findIndex(
+      (f, i) => !consumedFacts.has(i) && f.span.start >= hit.end && onlyFillerGap(text, hit.end, f.span.start),
+    );
     if (first === -1) continue;
     const joinRe = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(hit.entry.join)}(?![\\p{L}\\p{N}])`, "gu");
     joinRe.lastIndex = facts[first].span.end;
     const join = joinRe.exec(lower);
     if (!join) continue;
+    if (!onlyFillerGap(text, facts[first].span.end, join.index)) continue;
+    const joinEnd = join.index + join[0].length;
     const second = facts.findIndex(
-      (f, i) => i > first && !consumedFacts.has(i) && f.span.start >= join.index + join[0].length && f.fact.kind === facts[first].fact.kind,
+      (f, i) => i > first && !consumedFacts.has(i) && f.span.start >= joinEnd
+        && onlyFillerGap(text, joinEnd, f.span.start) && f.fact.kind === facts[first].fact.kind,
     );
     if (second === -1) continue;
     const a = facts[first].fact;

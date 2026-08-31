@@ -116,6 +116,43 @@ describe("parseQueryFilters — the same extractor, a closed comparator table, a
     expect(mixed.filters.every((f) => f.comparator !== "between")).toBe(true);
   });
 
+  it("between must REACH its operands — an ordinary 'between ... and' is not a range", () => {
+    // "between" and "and" are ordinary words. Binding them at any distance
+    // invents a range the operator did not ask for AND eats the words from
+    // the residue, which is a silently different query, not a failed one.
+    const en = parseQueryFilters("read between the lines about invoice $1,000 and payment $2,000", RULESET);
+    expect(en.filters.every((f) => f.comparator !== "between")).toBe(true);
+    expect(en.residue).toContain("between");
+    expect(en.residue).toContain("and");
+
+    const es = parseQueryFilters("entre otras cosas, 1000 USD y 2000 USD", RULESET);
+    expect(es.filters.every((f) => f.comparator !== "between")).toBe(true);
+
+    // ...while the adjacent form, including a stranded connective, still binds.
+    expect(parseQueryFilters("invoices between $1,000 and $2,000", RULESET).filters[0]).toMatchObject({
+      comparator: "between", num: 100_000, num2: 200_000,
+    });
+  });
+
+  it("folds case per CHARACTER and composes the query, so one exotic character costs only itself", () => {
+    // NFD: "más" as m + a + U+0301 + s. The tables are composed, so without
+    // normalization this reads as a DIFFERENT query — an equality filter
+    // instead of a lower bound — with no error anywhere.
+    const nfd = "facturas más de 5000 USD del último trimestre".normalize("NFD");
+    const nfc = nfd.normalize("NFC");
+    expect(nfd).not.toBe(nfc); // the input really is decomposed
+    const parsedNfd = parseQueryFilters(nfd, RULESET);
+    expect(parsedNfd.filters[0]).toMatchObject({ kind: "MONEY", comparator: ">=", num: 500_000 });
+    expect(parsedNfd.filters[1]).toMatchObject({ kind: "DATE", ts: Q4_2025_START, tsEnd: Q4_2025_END });
+
+    // "İ" lowercases to two code units. A whole-string fold would change
+    // every offset after it and disable the phrase table for the rest of
+    // the query; folding per character costs that character alone.
+    const exotic = parseQueryFilters("İ invoices over $5,000", RULESET);
+    expect(exotic.filters[0]).toMatchObject({ kind: "MONEY", comparator: ">=", num: 500_000 });
+    expect(exotic.residue).toContain("invoices");
+  });
+
   it("caps its input at 512 characters", () => {
     expect(QUERY_INPUT_CAP).toBe(512);
     const padding = "invoice ".repeat(70); // 560 characters
@@ -264,8 +301,6 @@ describe("filters inside kb-10's single statement", () => {
   });
 
   it("FILTERS NARROW, NEVER WIDEN — with and without embeddings, the identical code path", async () => {
-    for (const key of Object.keys(docs)) await embed(docs[key]);
-
     // The whole composition, end to end: the residue is what reaches
     // websearch_to_tsquery and the filters are what reach the WHERE.
     const parsed = parseQueryFilters("invoices over $2k from last quarter", RULESET);
@@ -273,6 +308,29 @@ describe("filters inside kb-10's single statement", () => {
     expect(parsed.filters).toHaveLength(2);
 
     for (const withVectors of [false, true]) {
+      // ABSENT means absent from the DATABASE, not merely a missing query
+      // vector: a run with the embeddings still written and only the
+      // queryVector withheld is a weaker witness than this criterion asks
+      // for, because it never exercises the no-embedding corpus at all.
+      const embedded = async () =>
+        Number(
+          (
+            await db.$queryRawUnsafe<{ n: bigint }[]>(
+              `SELECT COUNT(*) AS n FROM "DocumentChunk" WHERE embedding IS NOT NULL`,
+            )
+          )[0].n,
+        );
+      if (withVectors) {
+        for (const key of Object.keys(docs)) await embed(docs[key]);
+        expect(await embedded()).toBeGreaterThan(0);
+      } else {
+        // Genuinely absent from the DATABASE — the no-vector pass runs
+        // first, before anything is embedded. Withholding only the
+        // queryVector while the rows still carry embeddings would be a
+        // weaker witness than this criterion asks for.
+        expect(await embedded()).toBe(0);
+      }
+
       const opts = withVectors
         ? { queryVector: mockEmbed(parsed.residue), embeddingModel: MOCK_EMBEDDER_MODEL }
         : {};
