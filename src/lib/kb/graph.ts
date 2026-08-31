@@ -153,7 +153,7 @@ export async function relatedDocuments(
             d.name, e.kind, e.weight, e.evidence::text
        FROM "KnowledgeEdge" e
        JOIN "Document" d ON d.id = (CASE WHEN e."fromId" = $1 THEN e."toId" ELSE e."fromId" END)
-       JOIN entitled en ON en.id = d.id
+       JOIN readable en ON en.id = d.id
       WHERE (e."fromId" = $1 OR e."toId" = $1)
       ORDER BY e.weight DESC
       LIMIT 20`.replace(/\$1/g, `'${documentId.replace(/'/g, "''")}'`),

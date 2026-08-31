@@ -108,7 +108,7 @@ export function filterExistsSql(filter: QueryFilter, alias: string, documentIdEx
          SELECT 1 FROM "DocumentFact" ${f}
            -- Redundant here: the outer query already joined "entitled" for
            -- this document. KEPT so the pattern carries the gate.
-           JOIN entitled ${e} ON ${e}.id = ${f}."documentId"
+           JOIN readable ${e} ON ${e}.id = ${f}."documentId"
           WHERE ${preds.join("\n            AND ")}
        )`;
 }
@@ -167,7 +167,7 @@ export async function kbSearch(
          -- The gate, in the FROM clause: deleting this JOIN is what makes the
          -- red-team test fail. A chunk outside "entitled" must never score,
          -- never rank, never reach a prompt.
-         JOIN entitled e ON e.id = c."documentId"
+         JOIN readable e ON e.id = c."documentId"
         WHERE (c.tsv @@ websearch_to_tsquery('simple', ${q})
            OR (${vecLiteral} IS NOT NULL AND c.embedding IS NOT NULL AND c."embeddingModel" = ${modelLit}))${filterClauses(opts.filters, 'c."documentId"')}
      ) ranked
@@ -207,7 +207,7 @@ export async function countEntitledDocumentsMatching(
     `${cte}
      SELECT COUNT(*) AS n
        FROM "Document" d
-       JOIN entitled e ON e.id = d.id
+       JOIN readable e ON e.id = d.id
       WHERE TRUE${filterClauses(filters, 'd.id')}`,
   );
   return rows.length === 0 ? 0 : Number(rows[0].n);

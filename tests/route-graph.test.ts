@@ -250,7 +250,7 @@ describe("RED TEAM — entitlement inside the recursive term", () => {
     expect(edgesToB).toBe(2); // they exist — they are simply never disclosed
     // The warning comment sits directly above the recursive-term join:
     const source = (await import("node:fs")).readFileSync("src/lib/kb/route.ts", "utf8");
-    const joinIdx = source.indexOf("JOIN entitled eN ON eN.id = nxt.id");
+    const joinIdx = source.indexOf("JOIN readable eN ON eN.id = nxt.id");
     const commentIdx = source.indexOf("THE ENTITLEMENT JOIN INSIDE THE RECURSIVE TERM");
     expect(commentIdx).toBeGreaterThan(-1);
     expect(commentIdx).toBeLessThan(joinIdx);
