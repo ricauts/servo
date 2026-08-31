@@ -30,6 +30,24 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # The "external" SQL server (xds-01), mirroring docker-compose.test.yml's
+      # extdb service on the same port. A second REAL endpoint is what makes
+      # "a data source may never point at Servo's own database" provable: a
+      # guard that compares URL strings passes against one server and fails
+      # against two.
+      extdb:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: servo
+          POSTGRES_PASSWORD: servo
+          POSTGRES_DB: postgres
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U servo -d postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v5
 

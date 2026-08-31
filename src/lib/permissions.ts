@@ -22,7 +22,11 @@ export type Action =
   | "kb.view"
   | "kb.upload"
   | "kb.share"
-  | "kb.manage";
+  | "kb.manage"
+  // External data sources (xds-01): connecting a store is an admin act;
+  // seeing which stores exist is not.
+  | "kb.sources.view"
+  | "kb.sources.manage";
 
 const MATRIX: Record<Action, Role[]> = {
   "ticket.create": ["ADMIN", "AGENT", "REQUESTER"],
@@ -47,6 +51,8 @@ const MATRIX: Record<Action, Role[]> = {
   "kb.upload": ["ADMIN", "AGENT"],
   "kb.share": ["ADMIN", "AGENT"],
   "kb.manage": ["ADMIN"],
+  "kb.sources.view": ["ADMIN", "AGENT"],
+  "kb.sources.manage": ["ADMIN"],
 };
 
 export function can(user: Pick<User, "role">, action: Action): boolean {

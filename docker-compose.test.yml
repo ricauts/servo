@@ -18,3 +18,26 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+
+  # The "external" SQL server (spec xds-01, canonized in
+  # docs/design/external-sources.md). Deliberately a SECOND instance on a
+  # SECOND port: "a data source may never point at Servo's own database" is
+  # only provable against two real endpoints, and a guard that compares URL
+  # strings passes a test with one. No pgvector here — nothing indexes into
+  # it; it is the far side of the connection, not a Servo database.
+  extdb:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: servo
+      POSTGRES_PASSWORD: servo
+      POSTGRES_DB: postgres
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servo -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
