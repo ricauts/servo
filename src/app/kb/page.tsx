@@ -8,6 +8,7 @@ import EmptyState from "@/components/legacy/EmptyState";
 import KbUpload from "@/components/kb/KbUpload";
 import KbDocumentList from "@/components/kb/KbDocumentList";
 import KbAdminPanel from "@/components/kb/KbAdminPanel";
+import KbSearch from "@/components/kb/KbSearch";
 import PageHeader from "@/components/shell/PageHeader";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +103,8 @@ export default async function KnowledgePage() {
       <PageHeader title="Knowledge" description="The company's own documents — manuals, spreadsheets, procedures — searchable by the desk's agents with citations back to the exact page, sheet or lines." />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
       {can(user, "kb.upload") && <KbUpload />}
+      {/* ext-08: search with the parse shown back as removable chips. */}
+      <KbSearch />
       <KbDocumentList documents={documents} anyAgentGrant={agentGrants > 0} />
       {documents.length === 0 && (
         <div className="mt-6">
