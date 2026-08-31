@@ -83,6 +83,10 @@ const CREDENTIAL_HINTS = [
   "auth",
 ];
 
+/** Characters Postgres refuses inside a jsonb string. Accepting one here
+ *  turns a hostile input into a 500 instead of a 400. */
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
 export class SourceValidationError extends Error {}
 
 function fail(message: string): never {
@@ -162,7 +166,11 @@ export function validateSourceConfig(kind: SourceKind, config: unknown): Record<
           `in, or returned with, the configuration.`,
       );
     }
-    const rule = spec[key];
+    // `Object.hasOwn`, not `spec[key]`: a plain object literal answers
+    // `__proto__`, `constructor` and `toString` with an INHERITED truthy
+    // value, which skipped the unknown-key branch and reached the type gate
+    // with `rule.type === undefined`.
+    const rule = Object.hasOwn(spec, key) ? spec[key] : undefined;
     if (!rule) {
       fail(
         `configJson for a ${kind} source may not carry "${key}". ` +
@@ -182,14 +190,27 @@ export function validateSourceConfig(kind: SourceKind, config: unknown): Record<
 }
 
 /**
- * The scope allowlist: a list of objects, never a wildcard, never a
+ * The scope allowlist: a list of FLAT objects, never a wildcard, never a
  * free-text predicate. An EMPTY list is legal and reaches nothing — the safe
- * default, not an error. This mirrors migration 0012's
- * `DataSource_scope_allowlist` CHECK exactly: the same three refusals
- * (non-object entry, a `where`-shaped key at any depth and in any case, an
- * asterisk in any string at any depth) hold on both sides, so neither the
- * route nor the catalog is the looser one. The per-kind shape below is the
- * part only the route can express.
+ * default, not an error.
+ *
+ * The first four rules below are migration 0012's
+ * `DataSource_scope_allowlist` CHECK, written once more in TypeScript, and
+ * they are written to be MIRRORABLE rather than merely correct:
+ *
+ *  - a scope entry is FLAT — values are strings, numbers or booleans, or
+ *    arrays of those. Refusing nesting is what lets the CHECK stay
+ *    non-recursive; a recursive one could be made to OOM-kill the backend.
+ *  - a key CONTAINING "where", in any case, is a free-text predicate.
+ *    Containment rather than an anchored match with a whitespace class,
+ *    because POSIX `[[:space:]]` and JavaScript's `\s` disagree about NBSP,
+ *    the zero-width no-break space and the vertical tab — six such spellings
+ *    used to commit in the catalog while this function refused them.
+ *  - an asterisk in any string, at either level.
+ *  - no control characters: Postgres refuses a NUL inside a jsonb string, so
+ *    accepting one here turns a hostile input into a 500 instead of a 400.
+ *
+ * The per-kind shape after them is the part only the route can express.
  */
 export function validateSourceScope(kind: SourceKind, scope: unknown): Record<string, unknown>[] {
   if (!Array.isArray(scope)) fail("scopeJson must be an array of scope entries.");
@@ -198,19 +219,30 @@ export function validateSourceScope(kind: SourceKind, scope: unknown): Record<st
     const at = `scope entry ${i + 1}`;
     if (!isPlainObject(raw)) fail(`${at} must be an object.`);
     const entry = raw;
-    // The two catalog rules, applied at every depth exactly as the CHECK
-    // applies them.
-    walkScope(entry, (key, value) => {
-      if (key !== null && /^\s*where\s*$/i.test(key)) {
+    for (const [key, value] of Object.entries(entry)) {
+      if (/where/i.test(key)) {
         fail(
           `${at} may not carry a "${key}" clause. There is no free-text predicate: ` +
             `create a view upstream and name the view instead.`,
         );
       }
-      if (typeof value === "string" && value.includes("*")) {
-        fail(`${at} may not use a wildcard${key ? ` in "${key}"` : ""}. Name each bucket, schema and table explicitly.`);
+      const items = Array.isArray(value) ? value : [value];
+      if (Array.isArray(value) && value.some((v) => Array.isArray(v) || isPlainObject(v))) {
+        fail(`${at}: "${key}" may not nest — a scope entry is flat.`);
       }
-    });
+      for (const item of items) {
+        if (isPlainObject(item) || Array.isArray(item)) {
+          fail(`${at}: "${key}" may not nest — a scope entry is flat.`);
+        }
+        if (typeof item !== "string") continue;
+        if (item.includes("*")) {
+          fail(`${at} may not use a wildcard in "${key}". Name each bucket, schema and table explicitly.`);
+        }
+        if (CONTROL_CHARS.test(item)) {
+          fail(`${at}: "${key}" may not contain control characters.`);
+        }
+      }
+    }
     for (const key of Object.keys(entry)) {
       if (!SCOPE_KEYS[kind].includes(key)) {
         fail(`${at} may not carry "${key}". Allowed keys: ${SCOPE_KEYS[kind].join(", ")}.`);
@@ -240,17 +272,6 @@ export function validateSourceScope(kind: SourceKind, scope: unknown): Record<st
     out.push(entry);
   }
   return out;
-}
-
-/** Visit every key and every scalar in a scope entry, at any depth — the
- *  jsonpath `$.**` the CHECK uses, written in TypeScript. */
-function walkScope(node: unknown, visit: (key: string | null, value: unknown) => void, key: string | null = null): void {
-  visit(key, node);
-  if (Array.isArray(node)) {
-    for (const item of node) walkScope(item, visit, key);
-  } else if (isPlainObject(node)) {
-    for (const [k, v] of Object.entries(node)) walkScope(v, visit, k);
-  }
 }
 
 /** A Postgres endpoint, already split into its parts. */
@@ -312,7 +333,10 @@ export function parsePostgresUrl(url: string): PostgresTarget | null {
     params = new URLSearchParams(m[3] ?? "");
   }
 
-  const hostParam = params.get("host");
+  // libpq takes the LAST occurrence of a repeated parameter, so `getAll().pop()`
+  // rather than `get()`: a duplicated ?host= otherwise compares the wrong one.
+  const hostParams = params.getAll("host");
+  const hostParam = hostParams.length > 0 ? hostParams[hostParams.length - 1] : null;
   const resolvedHost = (hostParam ?? host).replace(/^\[|\]$/g, "").trim();
   const port = Number(portText || params.get("port") || 5432);
   const database = path || params.get("dbname") || user;
@@ -406,17 +430,20 @@ function ownDatabaseUrls(): { label: string; url: string }[] {
     .filter((e) => e.url.trim() !== "");
 }
 
+/** The keys that make a config a SQL endpoint rather than an object store. */
+const SQL_SHAPED_KEYS = ["host", "hostname", "server", "address", "addr", "port", "ssl", "sslmode"];
+
 /** Every Postgres endpoint a config could reach, however it is spelled.
  *  Reading only the literal keys `host`/`database` would make the guard a
  *  SILENT no-op for `{Host, DATABASE}` or `{connectionString: "postgres://…"}`
  *  — and a guard whose failure mode is acceptance is not a guard. */
-function candidateTargets(config: unknown): PostgresTarget[] {
-  if (!isPlainObject(config)) return [];
-  const out: PostgresTarget[] = [];
+function candidateTargets(config: unknown): { targets: PostgresTarget[]; sqlShapedWithoutDatabase: boolean } {
+  if (!isPlainObject(config)) return { targets: [], sqlShapedWithoutDatabase: false };
+  const targets: PostgresTarget[] = [];
   for (const value of Object.values(config)) {
     if (typeof value !== "string") continue;
     const embedded = parsePostgresUrl(value);
-    if (embedded) out.push(embedded);
+    if (embedded) targets.push(embedded);
   }
   const lower = new Map<string, unknown>();
   for (const [key, value] of Object.entries(config)) lower.set(key.toLowerCase(), value);
@@ -431,14 +458,17 @@ function candidateTargets(config: unknown): PostgresTarget[] {
   if (database !== null) {
     const portValue = lower.get("port");
     const port = Number(typeof portValue === "string" ? portValue.trim() : (portValue ?? 5432));
-    out.push({
+    targets.push({
       // libpq's own default: no host means the local server.
       host: (pick(["host", "hostname", "server", "address", "addr"]) ?? "localhost").replace(/^\[|\]$/g, ""),
       port: Number.isFinite(port) ? port : 5432,
       database,
     });
   }
-  return out;
+  return {
+    targets,
+    sqlShapedWithoutDatabase: database === null && SQL_SHAPED_KEYS.some((k) => lower.has(k)),
+  };
 }
 
 /** Echo a host back to the caller only when it is a plain, safe token. */
@@ -478,9 +508,24 @@ function safeHost(host: string): string {
  * Both exist; neither replaces the other.
  */
 export async function assertNotServoDatabase(config: unknown): Promise<void> {
-  const targets = candidateTargets(config);
-  // Nothing to compare: an S3 config names no database. The S3 endpoint is
-  // constrained by kb.sources.egress.allowlist instead (xds-03).
+  const { targets, sqlShapedWithoutDatabase } = candidateTargets(config);
+  // THE OMITTED DATABASE NAME IS NOT AN ABSENCE OF A TARGET — it is a target
+  // this process cannot name. libpq defaults `dbname` to the CONNECTION USER,
+  // which lives in the sealed secret and not in configJson, and Servo's own
+  // shipped DATABASE_URL is `postgresql://servo:servo@db:5432/servo`, where
+  // the user name IS the database name. So `{host: "db", port: 5432}` with
+  // the wrong credential in the store reaches the desk, and a guard that
+  // returned here would never look. Refuse instead: an explicit database name
+  // is something the crawler needs anyway.
+  if (sqlShapedWithoutDatabase) {
+    fail(
+      "Refusing the source: it names no database. An omitted database name defaults to the connection " +
+        "user, which is how a source can reach Servo's own database without ever naming it. " +
+        "Name the database explicitly.",
+    );
+  }
+  // Nothing to compare: an S3 config names no database and no SQL endpoint.
+  // The S3 endpoint is constrained by kb.sources.egress.allowlist (xds-03).
   if (targets.length === 0) return;
 
   const own = ownDatabaseUrls().map(({ label, url }) => {

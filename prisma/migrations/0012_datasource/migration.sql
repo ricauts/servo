@@ -15,13 +15,16 @@
 -- rejects a DROP, correctly, and §0.6 tier 1 sends the diff to a PR.
 --
 -- Stated precisely, because "the one non-additive line" would be false:
--- `migration-guard` finds FOUR things here it will not wave through — that
--- DROP CONSTRAINT, the `DROP POLICY kb_grant_floor` that its replacement
--- needs, the unique index on the pre-existing "KbGrant", and the two
--- ADD CONSTRAINT foreign keys on pre-existing tables. Two more statements
--- (ENABLE / FORCE ROW LEVEL SECURITY on the new table) are neither a CREATE
--- nor an ADD COLUMN either. Everything else IS additive: a CREATE, a nullable
--- ADD COLUMN, or a CHECK on a table this migration creates.
+-- `migration-guard` emits FIVE reason lines here — that DROP CONSTRAINT, the
+-- `DROP POLICY kb_grant_floor` its replacement needs, the unique index on the
+-- pre-existing "KbGrant", and an ADD CONSTRAINT foreign key on each of
+-- "Document" and "KbGrant". Three more statements it does not flag are still
+-- not additions: ENABLE and FORCE ROW LEVEL SECURITY on the new table, and
+-- the re-ADDed `KbGrant_one_target` CHECK, which lands on a PRE-EXISTING
+-- table (it is safe — sourceId is NULL on every existing row, so
+-- num_nonnulls over three equals num_nonnulls over two, and every existing
+-- row revalidates). Everything else IS additive: a CREATE, a nullable ADD
+-- COLUMN, or a CHECK on the table this migration itself creates.
 --
 -- THE TWO EXISTING PARTIAL INDEXES ARE UNTOUCHED. "KbGrant_doc_subject_key"
 -- and "KbGrant_coll_subject_key" (0003_kb) are neither dropped nor rebuilt;
@@ -52,10 +55,20 @@
 -- puts it there. Reading this file as if it enforced the ceiling is the
 -- mistake the paragraph exists to prevent.
 --
--- FORCE is not decorative here for the same reason it is not on the kb
--- tables: the application connects as the table OWNER, and an owner bypasses
--- RLS unless the table also carries FORCE. A superuser bypasses either way,
--- which is why the probe in the tests owns its own NOBYPASSRLS role.
+-- FORCE is here for the same reason it is on the kb tables: an owner bypasses
+-- RLS unless the table also carries FORCE. Said honestly, because the
+-- distinction matters and 0004_kb_rls leaves it implicit: the configuration
+-- THIS REPO SHIPS connects as `servo`, the compose POSTGRES_USER, which is a
+-- SUPERUSER — and a superuser bypasses RLS with or without FORCE, so on a
+-- default install every one of these policies is inert and the application
+-- filter is doing all the work. FORCE earns its place only on a deployment
+-- whose application role is a non-superuser owner. On such a deployment note
+-- that kb_source_floor's USING doubles as its WITH CHECK and nothing in src/
+-- ever sets `app.human_id`, so DataSource writes would be refused outright —
+-- the same condition 0004 already creates for "Document" and "KbGrant", and
+-- one the owner should settle before any install runs as a non-superuser.
+-- The probe in the tests owns its own NOBYPASSRLS role for exactly this
+-- reason.
 
 -- CreateTable
 CREATE TABLE "DataSource" (
@@ -100,24 +113,58 @@ ALTER TABLE "DataSource" ADD CONSTRAINT "DataSource_status_check"
 -- WHERE clause names a view upstream. An EMPTY list is legal and reaches
 -- nothing — that is the safe default, not an error.
 --
--- The two refusals are deliberately written at ANY DEPTH and in ANY CASE,
--- rather than as `$[*].where` and `$[*].bucket`, because the narrow spelling
--- makes the CATALOG LOOSER THAN THE ROUTE — and "a row written by a seed, a
--- migration or a direct write is as constrained as one written by the route"
--- is the whole point of putting the rule here. Three payloads the narrow form
--- committed and src/lib/kb/sources.ts refused: {"WHERE": "1=1"} (jsonpath key
--- matching is exact, so a different case is a different key),
--- {"filter": {"where": "…"}} (one level of nesting), and
--- {"bucket": {"n": "*"}} (like_regex only fires on strings). `$.**` closes
--- all three, and src/lib/kb/sources.ts's walkScope() is the same two rules
--- written in TypeScript so neither side is the looser one.
+-- SHAPE FIRST, THEN THE TWO RULES. A scope entry is FLAT by construction:
+-- an object whose values are scalars, or arrays of scalars. Nothing nests.
+-- That is not tidiness, it is what makes the two rules below both CHEAP and
+-- EXACT, and it is the fix for two defects a narrower spelling had:
+--
+--   * `$[*].where` alone is LOOSER THAN THE ROUTE — {"WHERE":"1=1"} (jsonpath
+--     key matching is exact, so a different case is a different key) and
+--     {"filter":{"where":"…"}} (one level of nesting) both committed while
+--     src/lib/kb/sources.ts refused them. "A row written by a seed, a
+--     migration or a direct write is as constrained as one written by the
+--     route" is the whole point of putting the rule in the catalog.
+--   * `$.**` with `.keyvalue()` closes that hole and opens a worse one:
+--     keyvalue() over the recursive wildcard allocates superlinearly in
+--     nesting depth. Measured on PG 16.13 — 8 s of backend CPU at 2,000
+--     levels, and at 8,000 levels (48 KB of JSON, well inside any request
+--     body) the backend is OOM-killed by signal 9, which takes the WHOLE
+--     CLUSTER into crash recovery. A constraint that can be turned into a
+--     denial of service by the row it is meant to refuse is worse than the
+--     hole it closed.
+--
+-- Refusing nesting outright makes `$[*]` sufficient: no `$.**`, no recursion,
+-- no unbounded cost. `like_regex "where" flag "i"` is CONTAINMENT, not an
+-- anchored match with a whitespace class — deliberately, because POSIX
+-- `[[:space:]]` and JavaScript's `\s` do not agree on NBSP, the zero-width
+-- no-break space or the vertical tab, and six such spellings committed here
+-- while the route refused them. Containment is trivially mirrorable.
+--
+-- The ONE asymmetry, stated rather than glossed: jsonpath's LAX mode unwraps
+-- arrays, so a scalar buried in an array-inside-an-array is reached by the
+-- filter as a scalar rather than surfacing as a nested array. The two rules
+-- the criterion names still hold at every depth — a wildcard one and two
+-- array levels down is caught by the string rule, and three or more levels
+-- down surfaces as an array and is caught by the nesting rule, as is a
+-- `where`-keyed object at any depth — but `{"suffixes": [[".pdf"]]}`, an
+-- array of arrays of plain strings, carries neither a wildcard nor a
+-- predicate and COMMITS here while src/lib/kb/sources.ts refuses it as a
+-- shape error. That direction is the harmless one: the route is stricter, so
+-- no route-written row can be one the catalog then rejects.
+--
+-- An EMPTY list is legal and reaches nothing — the safe default, not an error.
 ALTER TABLE "DataSource" ADD CONSTRAINT "DataSource_scope_allowlist" CHECK (
   jsonb_typeof("scopeJson") = 'array'
+  -- every entry is an object …
   AND NOT jsonb_path_exists("scopeJson", '$[*] ? (@.type() != "object")')
-  AND NOT jsonb_path_exists(
-        "scopeJson",
-        '$.** ? (@.type() == "object").keyvalue().key ? (@ like_regex "^ *where *$" flag "i")')
-  AND NOT jsonb_path_exists("scopeJson", '$.** ? (@.type() == "string" && @ like_regex "[*]")')
+  -- … whose values are scalars or arrays of scalars, and nothing deeper
+  AND NOT jsonb_path_exists("scopeJson", '$[*].* ? (@.type() == "object")')
+  AND NOT jsonb_path_exists("scopeJson", '$[*].*[*] ? (@.type() == "object" || @.type() == "array")')
+  -- no free-text predicate, in any spelling
+  AND NOT jsonb_path_exists("scopeJson", '$[*].keyvalue().key ? (@ like_regex "where" flag "i")')
+  -- no wildcard in any string, at either level
+  AND NOT jsonb_path_exists("scopeJson", '$[*].* ? (@.type() == "string" && @ like_regex "[*]")')
+  AND NOT jsonb_path_exists("scopeJson", '$[*].*[*] ? (@.type() == "string" && @ like_regex "[*]")')
 );
 
 -- AlterTable — all four nullable, so every pre-existing Document row keeps

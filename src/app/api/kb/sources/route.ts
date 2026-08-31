@@ -22,7 +22,9 @@ export const dynamic = "force-dynamic";
  *  it, which is the only safe default. */
 const createSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(80),
-  kind: z.string(),
+  // Bounded, because the refusal below echoes it back and an unbounded
+  // reflected value is a habit worth not starting.
+  kind: z.string().trim().max(40),
   config: z.unknown().default({}),
   scope: z.unknown().default([]),
   /** The credential. It is sealed into its own Setting row and NEVER stored
@@ -61,7 +63,8 @@ export async function POST(req: NextRequest) {
     // crawls anything yet (xds-03/xds-04 are unshipped), so "Servo indexes S3
     // and POSTGRES" would be user-visible copy asserting a capability that
     // does not exist — §0.8 rail 6.
-    return Response.json({ error: `Unsupported source kind "${kind}". Supported kinds: S3, POSTGRES.` }, { status: 400 });
+    const echoed = /^[A-Za-z0-9_.-]{0,40}$/.test(kind) ? `"${kind}"` : "that";
+    return Response.json({ error: `Unsupported source kind ${echoed}. Supported kinds: S3, POSTGRES.` }, { status: 400 });
   }
 
   let config: Record<string, unknown>;

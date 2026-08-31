@@ -198,20 +198,54 @@ describe("the rules are in the catalog, not only in JavaScript", () => {
     await expect(rawSource({ '"scopeJson"': `'["*"]'` })).rejects.toThrow(/DataSource_scope_allowlist/);
   });
 
+  it("a deeply nested scope is refused CHEAPLY — the CHECK cannot be turned into a denial of service", async () => {
+    // The `$.**` + keyvalue() spelling that first closed the case/nesting
+    // holes allocated superlinearly in depth: 8 s of backend CPU at 2,000
+    // levels, and an OOM-kill that took the whole cluster into crash recovery
+    // at 8,000. Refusing nesting outright keeps the rules non-recursive.
+    let nested = '"leaf"';
+    for (let i = 0; i < 8000; i++) nested = `{"a":${nested}}`;
+    const payload = `[{"schema":"public","table":"t","idColumn":"id","textColumns":["b"],"titleColumn":${nested}}]`;
+    const started = Date.now();
+    await expect(rawSource({ '"scopeJson"': `'${payload}'` })).rejects.toThrow(/DataSource_scope_allowlist/);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    // And the server is still there to answer.
+    expect(await db.$queryRawUnsafe(`SELECT 1 AS ok`)).toEqual([{ ok: 1 }]);
+  });
+
   it("the CATALOG is not looser than the ROUTE: case, nesting and non-string wildcards all raise too", async () => {
     // Each of these committed under the narrow `$[*].where` / `$[*].bucket`
     // spelling while src/lib/kb/sources.ts refused them — which would make
     // "as constrained as one written by the route" false in the direction
     // that matters. The raw INSERT is the whole point: a JS validator cannot
     // stop a seed or a psql session.
+    // The whitespace spellings are here because an anchored match with a
+    // character class does NOT give parity: POSIX [[:space:]] and JavaScript
+    // \s disagree about NBSP, the zero-width no-break space and the vertical
+    // tab, and all six committed in the catalog while the route refused them.
+    // Both sides now test CONTAINMENT, which is the same rule twice.
     const payloads = [
       `[{"schema":"public","table":"t","WHERE":"1=1"}]`,
       `[{"schema":"public","table":"t","Where":"1=1"}]`,
       `[{"schema":"public","table":"t","where ":"1=1"}]`,
+      `[{"schema":"public","table":"t","\\u0009where":"1=1"}]`,
+      `[{"schema":"public","table":"t","\\u000bwhere":"1=1"}]`,
+      `[{"schema":"public","table":"t","\\u00a0where":"1=1"}]`,
+      `[{"schema":"public","table":"t","\\u2003where":"1=1"}]`,
+      `[{"schema":"public","table":"t","\\ufeffwhere":"1=1"}]`,
+      `[{"schema":"public","table":"t","where\\u000a":"1=1"}]`,
       `[{"schema":"public","table":"t","filter":{"where":"1=1 OR true"}}]`,
       `[{"bucket":{"n":"*"}}]`,
       `[{"bucket":"b","suffixes":["*"]}]`,
       `[{"bucket":"b","nested":{"deep":"any*thing"}}]`,
+      `[{"bucket":"b","suffixes":[{"where":"1=1"}]}]`,
+      // A wildcard buried in nested arrays: caught by the string rule one and
+      // two levels down, and by the nesting rule from three levels down,
+      // which is what makes "carries * for bucket, schema or table" hold at
+      // every depth rather than only at the top.
+      `[{"bucket":"b","suffixes":[["*"]]}]`,
+      `[{"bucket":"b","suffixes":[[["*"]]]}]`,
+      `[{"bucket":"b","suffixes":[[{"where":"1=1"}]]}]`,
     ];
     for (const payload of payloads) {
       await expect(rawSource({ '"scopeJson"': `'${payload}'` }), payload).rejects.toThrow(
@@ -221,6 +255,16 @@ describe("the rules are in the catalog, not only in JavaScript", () => {
       expect(() => validateSourceScope("S3", JSON.parse(payload)), payload).toThrow(SourceValidationError);
       expect(() => validateSourceScope("POSTGRES", JSON.parse(payload)), payload).toThrow(SourceValidationError);
     }
+  });
+
+  it("the ONE asymmetry is the harmless direction, and it is the one the header names", async () => {
+    // An array of arrays of plain strings carries neither a wildcard nor a
+    // predicate, so neither of the criterion's two rules applies to it. It
+    // commits in the catalog (jsonpath's lax mode unwraps it out of sight)
+    // and the ROUTE refuses it as a shape error. Route-stricter is the safe
+    // direction: no row the route writes can be one the catalog rejects.
+    await expect(rawSource({ '"scopeJson"': `'[{"bucket":"b","suffixes":[[".pdf"]]}]'` })).resolves.toBeDefined();
+    expect(() => validateSourceScope("S3", [{ bucket: "b", suffixes: [[".pdf"]] }])).toThrow(/may not nest/);
   });
 
   it("accepts a real scope entry and an EMPTY list — empty reaches nothing, it is not an error", async () => {
@@ -331,6 +375,65 @@ describe("row level security", () => {
     const sql = readFileSync("prisma/migrations/0012_datasource/migration.sql", "utf8");
     expect(sql).toMatch(/COARSER than the application filter/);
   });
+
+  it("BEHAVIOURALLY: the amended grant floor still lets kb-15's probe role read, and still closes without a principal", async () => {
+    // The structural assertions above would all pass if the floor let
+    // everything through, and they would not have caught the regression that
+    // shipped in the first draft of this migration (a policy reading
+    // "DataSource" made every Document read fail with "permission denied for
+    // table DataSource" for kb-15's role). This is the same probe kb-15 uses:
+    // roles are cluster-wide, so the name carries the pid and a counter.
+    const role = `xds_probe_${process.pid}_${Math.floor(Math.random() * 1e6)}`;
+    const src = await source();
+    const doc = await db.document.create({
+      data: { name: "public.md", contentType: "text/markdown", byteSize: 1, sha256: "9".repeat(64), ownerId: admin.id, visibility: "PUBLIC" },
+    });
+    await db.kbGrant.create({
+      data: { documentId: doc.id, subjectType: "USER", subjectId: admin.id, grantedById: admin.id },
+    });
+    await db.kbGrant.create({
+      data: { sourceId: src.id, subjectType: "USER", subjectId: admin.id, grantedById: admin.id },
+    });
+    await db.$executeRawUnsafe(`CREATE ROLE ${role} NOLOGIN NOBYPASSRLS`);
+    for (const table of ["Document", "DocumentChunk", "KnowledgeEdge", "KbGrant"]) {
+      await db.$executeRawUnsafe(`ALTER TABLE "${table}" OWNER TO ${role}`);
+    }
+    await db.$executeRawUnsafe(`GRANT SELECT ON "User" TO ${role}`);
+
+    const asProbe = <T>(humanId: string | null, sql: string) =>
+      db.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SET LOCAL ROLE ${role}`);
+        if (humanId !== null) await tx.$executeRawUnsafe(`SET LOCAL app.human_id = '${humanId}'`);
+        return tx.$queryRawUnsafe<T>(sql);
+      });
+
+    // The regression case: reading Document goes through kb_document_floor,
+    // which subqueries "KbGrant", whose policy must not reach a fifth table
+    // this role has no privilege on.
+    const docs = await asProbe<{ name: string }[]>(admin.id, `SELECT name FROM "Document"`);
+    expect(docs.map((r) => r.name)).toContain("public.md");
+    const grants = await asProbe<{ id: string }[]>(admin.id, `SELECT id FROM "KbGrant"`);
+    expect(grants.length).toBe(2); // the document grant AND the source grant
+
+    // Closed, not open, with no principal resolved. This must run on a
+    // connection that has NEVER carried one: after a single committed
+    // transaction that did `SET LOCAL app.human_id`, the same pooled
+    // connection reports current_setting('app.human_id', true) as '' rather
+    // than NULL, and every kb-15 policy whose gate is that NULL test opens.
+    // That is a pre-existing property of 0004_kb_rls, not of this item — it
+    // is raised as a dated owner question in §14 — so the check here uses a
+    // fresh client rather than asserting a guarantee this item did not make.
+    const fresh = new PrismaClient({ datasourceUrl: handles[handles.length - 1].url });
+    try {
+      const blind = await fresh.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SET LOCAL ROLE ${role}`);
+        return tx.$queryRawUnsafe<{ id: string }[]>(`SELECT id FROM "KbGrant"`);
+      });
+      expect(blind).toEqual([]);
+    } finally {
+      await fresh.$disconnect();
+    }
+  });
 });
 
 describe("assertNotServoDatabase — resolved addresses, never a URL string", () => {
@@ -420,6 +523,20 @@ describe("assertNotServoDatabase — resolved addresses, never a URL string", ()
         host,
       ).rejects.toThrow(/Servo's own database/);
     }
+  });
+
+  it("REFUSES a SQL config that names NO database — an omitted name defaults to the connection user", async () => {
+    // Servo's shipped DATABASE_URL is postgresql://servo:servo@db:5432/servo,
+    // where the user name IS the database name, so {host, port} with no
+    // database reaches the desk and a guard that returned here never looked.
+    for (const config of [{ host: "db", port: 5432 }, { port: 5433 }, { host: "localhost", ssl: false }]) {
+      await expect(assertNotServoDatabase(config), JSON.stringify(config)).rejects.toThrow(/names no database/);
+    }
+    // An S3 config names neither a database nor a SQL endpoint, and is not
+    // caught by that rule.
+    await expect(
+      assertNotServoDatabase({ endpoint: "http://s3mock:9090", region: "us-east-1" }),
+    ).resolves.toBeUndefined();
   });
 
   it("REFUSES a database named under a spelling the guard was not written for — it never returns silently", async () => {
@@ -636,6 +753,44 @@ describe("credentials never reach configJson, and no route returns them", () => 
       if (savedUrl === undefined) delete process.env.DATABASE_URL;
       else process.env.DATABASE_URL = savedUrl;
     }
+  });
+
+  it("refuses a prototype-member config key by the ALLOWLIST, not by accident", async () => {
+    // `spec[key]` answered __proto__ / constructor / toString with an
+    // inherited truthy value, skipping the unknown-key branch and producing
+    // "must be a undefined".
+    for (const key of ["__proto__", "constructor", "toString"]) {
+      const res = await post({ name: `p${key}`, kind: "S3", config: JSON.parse(`{"${key}":"x"}`) });
+      expect(res.status, key).toBe(400);
+      expect(String(res.body.error), key).toMatch(/may not carry/);
+      expect(String(res.body.error), key).not.toMatch(/must be a undefined/);
+    }
+    expect(Object.prototype).not.toHaveProperty("x");
+  });
+
+  it("refuses hostile scope inputs with a 400, never a 500 from the driver or the database", async () => {
+    // Both of these used to pass the validator and blow up further down: a
+    // NUL raises "unsupported Unicode escape sequence" at Postgres, and a
+    // ~5000-deep scope throws RangeError inside Prisma's serializer.
+    const nul = await post({ name: "n", kind: "S3", config: {}, scope: [{ bucket: `acme${String.fromCharCode(0)}docs` }] });
+    expect(nul.status).toBe(400);
+    expect(String(nul.body.error)).toMatch(/control characters/);
+
+    // 3000 rather than 6000: past roughly 4000 this Node build cannot
+    // JSON.stringify the body at all, so the request never leaves the test.
+    // 3000 is comfortably inside what the JS half used to accept and hand to
+    // Prisma, which is where the RangeError landed.
+    let nested: unknown = "leaf";
+    for (let i = 0; i < 3000; i++) nested = { a: nested };
+    const deep = await post({
+      name: "d",
+      kind: "POSTGRES",
+      config: {},
+      scope: [{ schema: "public", table: "t", idColumn: "id", textColumns: ["b"], titleColumn: nested }],
+    });
+    expect(deep.status).toBe(400);
+    expect(String(deep.body.error)).toMatch(/may not nest/);
+    expect(await db.dataSource.count()).toBe(0);
   });
 
   it("refuses a scope carrying a wildcard or a where clause, before anything is written", async () => {
