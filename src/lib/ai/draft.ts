@@ -350,6 +350,40 @@ async function reverifyCitations(
     agentId: draftPrincipalId(profile ?? null),
     humanId: draft.ticket.requesterId,
   };
+  // xds-08: the source half. A cited document that went GONE was removed
+  // upstream; a cited document whose DataSource is DISABLED or PURGED reads
+  // from a source the desk turned off. SYNCING and UNREACHABLE do NOT
+  // refuse — the record is still there, merely possibly behind, and the
+  // staleness age rides the citation instead. Both refusals run in the
+  // SAME guard the automatic path already inherits, with distinct messages
+  // so an operator can tell which happened.
+  const docRows = await db.document.findMany({
+    where: { id: { in: sources.map((s) => s.docId) } },
+    select: { id: true, name: true, textStatus: true, sourceId: true },
+  });
+  const byId = new Map(docRows.map((d) => [d.id, d]));
+  const gone = sources.filter((s) => byId.get(s.docId)?.textStatus === "GONE");
+  if (gone.length > 0) {
+    return (
+      `Cannot send: a cited record was removed upstream — ` +
+      `${gone.map((s) => s.docName).join(", ")} is gone from its source ` +
+      `(a later crawl did not observe it). Regenerate the draft.`
+    );
+  }
+  const sourceIds = [...new Set(docRows.map((d) => d.sourceId).filter((v): v is string => v !== null))];
+  const sourceRows = sourceIds.length > 0
+    ? await db.dataSource.findMany({ where: { id: { in: sourceIds } }, select: { id: true, status: true } })
+    : [];
+  const offSources = new Set(sourceRows.filter((r) => r.status === "DISABLED" || r.status === "PURGED").map((r) => r.id));
+  const off = sources.filter((s) => byId.get(s.docId)?.sourceId !== null && offSources.has(byId.get(s.docId)!.sourceId!));
+  if (off.length > 0) {
+    return (
+      `Cannot send: a cited data source was disabled — ` +
+      `${off.map((s) => s.docName).join(", ")} comes from a source that is ` +
+      `turned off or purged. Re-enable the source or regenerate the draft.`
+    );
+  }
+
   const readable = new Set(await entitledDocumentIds(db, chain));
   const dark = sources.filter((s) => !readable.has(s.docId));
   if (dark.length > 0) {
@@ -381,6 +415,7 @@ async function reverifyCitations(
       );
     }
   }
+
   return null;
 }
 
