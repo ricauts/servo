@@ -14,6 +14,7 @@ import {
   Inbox,
   LayoutDashboard,
   Plug,
+  ServerCog,
   Plus,
   Settings2,
   ShieldCheck,
@@ -32,6 +33,7 @@ export const NAV_ICONS = {
   skills: BookOpen,
   knowledge: Database,
   integrations: Plug,
+  sources: ServerCog,
   settings: Settings2,
 } satisfies Record<string, LucideIcon>;
 
