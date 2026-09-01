@@ -41,8 +41,23 @@ export const MAX_HEADING_DEPTH = 3;
 /** The additive locator key naming the prefix boundary. */
 export const HEADING_PREFIX_END_KEY = "headingPrefixEnd";
 
+type PageList = Array<{ page_no: number; size?: { width: number; height: number } }>;
+type PageMap = Record<string, { page_no?: number; size?: { width: number; height: number } }>;
+
+/** pages arrives BOTH ways upstream: an array (older builds) and a map
+ *  keyed by page NUMBER (1.31.0). Normalize to one Map. */
 function pageSizes(doc: DoclingDocumentT): Map<number, { width: number; height: number } | undefined> {
-  return new Map(doc.pages.map((p) => [p.page_no, p.size]));
+  const out = new Map<number, { width: number; height: number } | undefined>();
+  const pages = doc.pages as PageList | PageMap | undefined;
+  if (!pages) return out;
+  if (Array.isArray(pages)) {
+    for (const p of pages) out.set(p.page_no, p.size);
+    return out;
+  }
+  for (const [key, p] of Object.entries(pages)) {
+    out.set(p.page_no ?? Number(key), p.size);
+  }
+  return out;
 }
 
 function normalizeFurniture(text: string): string {
@@ -63,7 +78,7 @@ function furnitureTexts(doc: DoclingDocumentT): Set<string> {
     for (const p of item.prov ?? []) pages.add(p.page_no);
     pagesBy.set(key, pages);
   }
-  const totalPages = new Set(doc.pages.map((p) => p.page_no));
+  const totalPages = new Set(pageSizes(doc).keys());
   const furniture = new Set<string>();
   for (const [key, pages] of pagesBy) {
     if (pages.size >= 2 && pages.size >= Math.max(2, totalPages.size)) furniture.add(key);
@@ -130,6 +145,73 @@ export function chunkDoclingDocument(doc: DoclingDocumentT): ExtractedChunk[] {
   const chunks: ExtractedChunk[] = [];
   let path: string[] = [];
   let lastWasHeading = false;
+
+  // THE REAL ARRAYS (ratified dcl-06): when upstream's texts/tables carry
+  // content, walk those — section_header/document_title labels are the
+  // headings (consecutive headings nest, exactly like the synthetic shape),
+  // `orig` is the text, and tables split by row groups under the cell cap
+  // with the header row repeated. The synthetic-era items array stays the
+  // fallback so the golden corpora keep their coverage.
+  if ((doc.texts?.length ?? 0) + (doc.tables?.length ?? 0) > 0) {
+    for (const t of doc.texts ?? []) {
+      const prov = t.prov?.[0];
+      if (!prov) continue;
+      const text = t.orig?.trim();
+      if (!text || furniture.has(text.replace(/\s+/g, " ").trim().toLowerCase())) continue;
+      const label =
+        t.label === "section_header" || t.label === "document_title" ? t.label
+        : t.label === "title" ? "section_header"
+        : t.label;
+      if (label === "section_header" || label === "document_title") {
+        const depth = label === "document_title" ? 1 : lastWasHeading ? Math.min(path.length + 1, MAX_HEADING_DEPTH) : 1;
+        path = path.slice(0, depth - 1);
+        path[depth - 1] = text;
+        path = path.slice(0, depth);
+      }
+      const prefix = path.join(HEADING_SEP);
+      const locator: Record<string, unknown> = { page: prov.page_no };
+      const size = sizes.get(prov.page_no);
+      if (prov.bbox && size && size.width > 0 && size.height > 0) {
+        const box = {
+          x: prov.bbox.l / size.width,
+          y: 1 - prov.bbox.t / size.height,
+          w: (prov.bbox.r - prov.bbox.l) / size.width,
+          h: (prov.bbox.t - prov.bbox.b) / size.height,
+        };
+        if (Object.values(box).every((v) => v >= 0 && v <= 1)) locator.bbox = box;
+      }
+      if (t.self_ref) locator.ref = t.self_ref;
+      if (prefix) locator[HEADING_PREFIX_END_KEY] = prefix.length + HEADING_SEP.length;
+      chunks.push({ text: prefix ? `${prefix}${HEADING_SEP}${text}` : text, locator });
+      lastWasHeading = label === "section_header" || label === "document_title";
+    }
+    for (const t of doc.tables ?? []) {
+      const grid = (t.data?.grid ?? []).filter((r) => r.some((c) => (c.text ?? "").trim() !== ""));
+      const rows = grid.length;
+      const cols = t.data?.num_cols ?? (grid[0]?.length ?? 0);
+      if (rows < 1 || cols < 1) continue;
+      const prov = t.prov?.[0];
+      const locator: Record<string, unknown> = { label: "table" };
+      if (prov) locator.page = prov.page_no;
+      const label = t.label ?? t.captions?.[0];
+      if (label) { locator.sheet = label; locator.table = label; }
+      locator.range = `A1:${a1Col(Math.max(0, cols - 1))}${rows}`;
+      locator.cell = "A1";
+      if (t.self_ref) locator.ref = t.self_ref;
+      // Row groups under the cell cap, header row repeated in every piece.
+      const per = Math.max(1, Math.floor(DOC_TABLE_CELL_CAP / Math.max(1, cols)) - 1);
+      let emitted = false;
+      for (let start = 1; start < rows || !emitted; start += per) {
+        const group: number[] = [];
+        for (let r = start; r < rows && r < start + per; r++) group.push(r);
+        const rowText = (r: number) => `| ${grid[r].map((c) => c.text ?? "").join(" | ")} |`;
+        chunks.push({ text: [rowText(0), ...group.map(rowText)].join("\n"), locator: { ...locator } });
+        emitted = true;
+        if (start >= rows) break;
+      }
+    }
+    return chunks;
+  }
 
   for (const item of doc.items) {
     if (item.item_type === "picture") continue;

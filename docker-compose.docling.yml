@@ -1,0 +1,55 @@
+# docker-compose.docling.yml — the OPTIONAL high-fidelity extraction sidecar
+# (dcl-06). A SEPARATE OVERLAY, never merged into docker-compose.yml: the
+# default `docker compose up` never pulls 4.4 GB of model weights, and a
+# test asserts the base file contains no docling service.
+#
+# WHY PINNED BY DIGEST, NOT TAG: a moving tag would silently change
+# extraction output under a knowledge base whose citations are supposed to
+# be stable — a re-crawl could re-write every chunk a draft cites. The
+# digest below is the upstream index's linux/AMD64 manifest
+# (ghcr.io/docling-project/docling-serve-cpu). An arm64 manifest IS
+# published upstream at the time of writing, but its availability is
+# UNVERIFIED by this project: no arm64 host has run this overlay. An
+# arm64 self-hosted deployment substitutes its own digest with:
+#   docker manifest inspect ghcr.io/docling-project/docling-serve-cpu:latest
+# and takes the arm64 entry's digest.
+#
+# THE HEALTHCHECK IS THE ARTIFACTS ASSERTION. There is no entrypoint
+# override and no rebuild: dcl-08 commits to pulling the upstream image by
+# digest and never redistributing it, so there is nowhere to inject a boot
+# check. The models are baked into the published image at build time; a
+# runtime HuggingFace fetch would need network egress, which
+# network_mode's internal network just closed.
+services:
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cpu@sha256:7deed6ddba54908925c039d69a95806416c90cfc9b5486ca8554d3ce30a50289
+    network_mode: internal # no egress: the sidecar never fetches at runtime
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes: [] # read-only root, no mounts
+    mem_limit: 4g
+    cpus: 2.0
+    pids_limit: 512
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      DOCLING_SERVE_ARTIFACTS_PATH: /opt/artifacts
+      DOCLING_SERVE_ENGINE: local # local ONLY — no remote-service key may appear here
+    healthcheck:
+      # The one assertion: the baked artifacts directory exists and is
+      # non-empty (at least one entry). A model-less image cannot pass.
+      test: ["CMD-SHELL", "test -n \"$(ls -A /opt/artifacts)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  servo:
+    depends_on:
+      docling:
+        condition: service_healthy
+
+networks:
+  internal:
+    internal: true
