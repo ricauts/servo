@@ -47,3 +47,31 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+
+  # The "external" object store (xds-03). adobe/s3mock, Apache-2.0 — re-read
+  # from the upstream LICENSE on the tick that landed this, not taken on
+  # trust from docs/design/external-sources.md. MinIO would also work and an
+  # operator who already runs one should point a DataSource at it, but its
+  # server is AGPL-3.0 and there is a zero-cost Apache-2.0 alternative, so
+  # the test compose ships the Apache-2.0 one. chrislusf/seaweedfs
+  # (Apache-2.0) stays the documented fallback if ListObjectsV2 pagination
+  # here ever proves too thin for the cursor tests.
+  #
+  # PINNED to a version, not `latest`: a test that proves an S3 client's
+  # behaviour against a server that silently changes underneath it proves
+  # nothing on the day it changes.
+  #
+  # The bucket is created by the server at boot (`initialBuckets`); the test
+  # puts the fixture objects in. Servo's own code never writes to an object
+  # store and a test asserts that, so the seeding is the test's job and the
+  # crawler's import list stays three read commands wide.
+  s3:
+    image: adobe/s3mock:4.11.0
+    environment:
+      initialBuckets: "contracts"
+      # Everything lives in the container's own filesystem and dies with it,
+      # exactly like the two databases above.
+      retainFilesOnExit: "false"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped

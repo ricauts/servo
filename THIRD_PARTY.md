@@ -148,6 +148,56 @@ a permissive code licence says nothing about what ships beside it.
   the dependency: its licence travels inside `node_modules` to every
   install. Nothing of it is copied into this tree.
 
+### @aws-sdk/client-s3 (xds-03)
+
+- **Upstream:** <https://github.com/aws/aws-sdk-js-v3>
+- **Licence:** Apache-2.0, verified from the `LICENSE` file shipped in the
+  installed package (`node_modules/@aws-sdk/client-s3/LICENSE`) on 2026-09-01.
+  Its text is the Apache License 2.0 in full. **The whole dependency tree it
+  pulls was checked, not only the top package:** the 25 packages this addition
+  puts into `node_modules` are 24 Apache-2.0 — 17 `@aws-sdk/*`, 6 `@smithy/*`
+  and `@aws/lambda-invoke-store` — and one MIT (`bowser`); every one of them
+  adoptable under the table above, with no GPL, AGPL or SSPL anywhere in the
+  tree. The count and each licence were read from the installed
+  `package.json`/`LICENSE` of every package the lockfile diff adds, not
+  inferred from the scope names.
+- **Copyright:** `Copyright 2018-2020 Amazon.com, Inc. or its affiliates. All
+  Rights Reserved.`
+- **What we use:** an ordinary npm dependency (3.1123.0), not vendored code —
+  no file from it lives in this tree. `src/lib/kb/sources/s3.ts` (spec
+  `xds-03`) imports exactly one client and **three read commands**:
+  `ListObjectsV2Command`, `HeadObjectCommand`, `GetObjectCommand`. A test
+  reads that import list and fails on any other command name, and greps `src/`
+  for the write command, because "we only ever read" should be checkable
+  mechanically rather than by reading every branch. Neither
+  `@aws-sdk/s3-request-presigner` nor `@aws-sdk/lib-storage` is installed:
+  presigned URLs hand a viewer a credential and multipart upload is a write.
+- **Adopt-first verdict:** ADOPT. The alternatives were considered and refused
+  on their own terms rather than on licence: **MinIO's server is AGPL-3.0** and
+  is therefore not shipped in the test compose (pointing a `DataSource` at an
+  operator's MinIO is fine — that is a network endpoint, not adopted code),
+  and **DuckDB + `@duckdb/node-api` (MIT) is refused for v1** because its
+  `postgres` extension attaches read-write by default, its xlsx reader is
+  native code inside the Node process where a crafted file is not bounded by
+  the forked worker's caps, and its extensions are fetched at runtime from a
+  network endpoint, which offline operation forbids.
+- **Obligations:** attribution only, discharged by `package.json` shipping the
+  dependency: its licence travels inside `node_modules` to every install.
+  Apache-2.0 §4 would additionally require carrying a `NOTICE` file's contents
+  where one exists; the installed package ships **no `NOTICE` file**, so the
+  copyright line above is the whole of what attaches. Nothing of it is copied
+  into this tree.
+
+  The test stack's object store, `adobe/s3mock` (pinned at `4.11.0` in
+  `docker-compose.test.yml`), is **Apache-2.0**, verified from
+  <https://raw.githubusercontent.com/adobe/S3Mock/main/LICENSE> on 2026-09-01;
+  its documented fallback `chrislusf/seaweedfs` is Apache-2.0, verified from
+  <https://raw.githubusercontent.com/seaweedfs/seaweedfs/master/LICENSE> on the
+  same date. Neither is a dependency of the application and neither ships in
+  the image — they are test containers — so neither gets a section of its own;
+  they are recorded here because the adopt-first gate read both licences and a
+  verdict that is not written down is a verdict that gets re-litigated.
+
 ### shadcn/ui
 
 - **Upstream:** <https://github.com/shadcn-ui/ui> — two layers of its component

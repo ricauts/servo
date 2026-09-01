@@ -16,6 +16,11 @@ import {
   sourceSecretKey,
   type SourceKind,
 } from "@/lib/kb/sources";
+import {
+  assertEndpointAllowed,
+  readSourceEgressAllowlist,
+  type S3Target,
+} from "@/lib/kb/sources/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +95,24 @@ export async function POST(req: NextRequest) {
     // the second is the field an operator reaches for when the first refuses.
     await assertNotServoDatabase(config as Record<string, unknown>);
     if (secret !== undefined) await assertSecretNotServoDatabase(secret);
+    // xds-03: an S3 source may only NAME an endpoint an admin has already put
+    // on the DATA-SOURCE allowlist (kb.sources.egress.allowlist) — never the
+    // agent-facing integration.egress.allowlist that web_fetch reads. Checked
+    // here so the refusal names the setting while the operator is still
+    // looking at the form.
+    //
+    // Only when an endpoint is actually GIVEN. A config that names none is a
+    // source pointed at AWS itself, and there is no endpoint host to validate
+    // yet; refusing it here would refuse every source created before an admin
+    // has filled the list in, which is a usability rule masquerading as a
+    // security one. The security boundary is the CRAWL: crawlS3Scope runs the
+    // same check on the resolved destination — the derived
+    // `s3.<region>.amazonaws.com` included — before it builds a client, so an
+    // unlisted destination is unreachable however the row was created and
+    // however the list is narrowed afterwards.
+    if (kind === "S3" && typeof (config as S3Target)?.endpoint === "string") {
+      assertEndpointAllowed(config as S3Target, await readSourceEgressAllowlist(db));
+    }
   } catch (err) {
     const refused = refusal(err);
     if (refused) return refused;
