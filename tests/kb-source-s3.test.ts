@@ -127,7 +127,7 @@ describe("the pinned client", () => {
 describe("the crawl, against a real s3mock", () => {
   it("a {bucket, prefix, suffixes} scope lists exactly the in-scope objects", async () => {
     const client = await makeS3Client(ENDPOINT, "setting.s3.secret");
-    const listed = await listScope(client, { bucket: BUCKET, prefix: "", suffixes: [".md", ".pdf", ".xlsx"] }).then((all) => all.filter((o) => !["hostile/", "other/", "sync/"].some((p) => o.key.startsWith(p))));
+    const listed = await listScope(client, { bucket: BUCKET, prefix: "", suffixes: [".md", ".pdf", ".xlsx"] }).then((all) => all.filter((o) => !["hostile/", "other/", "sync/", "prune/"].some((p) => o.key.startsWith(p))));
     expect(listed.map((o) => o.key).sort()).toEqual(["docs/manual.pdf", "notes/readme.md", "sheets/pricing.xlsx"]);
   });
 
