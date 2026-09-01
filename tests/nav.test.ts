@@ -47,7 +47,7 @@ describe("the registry itself", () => {
     // The admin tree includes the two adminOnly pages; the operator tree is
     // a strict subset. If a page is added without a NavEntry, this count is
     // where the drift shows first.
-    expect(NAV_ENTRIES).toHaveLength(11); // + Knowledge (kb-16), + Runs (ux-05)
+    expect(NAV_ENTRIES).toHaveLength(12); // + Knowledge (kb-16), + Runs (ux-05), + Sources (xds-09)
   });
 
   it("addresses icons by name — entries cross the server/client boundary", () => {

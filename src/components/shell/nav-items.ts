@@ -36,6 +36,8 @@ export const NAV_ENTRIES: NavEntry[] = [
   // The Knowledge entry (kb-16): kb.view excludes REQUESTER and AI_AGENT, so
   // the entry is absent from their nav — they meet the KB as cited answers.
   { href: "/kb", label: "Knowledge", icon: "knowledge", section: "fleet", action: "kb.view" },
+  // External data sources (xds-09): admins manage, kb.view roles browse.
+  { href: "/kb/sources", label: "Sources", icon: "sources", section: "fleet", action: "kb.sources.manage" },
   { href: "/integrations", label: "Integrations", icon: "integrations", section: "admin", adminOnly: true },
   { href: "/settings", label: "Settings", icon: "settings", section: "admin", adminOnly: true },
 ];

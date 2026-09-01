@@ -68,6 +68,11 @@ Note the two deliberate hedges. "the actions the desk has gated" — not
 (see the ledger). "is told which of them the run actually opened" — not
 "catches every ignored procedure", because reading a skill is advisory.
 
+**The "your documents never leave your infrastructure" line carries TWO
+conditions now (xds-09):** uploads never leave, and — under INDEX mode —
+external records arrive INTO the Servo database. Both halves are true
+today and neither may be stated without the other.
+
 ---
 
 ## Claims ledger
@@ -94,6 +99,7 @@ earlier.
 | Self-hostable and MIT-licensed. Bring your own key (Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint), or run entirely offline on the deterministic mock provider, which is the default when no key is configured. SSO against any OIDC provider. | `LICENSE`, `src/lib/ai/settings.ts`, `src/lib/ai/provider.ts`, `src/lib/ai/mock.ts`, `src/lib/authjs.ts` |
 | Secrets stored through Settings are encrypted at rest with AES-256-GCM **when `SERVO_ENCRYPTION_KEY` is set**. Without that variable they are stored in plain text, and the docs say so. | `src/lib/secret-store.ts`, `SECURITY.md` |
 | One `docker compose up`: the app and its Postgres (pgvector) container, both on local volumes; the schema arrives as numbered migrations applied on boot. The agent's SQL sandbox is a second database on that same server, `servo_ops`, whose two login roles have `CONNECT` on the desk database revoked. | `docker-compose.yml`, `scripts/docker-entrypoint.sh`, `Dockerfile`, `scripts/postgres-init.sql` |
+| External data sources in INDEX mode: an S3 bucket or a PostgreSQL database is crawled on demand into ordinary documents, gated by a **source ceiling** — a source grant alone entitles nothing, a document path alone reaches nothing source-backed, and a complete crawl propagates upstream deletions while an incomplete one erases nothing. | `src/lib/kb/sources/` (`s3.ts`, `sql.ts`, `sync.ts`, `prune.ts`), `src/lib/kb/entitlement.ts` (`readable`), `tests/kb-source-s3.test.ts`, `tests/kb-source-sql.test.ts`, `tests/kb-source-sync.test.ts`, `tests/kb-source-prune.test.ts` |
 
 ### ROADMAP
 
