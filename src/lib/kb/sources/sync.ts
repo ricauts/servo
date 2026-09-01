@@ -118,14 +118,19 @@ export async function syncSource(sourceId: string): Promise<SyncOutcome> {
     outcome.statusError = scrub(message);
   }
 
+  const completedAt = outcome.complete ? new Date() : null;
   await db.dataSource.update({
     where: { id: source.id },
     data: {
       status: outcome.status,
       statusError: outcome.statusError,
-      ...(outcome.complete ? { lastCompleteSyncAt: new Date() } : {}),
+      ...(completedAt ? { lastCompleteSyncAt: completedAt } : {}),
     },
   });
+  // xds-06: deletion propagation runs ONLY when the run was complete —
+  // an incomplete crawl deletes and erases NOTHING, whatever it saw.
+  const { propagateDeletions } = await import("./prune");
+  await propagateDeletions(source.id, runStartedAt, outcome.complete);
   return outcome;
 }
 
@@ -195,7 +200,9 @@ async function syncSqlEntry(source: SourceRow, scope: SqlScopeEntry, runStartedA
   // The FULL id sweep: every observed id, so a vanished row is visible to
   // deletion propagation even when updatedAtColumn filtering skips it.
   for (const row of rows.rows) {
-    await stampSeen(source.id, `${scope.schema}.${scope.table}:${row.externalId}`, row.version, runStartedAt);
+    // The stamp key is the LOCATOR's own stable id — the same shape the
+    // skip-lookup below matches, so an observed row is always stamped.
+    await stampSeen(source.id, row.externalId, row.version, runStartedAt);
     const locator = sqlLocator(scope, source.name, row.externalId);
     const existing = await db.document.findFirst({
       where: { sourceId: source.id, externalLocator: { path: ["id"], equals: row.externalId } },
