@@ -82,12 +82,6 @@
   ],
   "packages": [
     {
-      "name": "gifenc",
-      "finding": "unreferenced",
-      "reason": "declared in devDependencies and imported by nothing; removed with committed evidence under the deletion rule, not here — hyg-04 removes nothing",
-      "owner": "hyg-05"
-    },
-    {
       "name": "react-is",
       "finding": "unreferenced",
       "reason": "satisfies recharts' react-is peerDependency (node_modules/recharts/package.json peerDependencies); never imported by app code, so removing it breaks the peer range. NOT enumerated in question 31, which names only _ds_bundle.js, the five shadcn primitives and run-relay.ts — it is filed there as the question that owns the unreferenced-but-kept CLASS, and the owner should move if you open a narrower one",
@@ -110,6 +104,12 @@
       "finding": "unreferenced",
       "reason": "type-only devDependency for validator's subpath imports (validator/lib/isEmail has no bundled types); required by tsc, never imported at runtime",
       "owner": "ext-02"
+    },
+    {
+      "name": "gifenc",
+      "finding": "claimed-absent",
+      "reason": "tests/fixtures/repo-refs/virtual-repo.json names node_modules/gifenc as TEST DATA for the scanner's own unit suite; hyg-05 removed the real devDependency, so the real manifests no longer carry the name and the fixture's mention reads as a claim. The fixture is a virtual world, not prose about this repo's node_modules.",
+      "owner": "hyg-05"
     }
   ]
 }

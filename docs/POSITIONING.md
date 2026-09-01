@@ -433,6 +433,20 @@ paths-exempt:
       - docs/design/docling.md
     until: dcl-06
     reason: dcl-06 writes the sidecar operator guide.
+  - target:
+      - src/components/legacy/Button.tsx
+      - src/components/legacy/Card.tsx
+      - src/components/legacy/Field.tsx
+    paths:
+      - docs/design/hygiene.md
+      - docs/hygiene/hyg-05-evidence.md
+      - docs/hygiene/audit-2026-08-30-evidence.md
+      - docs/hygiene/audit-2026-08-30-2-evidence.md
+    reason: negative and historical references, permanent - hyg-05 deleted
+      the three components, and the DEAD-PROVEN table and the audit/evidence
+      reports name exactly what was deleted. An evidence report must still be
+      able to name what no longer exists; history does not un-happen, so this
+      exemption does not retire.
 ```
 
 Why the block is shaped that way:
