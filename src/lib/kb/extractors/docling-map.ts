@@ -42,8 +42,15 @@ function normalizedBbox(
     : undefined;
 }
 
+type PageList = Array<{ page_no: number; size?: { width: number; height: number } }>;
+type PageMap = Record<string, { page_no?: number; size?: { width: number; height: number } }>;
+
 function pageSizeFor(doc: DoclingDocumentT, pageNo: number) {
-  return doc.pages.find((p) => p.page_no === pageNo)?.size;
+  const pages = doc.pages as PageList | PageMap | undefined;
+  if (!pages) return undefined;
+  if (Array.isArray(pages)) return pages.find((p) => p.page_no === pageNo)?.size;
+  const hit = pages[String(pageNo)];
+  return hit?.size;
 }
 
 function a1Col(n: number): string {
@@ -82,6 +89,68 @@ function tableChunk(item: TableItemT): ExtractedChunk | null {
  *  subset and yield nothing. */
 export function mapDoclingDocument(doc: DoclingDocumentT): ExtractedChunk[] {
   const chunks: ExtractedChunk[] = [];
+
+  // The REAL upstream arrays (ratified dcl-06): when texts/tables carry
+  // content, walk them — orig is the text, prov is bottom-left. The
+  // synthetic-era items array stays the fallback for the golden corpora.
+  if ((doc.texts?.length ?? 0) + (doc.tables?.length ?? 0) > 0) {
+    for (const t of doc.texts ?? []) {
+      const prov = t.prov?.[0];
+      if (!prov) continue;
+      const text = t.orig?.trim();
+      if (!text) continue;
+      const label = t.label === "section_header" || t.label === "document_title" ? t.label : t.label === "title" ? "section_header" : t.label;
+      const locator: Record<string, unknown> = { page: prov.page_no };
+      const size = pageSizeFor(doc, prov.page_no);
+      if (prov.bbox && size && size.height > 0) {
+        // BOTTOMLEFT → 0-1 TOP-LEFT: flip y against the page height.
+        const box = {
+          x: prov.bbox.l / size.width,
+          y: 1 - prov.bbox.t / size.height,
+          w: (prov.bbox.r - prov.bbox.l) / size.width,
+          h: (prov.bbox.t - prov.bbox.b) / size.height,
+        };
+        if (Object.values(box).every((v) => v >= 0 && v <= 1)) locator.bbox = box;
+      }
+      if (label) locator.label = label;
+      if (t.self_ref) locator.ref = t.self_ref;
+      chunks.push({ text, locator });
+    }
+    for (const t of doc.tables ?? []) {
+      const prov = t.prov?.[0];
+      const grid = t.data?.grid ?? [];
+      const rows = t.data?.num_rows ?? grid.length;
+      const cols = t.data?.num_cols ?? (grid[0]?.length ?? 0);
+      if (rows < 1 || cols < 1) continue;
+      const rendered = grid.filter((r) => r.some((c) => (c.text ?? "").trim() !== "")).map((r) => `| ${r.map((c) => c.text ?? "").join(" | ")} |`).join("\n");
+      if (!rendered.trim()) continue;
+      const locator: Record<string, unknown> = { label: "table" };
+      if (prov) {
+        locator.page = prov.page_no;
+        const size = pageSizeFor(doc, prov.page_no);
+        if (prov.bbox && size && size.width > 0 && size.height > 0) {
+          const box = {
+            x: prov.bbox.l / size.width,
+            y: 1 - prov.bbox.t / size.height,
+            w: (prov.bbox.r - prov.bbox.l) / size.width,
+            h: (prov.bbox.t - prov.bbox.b) / size.height,
+          };
+          if (Object.values(box).every((v) => v >= 0 && v <= 1)) locator.bbox = box;
+        }
+      }
+      const label = t.label ?? t.captions?.[0];
+      if (label) {
+        locator.sheet = label;
+        locator.table = label;
+      }
+      locator.range = `A1:${a1Col(Math.max(0, cols - 1))}${rows}`;
+      locator.cell = "A1";
+      if (t.self_ref) locator.ref = t.self_ref;
+      chunks.push({ text: rendered, locator });
+    }
+    return chunks;
+  }
+
   for (const item of doc.items) {
     const prov = item.prov?.[0];
     if (item.item_type === "table" && "data" in item) {

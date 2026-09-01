@@ -3,29 +3,26 @@
     {
       "file": "manual.doclingdocument.json",
       "source_filename": "manual.pdf",
-      "provenance": "synthetic",
-      "synthetic": true,
-      "reason": "no docling-serve sidecar exists in the tree yet (LANE 1); hand-authored to the DoclingDocument item/provenance shape so the mapper, schema and caps are testable offline. Replaced by scripts/record-docling-fixture.mjs once docker-compose.docling.yml arrives — docling-fixture-lint fails on synthetic entries from that moment",
-      "docling_serve_version": null,
-      "image_digest": null
+      "provenance": "recorded",
+      "synthetic": false,
+      "docling_serve_version": "docling-serve@1.31.0",
+      "image_digest": "sha256:7deed6ddba54908925c039d69a95806416c90cfc9b5486ca8554d3ce30a50289"
     },
     {
       "file": "scanned.doclingdocument.json",
       "source_filename": "scanned.pdf",
-      "provenance": "synthetic",
-      "synthetic": true,
-      "reason": "the OCR case unpdf returns nothing for — the reason this section exists; synthesized until a live sidecar can record the real conversion",
-      "docling_serve_version": null,
-      "image_digest": null
+      "provenance": "recorded",
+      "synthetic": false,
+      "docling_serve_version": "docling-serve@1.31.0",
+      "image_digest": "sha256:7deed6ddba54908925c039d69a95806416c90cfc9b5486ca8554d3ce30a50289"
     },
     {
       "file": "messy-workbook.doclingdocument.json",
-      "source_filename": "messy-workbook.pdf",
-      "provenance": "synthetic",
-      "synthetic": true,
-      "reason": "two labelled tables on one page, exercising the sheet/range/table/cell mapping offline",
-      "docling_serve_version": null,
-      "image_digest": null
+      "source_filename": "pricing.xlsx",
+      "provenance": "recorded",
+      "synthetic": false,
+      "docling_serve_version": "docling-serve@1.31.0",
+      "image_digest": "sha256:7deed6ddba54908925c039d69a95806416c90cfc9b5486ca8554d3ce30a50289"
     }
   ]
 }

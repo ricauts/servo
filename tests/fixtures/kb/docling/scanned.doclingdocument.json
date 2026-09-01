@@ -1,23 +1,140 @@
 {
-  "schema_name": "docling-core/v1.24.0",
-  "name": "scanned-manual.pdf",
-  "pages": [
-    { "page_no": 1, "size": { "width": 612, "height": 792 } },
-    { "page_no": 2, "size": { "width": 612, "height": 792 } }
-  ],
-  "body": { "children": ["#/texts/0", "#/texts/1"] },
-  "items": [
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "scanned",
+  "body": {
+    "children": [
+      {
+        "$ref": "#/pictures/0"
+      },
+      {
+        "$ref": "#/texts/0"
+      },
+      {
+        "$ref": "#/pictures/1"
+      },
+      {
+        "$ref": "#/texts/1"
+      },
+      {
+        "$ref": "#/pictures/2"
+      },
+      {
+        "$ref": "#/texts/2"
+      }
+    ]
+  },
+  "items": [],
+  "texts": [
     {
-      "item_type": "text",
       "self_ref": "#/texts/0",
-      "text": "SCANNED PAGE ONE: boiler pressure must stay under 4 bar during startup.",
-      "prov": [{ "page_no": 1, "bbox": { "l": 60, "t": 80, "r": 550, "b": 130 } }]
+      "label": "text",
+      "orig": "1",
+      "prov": [
+        {
+          "page_no": 1,
+          "bbox": {
+            "l": 91,
+            "t": 709,
+            "r": 409.6666666666667,
+            "b": 590.3333333333333
+          }
+        }
+      ],
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "meta": null,
+      "text": "1",
+      "formatting": null,
+      "hyperlink": null
     },
     {
-      "item_type": "text",
       "self_ref": "#/texts/1",
-      "text": "SCANNED PAGE TWO: the relief valve is tested annually by an external contractor.",
-      "prov": [{ "page_no": 2, "bbox": { "l": 60, "t": 80, "r": 550, "b": 130 } }]
+      "label": "text",
+      "orig": "1",
+      "prov": [
+        {
+          "page_no": 2,
+          "bbox": {
+            "l": 91,
+            "t": 709,
+            "r": 409.6666666666667,
+            "b": 590.3333333333333
+          }
+        }
+      ],
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "meta": null,
+      "text": "1",
+      "formatting": null,
+      "hyperlink": null
+    },
+    {
+      "self_ref": "#/texts/2",
+      "label": "text",
+      "orig": "1",
+      "prov": [
+        {
+          "page_no": 3,
+          "bbox": {
+            "l": 91,
+            "t": 709,
+            "r": 409.6666666666667,
+            "b": 590.3333333333333
+          }
+        }
+      ],
+      "parent": {
+        "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "meta": null,
+      "text": "1",
+      "formatting": null,
+      "hyperlink": null
     }
-  ]
+  ],
+  "tables": [],
+  "pictures": [
+    {
+      "self_ref": "#/pictures/0"
+    },
+    {
+      "self_ref": "#/pictures/1"
+    },
+    {
+      "self_ref": "#/pictures/2"
+    }
+  ],
+  "pages": {
+    "1": {
+      "page_no": 1,
+      "size": {
+        "width": 612,
+        "height": 792
+      }
+    },
+    "2": {
+      "page_no": 2,
+      "size": {
+        "width": 612,
+        "height": 792
+      }
+    },
+    "3": {
+      "page_no": 3,
+      "size": {
+        "width": 612,
+        "height": 792
+      }
+    }
+  }
 }

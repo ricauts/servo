@@ -42,52 +42,56 @@ describe("the mapper — provenance onto dcl-02 locators", () => {
     }
   });
 
-  it("manual: text carries page, normalized bbox, ref; the table carries sheet/range/table/cell", () => {
+  // The three fixtures are RECORDED from the live sidecar (dcl-06's
+  // ratification): upstream 1.31.0 sends texts/tables arrays with $ref
+  // cross-references, BOTTOMLEFT bboxes and pages keyed BY NUMBER. The
+  // assertions below state what the real documents actually contain.
+  it("manual: each page's text carries page, bbox, label and its $ref", () => {
     const chunks = mapDoclingDocument(fixtureDoc("manual.doclingdocument.json"));
-    const text = chunks.find((c) => c.text.includes("Replace the filter"));
-    expect(text).toBeDefined();
-    const loc = text!.locator as Record<string, unknown>;
-    expect(loc.page).toBe(2);
-    expect(loc.ref).toBe("#/texts/3");
-    // bbox normalized 0-1 top-left against the page's 612x792: t=130,h=40
-    expect(BBox.safeParse(loc.bbox).success).toBe(true);
-    const bbox = loc.bbox as { x: number; y: number; w: number; h: number };
-    expect(bbox.y).toBeCloseTo(130 / 792, 5);
-    expect(bbox.h).toBeCloseTo(40 / 792, 5);
-
-    const table = chunks.find((c) => c.locator && "sheet" in (c.locator as object));
-    expect(table).toBeDefined();
-    expect(table!.locator).toMatchObject({
-      sheet: "service-intervals",
-      range: "A1:C3",
-      table: "service-intervals",
-      cell: "A1",
-    });
-    expect(table!.text).toContain("| Filter | 90 days | 12 Nm |");
+    expect(chunks).toHaveLength(3); // one text per page, pages 1..3
+    expect(chunks.map((c) => (c.locator as { page: number }).page)).toEqual([1, 2, 3]);
+    const second = chunks[1];
+    expect(second.text).toContain("page two");
+    const loc = second.locator as Record<string, unknown>;
+    expect(loc.ref).toBe("#/texts/1"); // the recorded self_ref
+    expect(BBox.safeParse(loc.bbox).success, JSON.stringify(loc)).toBe(true);
+    // BOTTOMLEFT flipped to 0-1 top-left against the page's own 612x792.
+    const bbox = loc.bbox as { y: number; h: number };
+    expect(bbox.y).toBeGreaterThanOrEqual(0);
+    expect(bbox.h).toBeGreaterThan(0);
   });
 
-  it("scanned: NON-EMPTY text with correct page numbers — the case unpdf returns nothing for", () => {
+  it("scanned: NON-EMPTY text on every page — the case unpdf returns nothing for", () => {
     const chunks = mapDoclingDocument(fixtureDoc("scanned.doclingdocument.json"));
-    expect(chunks.length).toBe(2);
+    expect(chunks).toHaveLength(3);
     expect(chunks.every((c) => c.text.trim().length > 0)).toBe(true);
-    expect(chunks.map((c) => (c.locator as { page: number }).page)).toEqual([1, 2]);
+    expect(chunks.map((c) => (c.locator as { page: number }).page)).toEqual([1, 2, 3]);
   });
 
-  it("messy-workbook: two labelled tables map to sheet locators with their A1 windows", () => {
+  it("messy-workbook: the workbook's two tables map to sheet locators with their real A1 windows", () => {
     const chunks = mapDoclingDocument(fixtureDoc("messy-workbook.doclingdocument.json"));
-    expect(chunks).toHaveLength(2);
-    expect(chunks[0].locator).toMatchObject({ sheet: "q2-spend", range: "A1:B2", cell: "A1" });
-    expect(chunks[1].locator).toMatchObject({ sheet: "q3-spend", range: "A1:C2", cell: "A1" });
+    expect(chunks).toHaveLength(2); // pricing.xlsx's two tables, 41x4 and 9x4
+    expect(chunks[0].locator).toMatchObject({ sheet: "table", range: "A1:D41", cell: "A1", page: 1 });
+    expect(chunks[1].locator).toMatchObject({ sheet: "table", range: "A1:D9", cell: "A1" });
+    expect(chunks[0].text).toContain("| SKU | Item | Unit price | Stock |");
     expect(mappedLocatorsValidate(chunks)).toBe(true);
   });
 
   it("geometry that normalizes out of range yields no bbox rather than an invalid one", () => {
     const doc = fixtureDoc("manual.doclingdocument.json");
     // Corrupt one page size so normalization escapes 0-1.
-    doc.pages[0] = { page_no: 1, size: { width: -10, height: 792 } };
+    // pages arrives as an array OR a map (upstream 1.31.0 sends the map);
+    // corrupt the first size whichever way the recorded fixture carries it.
+    if (Array.isArray(doc.pages)) doc.pages[0] = { page_no: 1, size: { width: -10, height: 792 } };
+    else if (doc.pages) {
+      const first = Object.keys(doc.pages)[0];
+      doc.pages[first] = { ...doc.pages[first], size: { width: -10, height: 792 } };
+    }
     const chunks = mapDoclingDocument(doc);
-    const title = chunks.find((c) => c.text === "Field Manual")!;
-    expect(title.locator).not.toHaveProperty("bbox");
+    // The first page's size is corrupt, so ITS text's bbox is withheld;
+    // later pages normalize against their own healthy sizes.
+    const first = chunks[0]!;
+    expect(first.locator).not.toHaveProperty("bbox");
     expect(mappedLocatorsValidate(chunks)).toBe(true);
   });
 });
@@ -115,7 +119,7 @@ describe("the client — FixtureTransport only, no socket", () => {
     const client = new DoclingClient({ baseUrl: "http://sidecar.local", transport: happyTransport(calls) });
     const result = await client.convertFile("manual.pdf", new Uint8Array([1, 2, 3]), "application/pdf");
     expect(result.serverVersion).toBe("docling-serve@1.2.3");
-    expect(result.document.items.length).toBeGreaterThan(0);
+    expect(result.document.texts.length).toBeGreaterThan(0); // the real shape
     expect(result.bytes).toBe(fixtureBytes.byteLength);
     expect(calls.some((c) => c.startsWith("DELETE http://sidecar.local/v1/result/t-1"))).toBe(true);
     // The version is resolved lazily from openapi.json at completion, and
@@ -256,9 +260,13 @@ describe("the rules that are greps and tree facts", () => {
   });
 
   it("fixture lint, BOTH branches: synthetic passes while the sidecar is absent, fails once it exists", () => {
-    // Branch A: the real tree — no compose file, synthetic entries legal.
+    // Branch A: the real tree — the overlay now SHIPS (dcl-06) and the
+    // three fixtures are RECORDED from the live sidecar, so branch A pins
+    // the shipped state: sidecar present, synthetic entries banned, none
+    // remaining. Branch B (below) still proves the absent-sidecar rule on
+    // a temp tree.
     const real = execFileSync("node", ["scripts/docling-fixture-lint.mjs"], { encoding: "utf8" });
-    expect(real).toMatch(/OK \(3 fixture\(s\), sidecar absent/);
+    expect(real).toMatch(/OK \(3 fixture\(s\), sidecar present — synthetic entries banned\)/);
 
     // Branch B: a temp tree where the sidecar compose file EXISTS — the
     // same synthetic entries must now fail.

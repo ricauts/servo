@@ -232,6 +232,7 @@ export const TOOLING_DEPENDENCIES = new Map([
   ["@types/react", "ambient type declarations consumed by tsc"],
   ["@types/react-dom", "ambient type declarations consumed by tsc"],
   ["@types/nodemailer", "ambient type declarations consumed by tsc"],
+  ["@types/js-yaml", "ambient type declarations consumed by tsc (js-yaml is imported by tests/docling-compose.test.ts)"],
   ["react-dom", "the DOM renderer Next.js loads at runtime; never imported by app code"],
 ]);
 

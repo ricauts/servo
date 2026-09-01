@@ -61,10 +61,17 @@ describe("heading paths", () => {
 
 describe("tables", () => {
   it("a table under the cap stays whole", () => {
-    const chunks = chunkDoclingDocument(docFromJson("manual.doclingdocument.json"));
-    const table = chunks.find((c) => "sheet" in (c.locator as object) || (c.locator as { label?: string }).label === "table");
-    expect(table).toBeDefined();
-    expect(table!.text).toMatch(/^\| Part \| Interval \| Torque \|/);
+    // Ratified against the recorded messy-workbook fixture: both tables
+    // (41x4=164 and 9x4=36 cells) sit under the cap, so each stays ONE chunk
+    // with the header row leading the text.
+    const chunks = chunkDoclingDocument(docFromJson("messy-workbook.doclingdocument.json"));
+    const tables = chunks.filter((c) => "sheet" in (c.locator as object));
+    expect(tables).toHaveLength(2);
+    expect(tables[0].text).toMatch(/^\| SKU \| Item \| Unit price \| Stock \|/);
+    expect(tables[0].text).toContain("| HW-001 |");
+    expect((tables[0].locator as Record<string, unknown>).range).toBe("A1:D41");
+    expect(tables[1].text).toMatch(/^\| Code \| Service \| Rate \| Unit \|/);
+    expect((tables[1].locator as Record<string, unknown>).range).toBe("A1:D9");
   });
 
   it("over the cap it splits by row groups WITH THE HEADER ROW REPEATED, each piece carrying {page, bbox, label:table}", () => {
@@ -186,10 +193,13 @@ describe("the same unchanged code paths as baseline", () => {
 
 describe("reading order and index monotonicity", () => {
   it("chunks follow item order; pages never go backwards for a forward-ordered document", () => {
+    // Ratified: the recorded manual carries three texts, one per page, in
+    // reading order — the chunker emits them in exactly that order.
     const chunks = chunkDoclingDocument(docFromJson("manual.doclingdocument.json"));
     const pages = chunks.map((c) => (c.locator as { page: number }).page).filter((p) => typeof p === "number");
+    expect(pages).toEqual([1, 2, 3]);
     expect(pages).toEqual([...pages].sort((a, b) => a - b));
     // Monotonic by construction: the chunker never reorders.
-    expect(chunks.length).toBeGreaterThan(3);
+    expect(chunks.length).toBe(3);
   });
 });
