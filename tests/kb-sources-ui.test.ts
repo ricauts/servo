@@ -64,13 +64,18 @@ describe("route-level gates", () => {
   });
 
   it("the sources page itself refuses non-managers (the page-level gate)", async () => {
-    // A Next.js PAGE renders or redirects rather than returning a status;
-    // the gate is the same forbid() the routes use, asserted through the
-    // permission helper the page calls — the direct check.
-    const { forbid } = await import("@/lib/permissions");
+    // A Next.js PAGE cannot return a Response (the build's page-type
+    // check rejects it), so the page gates on can() and renders the
+    // refusal surface — the same helper the routes' forbid() wraps.
+    const { can } = await import("@/lib/permissions");
     const requester = await db.user.create({ data: { name: "R2", email: `q${Date.now()}@x.com`, role: "REQUESTER" } });
-    expect(forbid(requester as never, "kb.sources.manage")?.status ?? 403).toBe(403);
-    expect(forbid(admin as never, "kb.sources.manage")).toBeFalsy(); // undefined or null: no refusal
+    expect(can(requester as never, "kb.sources.manage")).toBe(false);
+    expect(can(admin as never, "kb.sources.manage")).toBe(true);
+    // And the page source contains no Response return: the build-time
+    // rule, held by test rather than by CI alone.
+    const page = readFileSync("src/app/kb/sources/page.tsx", "utf8");
+    expect(page).toMatch(/can\(user, "kb.sources.manage"\)/);
+    expect(page).not.toMatch(/return denied|return forbid/);
   });
 
   it("an unconfirmed purge is a 400 naming the irreversibility; the mcp-servers gate stays intact beside it", async () => {
