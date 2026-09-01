@@ -121,23 +121,60 @@ export const DoclingItem = z.union([
   }).passthrough(),
 ]);
 
+/** The REAL upstream text item (ratified dcl-06, from the live sidecar):
+ *  `orig` is the text, `label` the structural role, `prov` the provenance
+ *  with a BOTTOMLEFT bbox — the mapper flips y to the 0-1 top-left origin
+ *  dcl-02 requires. */
+export const RealTextItem = z.object({
+  self_ref: z.string().optional(),
+  label: z.string(),
+  orig: z.string(),
+  prov: z.array(z.object({
+    page_no: z.number().int().min(1),
+    bbox: z.object({ l: z.number(), t: z.number(), r: z.number(), b: z.number() }).optional(),
+  })).default([]),
+}).passthrough();
+
+/** The REAL upstream table item: data.grid holds the cells (row arrays),
+ *  data.num_rows/num_cols the shape, captions beside. */
+export const RealTableItem = z.object({
+  self_ref: z.string().optional(),
+  label: z.string().optional(),
+  prov: z.array(z.object({
+    page_no: z.number().int().min(1),
+    bbox: z.object({ l: z.number(), t: z.number(), r: z.number(), b: z.number() }).optional(),
+  })).default([]),
+  data: z.object({
+    num_rows: z.number().int().min(0),
+    num_cols: z.number().int().min(0),
+    grid: z.array(z.array(z.object({ text: z.string().optional() }).passthrough())).default([]),
+  }).optional(),
+  captions: z.array(z.string()).default([]),
+}).passthrough();
+
 export const DoclingDocument = z.object({
   schema_name: z.string().optional(),
   version: z.string().optional(),
   name: z.string().optional(),
-  pages: z
-    .object({
-      page_no: z.number().int().min(1),
-      size: z.object({ width: z.number(), height: z.number() }).optional(),
-    })
-    .array()
-    .default([]),
-  body: z.object({ children: z.array(z.string()).default([]) }).optional(),
+  // Ratified: body.children entries are $ref OBJECTS ({"$ref": "#/texts/0"})
+  // upstream, not plain strings.
+  body: z.object({ children: z.array(z.union([z.string(), z.object({ $ref: z.string().optional() }).passthrough()])).default([]) }).optional(),
   // The flattened item list the mapper walks. Item typing is additive:
   // known item_types carry their fields; every other type passes through
   // as ignored structure.
   items: z.array(DoclingItem).default([]),
+  // The REAL upstream arrays (ratified dcl-06): texts/tables/pictures with
+  // $ref cross-references, pages keyed BY NUMBER as a map. The synthetic
+  // items array stays accepted; the mapper prefers whichever is populated.
+  texts: z.array(RealTextItem).default([]),
+  tables: z.array(RealTableItem).default([]),
   pictures: z.array(PictureItem).optional(),
+  pages: z
+    .union([
+      z.array(z.object({ page_no: z.number().int().min(1), size: z.object({ width: z.number(), height: z.number() }).optional() })),
+      z.record(z.string(), z.object({ page_no: z.number().int().min(1).optional(), size: z.object({ width: z.number(), height: z.number() }).optional() })),
+    ])
+    .optional(),
 });
 
 /** The poll status payload. */

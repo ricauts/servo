@@ -125,6 +125,10 @@ export class DoclingClient {
     const deadlineAt = Date.now() + deadlineMs;
     const form = new FormData();
     form.append("files", new Blob([bytes.slice().buffer as ArrayBuffer], { type: contentType }), filename);
+    // The ratification finding: the async result's json_content is EMPTY
+    // unless the submit asks for the JSON renderer — the default packs
+    // md/html/text only, and the schema would parse an empty envelope.
+    form.append("to_formats", "json");
 
     const submit = await this.transport.request(this.url("/v1/convert/file/async"), {
       method: "POST",
@@ -185,7 +189,19 @@ export class DoclingClient {
     } finally {
       await this.abandon(taskId);
     }
-    const document = parseCappedDocument(body);
+    // The ratification finding (dcl-06): the result envelope carries the
+    // rendered document inside `document.json_content` — upstream 1.31.0
+    // sends texts/tables/pictures arrays there, not the bare items array
+    // the synthetic-era fixtures guessed. Unwrap BOTH layers, then parse
+    // the inner document under the same caps.
+    let envelope: unknown;
+    try {
+      envelope = JSON.parse(body.toString("utf8"));
+    } catch (err) {
+      throw new DoclingError("docling-bad-json", err instanceof Error ? err.message : String(err));
+    }
+    const inner = (envelope as { document?: { json_content?: unknown } })?.document?.json_content ?? envelope;
+    const document = parseCappedDocument(Buffer.from(JSON.stringify(inner)));
     return { document, serverVersion: await this.serverVersion(), bytes: body.byteLength };
   }
 

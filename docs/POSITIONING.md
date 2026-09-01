@@ -383,13 +383,14 @@ paths-exempt:
   # did. The KB area is built.)
   # (src/lib/ai/tools/federation.ts rode here until fed-04 delivered it,
   # so that target left this list; the two-silo fixtures wait for fed-06.)
-  # (tests/fixtures/kb/docling/* and scripts/record-docling-fixture.mjs
-  # rode here until dcl-03 delivered them; they left, and only the opt-in
-  # live lane remains for dcl-07.)
+  # (The docling fixtures, recorder and now the overlay are all DELIVERED:
+  # dcl-03 delivered the first two, dcl-06 the overlay — which the
+  # docling-fixture-lint treats as the sidecar's arrival, so synthetic
+  # fixtures are banned and the recorded ones must carry the digest. Only
+  # the opt-in live lane remains for dcl-07.)
   - target:
       - tests/live
       - tests/live/*
-      - tests/docling-compose.test.ts
     paths:
       - docs/design/docling.md
     until: dcl-07
@@ -427,12 +428,9 @@ paths-exempt:
       (hyg-09) and the dockerignore test (hyg-07).
   # loop-07 delivered docs/integrations/ (the one mining procedure), so
   # that target left this list.
-  - target:
-      - docs/KB-DOCLING.md
-    paths:
-      - docs/design/docling.md
-    until: dcl-06
-    reason: dcl-06 writes the sidecar operator guide.
+  # (docs/KB-DOCLING.md rode here until dcl-06 wrote the sidecar operator
+  # guide — the target resolves now, so it left the way every delivered
+  # target does and docs/design/docling.md's reference to it is checked.)
   - target:
       - src/components/legacy/Button.tsx
       - src/components/legacy/Card.tsx
