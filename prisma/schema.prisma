@@ -452,6 +452,9 @@ model Document {
   externalLocator Json?
   externalVersion String?
   externalSeenAt  DateTime?
+  // xds-05: when THIS document's last crawl run started — the honest
+  // companion to externalSeenAt (a document seen unchanged was still seen).
+  runStartedAt    DateTime?
 }
 
 
