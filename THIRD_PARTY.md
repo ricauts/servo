@@ -209,6 +209,39 @@ attribution anywhere in the tree.
 
 ---
 
+### @aws-sdk/client-s3 (xds-03)
+
+- **Upstream:** <https://github.com/aws/aws-sdk-js-v3>
+- **Licence:** Apache-2.0, verified from the `LICENSE` file shipped in the
+  installed package (`node_modules/@aws-sdk/client-s3/LICENSE`, identical to
+  <https://github.com/aws/aws-sdk-js-v3/blob/main/LICENSE`) on 2026-08-31.
+- **Copyright:** `Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.` (NOTICE file in the same package)
+- **What we use:** an ordinary npm dependency (3.x), not vendored code.
+  The S3 crawler (`src/lib/kb/sources/s3.ts`, spec xds-03) imports EXACTLY
+  three read commands — ListObjectsV2Command, HeadObjectCommand,
+  GetObjectCommand — pinned by a test that reads the import line; the
+  upload-command name appears nowhere in `src/`. The client is built with
+  explicit sealed credentials and a credentialDefaultProvider that throws,
+  so no ambient provider chain exists. The entry records the adopt-first
+  verdict for the new RUNTIME dependency: hand-rolling SigV4 was REJECTED
+  (the §0.4 gate prefers the upstream client for a signed protocol), and
+  lighter S3 clients were rejected on maintenance grounds without a
+  licence read.
+- **Obligations:** attribution only, discharged by `package.json` shipping
+  the dependency: its licence travels inside `node_modules` to every
+  install. Nothing of it is copied into this tree.
+
+### adobe/s3mock (xds-03, test-only)
+
+- **Upstream:** <https://github.com/adobe/S3Mock>
+- **Licence:** Apache-2.0 (the upstream repository's LICENSE file; the
+  container image carries the same licence in `/LICENSE.txt`).
+- **What we use:** the `docker-compose.test.yml` test fixture ONLY — the
+  image runs in CI and in local test stacks, never in the application
+  image, and no code from it is copied into this tree.
+- **Obligations:** attribution here; the compose file names the image and
+  this entry names the licence.
+
 ## What has and has not been checked
 
 This register is only as good as the search behind it, so the search is stated

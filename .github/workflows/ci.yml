@@ -49,6 +49,17 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # The object-store fixture, mirroring docker-compose.test.yml's s3
+      # (xds-03) — same reasoning as extdb above: CI declares services by
+      # hand, and without s3mock tests/kb-source-s3.test.ts cannot run its
+      # crawl against a real endpoint. initialBuckets pre-creates the
+      # bucket the suite's uploader seeds.
+      s3:
+        image: adobe/s3mock:latest
+        env:
+          initialBuckets: fixtures
+        ports:
+          - 9090:9090
     steps:
       - uses: actions/checkout@v5
 
