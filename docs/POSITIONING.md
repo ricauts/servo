@@ -434,6 +434,8 @@ paths-exempt:
       - docs/hygiene/hyg-05-evidence.md
       - docs/hygiene/audit-2026-08-30-evidence.md
       - docs/hygiene/audit-2026-08-30-2-evidence.md
+      - docs/hygiene/audit-2026-09-02-evidence.md
+      - docs/hygiene/audit-2026-09-02-2-evidence.md
     reason: negative and historical references, permanent - hyg-05 deleted
       the three components, and the DEAD-PROVEN table and the audit/evidence
       reports name exactly what was deleted. An evidence report must still be
