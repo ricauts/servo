@@ -441,6 +441,23 @@ paths-exempt:
       reports name exactly what was deleted. An evidence report must still be
       able to name what no longer exists; history does not un-happen, so this
       exemption does not retire.
+  - target:
+      - src/components/legacy/Avatar.tsx
+      - src/components/legacy/Badge.tsx
+      - src/components/legacy/EmptyState.tsx
+      - src/components/legacy/Spinner.tsx
+      - src/components/legacy
+    paths:
+      - docs/hygiene/hyg-05-evidence.md
+      - docs/hygiene/audit-2026-08-30-evidence.md
+      - docs/hygiene/audit-2026-08-30-2-evidence.md
+      - docs/hygiene/audit-2026-09-02-evidence.md
+      - docs/hygiene/audit-2026-09-02-2-evidence.md
+      - docs/hygiene/audit-2026-09-02-3.md
+    reason: historical references, permanent - hyg-06 renamed the directory
+      to src/components/common/, and the frozen audit snapshots and hyg-05's
+      committed evidence still name the pre-rename paths. Evidence does not
+      get edited to match later reality; history does not un-happen.
 ```
 
 Why the block is shaped that way:

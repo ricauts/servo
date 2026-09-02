@@ -15,8 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import Badge from "@/components/legacy/Badge";
-import Spinner from "@/components/legacy/Spinner";
+import Badge from "@/components/common/Badge";
+import Spinner from "@/components/common/Spinner";
 import { PRIORITY_LABEL, PRIORITY_TONE } from "@/lib/labels";
 import type { Priority } from "@/lib/types";
 

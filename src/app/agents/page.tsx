@@ -5,7 +5,7 @@ import { can } from "@/lib/permissions";
 import { getToolRegistry } from "@/lib/ai/custom-tools";
 import { CORE_TOOLS } from "@/lib/agent-profiles";
 import PageHeader from "@/components/shell/PageHeader";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import AgentsManager, {
   type AgentProfileView,
   type ToolCatalogItem,

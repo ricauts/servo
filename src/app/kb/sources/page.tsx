@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { Lock } from "lucide-react";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import PageHeader from "@/components/shell/PageHeader";
 import KbSourcesPanel from "@/components/kb/KbSourcesPanel";
 import { READ_ONLY_ROLE_SQL } from "@/lib/kb/sources/sql";

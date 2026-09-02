@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import RelativeTime from "@/components/tickets/RelativeTime";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
 import type { TicketStatus } from "@/lib/types";

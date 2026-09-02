@@ -727,11 +727,13 @@ describe("the real tree — the findings the hygiene audit recorded", () => {
       expect(report.exports.find((e) => e.file === p), p).toBeUndefined();
     }
     // …while the live ones in the same directory are not touched.
+    // hyg-06 moved the four survivors to common/ — the live list follows
+    // the rename; the deleted three above stay as historical literals.
     for (const p of [
-      "src/components/legacy/Avatar.tsx",
-      "src/components/legacy/Badge.tsx",
-      "src/components/legacy/EmptyState.tsx",
-      "src/components/legacy/Spinner.tsx",
+      "src/components/common/Avatar.tsx",
+      "src/components/common/Badge.tsx",
+      "src/components/common/EmptyState.tsx",
+      "src/components/common/Spinner.tsx",
     ]) {
       expect(find(p).codeReferenceCount, p).toBeGreaterThan(0);
     }

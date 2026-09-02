@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import Spinner from "@/components/legacy/Spinner";
+import Spinner from "@/components/common/Spinner";
 import { CATEGORIES, PRIORITIES, TICKET_STATUSES } from "@/lib/types";
 import { CATEGORY_LABEL, PRIORITY_LABEL, STATUS_LABEL } from "@/lib/labels";
 

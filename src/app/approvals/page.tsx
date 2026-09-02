@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { can, canDecideApproval } from "@/lib/permissions";
 import PageHeader from "@/components/shell/PageHeader";
-import Badge from "@/components/legacy/Badge";
-import EmptyState from "@/components/legacy/EmptyState";
+import Badge from "@/components/common/Badge";
+import EmptyState from "@/components/common/EmptyState";
 import ApprovalCard, {
   type PendingApprovalView,
 } from "@/components/admin/ApprovalCard";

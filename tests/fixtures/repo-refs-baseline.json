@@ -33,7 +33,7 @@
     },
     {
       "path": "src/components/ui/badge.tsx",
-      "reason": "unused shadcn primitive; the live badge is src/components/legacy/Badge.tsx with 23 importers",
+      "reason": "unused shadcn primitive; the live badge is src/components/common/Badge.tsx (legacy/ until hyg-06 renamed the directory)",
       "owner": "question-31"
     },
     {
