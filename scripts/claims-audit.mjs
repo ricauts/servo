@@ -670,6 +670,51 @@ export function scanFile(relPath, text, canon) {
  * Exemptions
  * ------------------------------------------------------------------ */
 
+/**
+ * dcl-08: the UNCONDITIONAL-OCR rule. Every "OCR" on a scanned surface must
+ * be conditioned — tied to the optional high-fidelity extractor being
+ * configured, reachable, or under its cap. An install without the sidecar
+ * must never read a claim that Servo does OCR, and an install WITH it must
+ * never read that it does not. The phrase rides the SAME exemption
+ * machinery as banned phrases: an `exempt` entry whose phrase is
+ * "OCR (unconditional)" can scope legitimate prose (licence records,
+ * design docs discussing other tools' OCR) by path and section.
+ */
+const OCR_OCCURRENCE = /\bOCR\b/g;
+const OCR_CONDITIONAL =
+  /\b(optional|when|if|configured|unconfigured|sidecar|opt-in|high.fidelity|unavailable|not available|cannot|never|capped|page cap|cap\b|conditional|not attempted|not in|not triggered|only)\b/i;
+const OCR_CONTEXT_CHARS = 220;
+
+export function scanOcrClaims(relPath, text, canon) {
+  const body = String(text ?? "");
+  const excluded =
+    canon.selfExclude.appliesTo === "all-scanned-files"
+      ? selfExcludedLines(body, canon.selfExclude.fence ?? FENCE_NAME)
+      : new Set();
+  const sections = headingPathsByLine(body);
+  const violations = [];
+  const seen = new Set();
+  for (const m of body.matchAll(OCR_OCCURRENCE)) {
+    const { line, column } = offsetToLineCol(body, m.index);
+    if (excluded.has(line)) continue;
+    const after = body.slice(m.index, Math.min(body.length, m.index + OCR_CONTEXT_CHARS));
+    const before = body.slice(Math.max(0, m.index - OCR_CONTEXT_CHARS), m.index);
+    if (OCR_CONDITIONAL.test(before) || OCR_CONDITIONAL.test(after)) continue;
+    const key = `${line}:${column}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    violations.push({
+      file: relPath,
+      line,
+      column,
+      phrase: "OCR (unconditional)",
+      text: m[0],
+      sectionPath: sections[line] ?? [],
+    });
+  }
+  return violations.sort((a, b) => a.line - b.line || a.column - b.column);
+}
+
 function exemptionCovers(entry, violation) {
   if (entry.enforced === false) return false; // recorded policy, inert today
   if (!sameSection(entry.phrase, violation.phrase)) return false;
@@ -1253,7 +1298,10 @@ export function audit(files, canon) {
     ...scanSetErrors(canon, files.map((f) => f.path)),
     ...files.flatMap((f) => unterminatedFences(f.path, f.text, fenceName)),
   ];
-  const raw = files.flatMap((f) => scanFile(f.path, f.text, canon));
+  const raw = [
+    ...files.flatMap((f) => scanFile(f.path, f.text, canon)),
+    ...files.flatMap((f) => scanOcrClaims(f.path, f.text, canon)),
+  ];
   const { reported, exempted, notes } = applyExemptions(raw, canon);
   return { violations: reported, exempted, notes, errors };
 }
