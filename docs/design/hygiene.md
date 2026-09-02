@@ -45,7 +45,7 @@ Four clauses, binding on every tick, not only `hyg-*` ticks.
 
 The split is on kind, not convenience. `README.md` pointing at `prisma/seed.ts`, `docs/history/CONTRACT.md` pointing at `src/lib/ai/tools.ts` and `tailwind.config.ts`, and `docs/PORTING-LEDGER.md` pointing at `THIRD-PARTY.md` are all **false claims about the repository**, so they belong to the claims linter and its one machine-readable exemption block in `docs/POSITIONING.md`. There is no second banned-phrases canon and no second CI claims step. An orphaned file makes no claim about anything, so it belongs to the graph tool.
 
-Two things this area deliberately does **not** add: **ESLint, Prettier or Biome** — three devDependencies and a first run that will not be clean is a decision with its own tradeoffs, not a side effect of a cleanup pass (§17 q33); and **a second colour lint** — `scripts/color-audit.mjs` is a documented invariant nothing runs (`docs/DESIGN.md:8,60`), and the right fix is for `ds-01` to run it in the same step as `no-hex-lint.mjs`, not for hygiene to invent a third script.
+Two things this area deliberately does **not** add: **ESLint, Prettier or Biome** — three devDependencies and a first run that will not be clean is a decision with its own tradeoffs, not a side effect of a cleanup pass (§17 q33); and **a second colour lint** — `scripts/dev/color-audit.mjs` is a documented invariant nothing runs (`docs/DESIGN.md:8,60`), and the right fix is for `ds-01` to run it in the same step as `no-hex-lint.mjs`, not for hygiene to invent a third script.
 
 ### 13.4 Target layout, and what must not move
 

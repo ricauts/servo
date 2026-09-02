@@ -4,7 +4,7 @@
 // base64, or any passphrase (stretched with scrypt). Values are stored as
 // `enc:v1:<base64(iv | tag | ciphertext)>`; anything without the prefix is
 // treated as legacy plaintext, so enabling encryption is non-breaking and
-// existing rows can be migrated with `node scripts/encrypt-secrets.cjs`.
+// existing rows can be migrated with `node scripts/ops/encrypt-secrets.cjs`.
 //
 // Without a key Servo still works (POC mode) but secrets stay in plaintext
 // in the database — SECURITY.md documents why you want the key in production.
@@ -92,7 +92,7 @@ export const SENSITIVE_SETTING_KEYS = new Set([
  * denylist that cannot name a key does not seal it on write and does not
  * withhold it from `GET /api/settings`, which returns every row it was not
  * told to skip. The seal-on-write extension in src/lib/db.ts and the settings
- * route both use this predicate; `scripts/encrypt-secrets.cjs` does NOT — it
+ * route both use this predicate; `scripts/ops/encrypt-secrets.cjs` does NOT — it
  * is CommonJS with its own hardcoded list, and spec.md question 67 records
  * what that means for a plaintext row that predates the encryption key.
  */

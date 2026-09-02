@@ -9,7 +9,13 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import puppeteer from "puppeteer-core";
 
-const SITE = process.argv[2] ?? "C:/Desarrollos/servoai-site";
+const SITE = process.argv[2];
+if (!SITE) {
+  console.error("usage: node scripts/media/shoot-og.mjs <servoai-site-directory>");
+  console.error("The site directory is REQUIRED and has no default: the loop may never");
+  console.error("commit to the servoai-site repository, so it cannot hold a path into it.");
+  process.exit(1);
+}
 const SRC = resolve(SITE, "og-card.html");
 const OUT = resolve(SITE, "assets/og-card.png");
 

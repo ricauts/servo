@@ -2,28 +2,23 @@
   "$schema-note": "hyg-04. A KEEP-LIST, not a to-delete list. One row per finding the repository has decided to live with: an unreferenced-but-kept file, or a dependency finding (declared-and-unimported, imported-and-undeclared, or claimed-but-absent). Findings the scanner already reports as `keep` (the never-delete list) and dependencies it already reports as `referenced` or `tooling` are not findings and get no row. Every row carries a one-line `reason` and an `owner`. The owner convention is: the backlog item id that will END the row, and a `question-<n>` under spec.md section 14 ONLY where no item ends it. That is why run-relay.ts is owned by hyg-09 even though question 31 names it — hyg-09 is what resolves it — while the shadcn primitives and react-is are owned by question 31, which decided to keep them indefinitely. `node scripts/repo-refs.mjs --check` (npm run hygiene:check) fails on any finding with no row here. A row may only be REMOVED in the same commit that removes the thing it describes or adds a reference to it; tests/repo-refs-baseline.test.ts asserts every row still describes something real.",
   "files": [
     {
-      "path": "scripts/make-before-after.mjs",
+      "path": "scripts/media/make-before-after.mjs",
       "reason": "media rig that regenerates docs/assets/before-after-fix.png; archived under scripts/media/ with a guide, never deleted",
       "owner": "hyg-09"
     },
     {
-      "path": "scripts/record-approval.mjs",
+      "path": "scripts/media/record-approval.mjs",
       "reason": "media rig that records the approval-gate capture; archived under scripts/media/, never deleted",
       "owner": "hyg-09"
     },
     {
-      "path": "scripts/screenshot.mjs",
+      "path": "scripts/media/screenshot.mjs",
       "reason": "media rig that captures the README stills; archived under scripts/media/, never deleted",
       "owner": "hyg-09"
     },
     {
-      "path": "scripts/shoot-og.mjs",
+      "path": "scripts/media/shoot-og.mjs",
       "reason": "media rig that shoots the OG card; archived under scripts/media/ and loses its cross-repo default, never deleted",
-      "owner": "hyg-09"
-    },
-    {
-      "path": "scripts/run-relay.ts",
-      "reason": "undocumented tsx wrapper around scripts/imap-relay.mjs; wired up as npm run relay and documented rather than removed",
       "owner": "hyg-09"
     },
     {
@@ -52,7 +47,7 @@
       "owner": "question-31"
     },
     {
-      "path": "scripts/readme-screenshots.mjs",
+      "path": "scripts/media/readme-screenshots.mjs",
       "finding": "unreferenced",
       "reason": "operator tool, invoked by hand from the repo root (its header shows the command); no code imports a script, and no backlog item will ever reference it — question 47 keeps it indefinitely",
       "owner": "question-47"
@@ -88,15 +83,9 @@
       "owner": "question-31"
     },
     {
-      "name": "sharp",
-      "finding": "undeclared",
-      "reason": "imported by the media rig only (scripts/make-before-after.mjs); made a guarded dynamic import with no dependency added, and this row is superseded by the media-tooling block in docs/MEDIA-GUIDE.md",
-      "owner": "hyg-09"
-    },
-    {
       "name": "ffmpeg-static",
       "finding": "claimed-absent",
-      "reason": "named as a node_modules path by scripts/record-hero.mjs and present in neither manifest, so npm ci never creates it; made a guarded dynamic import with an actionable message, and this row is superseded by the media-tooling block in docs/MEDIA-GUIDE.md",
+      "reason": "named as a node_modules path by scripts/media/record-hero.mjs and present in neither manifest, so npm ci never creates it; made a guarded dynamic import with an actionable message, and this row is superseded by the media-tooling block in docs/MEDIA-GUIDE.md",
       "owner": "hyg-09"
     },
     {

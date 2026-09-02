@@ -1,9 +1,9 @@
 // Launch the IMAP relay with the decrypted inbound secret from Settings.
 // Keeps the plaintext out of shell history/args — it travels via child env.
-// Usage: npx tsx scripts/run-relay.ts  (IMAP_* vars still come from env)
+// Usage: npx tsx scripts/ops/run-relay.ts  (IMAP_* vars still come from env)
 import { spawn } from "child_process";
 import path from "path";
-import { db } from "../src/lib/db";
+import { db } from "../../src/lib/db";
 
 async function main() {
   const row = await db.setting.findUnique({ where: { key: "integration.inbound.secret" } });
