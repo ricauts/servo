@@ -17,9 +17,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import Avatar from "@/components/legacy/Avatar";
-import Badge from "@/components/legacy/Badge";
-import EmptyState from "@/components/legacy/EmptyState";
+import Avatar from "@/components/common/Avatar";
+import Badge from "@/components/common/Badge";
+import EmptyState from "@/components/common/EmptyState";
 import type { BadgeTone } from "@/lib/labels";
 import AiProviderForm, {
   type AiSettingsView,

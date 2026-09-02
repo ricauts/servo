@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import JsonBlock from "@/components/tickets/JsonBlock";
 import RelativeTime from "@/components/tickets/RelativeTime";
 import { RISK_LABEL, RISK_TONE } from "@/lib/labels";

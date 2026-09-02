@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { parseCategories } from "@/lib/skills";
 import PageHeader from "@/components/shell/PageHeader";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import SkillsManager, { type SkillView } from "@/components/skills/SkillsManager";
 import { distillPrefill, resolutionOfRecord } from "@/lib/skill-distill";
 

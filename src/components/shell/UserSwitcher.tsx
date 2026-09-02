@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
-import Avatar from "@/components/legacy/Avatar";
+import Avatar from "@/components/common/Avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,

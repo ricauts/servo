@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Inbox, Plus } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { Button } from "@/components/ui/button";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import PageHeader from "@/components/shell/PageHeader";

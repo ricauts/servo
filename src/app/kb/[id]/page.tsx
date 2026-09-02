@@ -11,7 +11,7 @@ import KbSharePanel from "@/components/kb/KbSharePanel";
 import KbReextractButton from "@/components/kb/KbReextractButton";
 import KbFactChips from "@/components/kb/KbFactChips";
 import PageHeader from "@/components/shell/PageHeader";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 
 export const dynamic = "force-dynamic";
 

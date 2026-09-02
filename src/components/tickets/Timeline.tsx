@@ -19,8 +19,8 @@ import {
   Terminal,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import Avatar from "@/components/legacy/Avatar";
-import Badge from "@/components/legacy/Badge";
+import Avatar from "@/components/common/Avatar";
+import Badge from "@/components/common/Badge";
 import JsonBlock from "@/components/tickets/JsonBlock";
 import Markdown from "@/components/tickets/Markdown";
 import RelativeTime from "@/components/tickets/RelativeTime";

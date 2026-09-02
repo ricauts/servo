@@ -14,8 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import Avatar from "@/components/legacy/Avatar";
-import Badge from "@/components/legacy/Badge";
+import Avatar from "@/components/common/Avatar";
+import Badge from "@/components/common/Badge";
 import RelativeTime from "@/components/tickets/RelativeTime";
 import SlaBadge from "@/components/tickets/SlaBadge";
 import {

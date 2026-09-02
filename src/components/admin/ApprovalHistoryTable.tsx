@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import { formatDateTime } from "@/components/admin/time";
 import { APPROVAL_STATUS_TONE, RISK_LABEL, RISK_TONE } from "@/lib/labels";
 import type { ApprovalStatus, RiskLevel } from "@/lib/types";

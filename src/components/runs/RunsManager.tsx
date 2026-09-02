@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState, Fragment } from "react";
 import Link from "next/link";
 import { Activity, ChevronRight, RefreshCw } from "lucide-react";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import RelativeTime from "@/components/tickets/RelativeTime";
 import {
   APPROVAL_STATUS_TONE,

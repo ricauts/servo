@@ -2,7 +2,7 @@
 // time-relative, so hydration warnings are suppressed the same way
 // RelativeTime does it.
 
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import { evaluateSla, slaLabel, type SlaState } from "@/lib/sla-rules";
 import type { BadgeTone } from "@/lib/labels";
 

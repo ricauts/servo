@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { groupInclude } from "@/lib/groups";
 import PageHeader from "@/components/shell/PageHeader";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import GroupsManager, {
   type GroupView,
   type MemberOption,

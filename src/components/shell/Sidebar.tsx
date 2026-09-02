@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUserOrNull } from "@/lib/auth";
 import { getAuthConfig, needsSetup, signOut } from "@/lib/authjs";
 import { can } from "@/lib/permissions";
-import Avatar from "@/components/legacy/Avatar";
+import Avatar from "@/components/common/Avatar";
 import SidebarNav from "@/components/shell/SidebarNav";
 import UserSwitcher from "@/components/shell/UserSwitcher";
 import ThemeToggle from "@/components/shell/ThemeToggle";
