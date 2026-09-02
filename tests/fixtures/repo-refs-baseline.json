@@ -17,11 +17,6 @@
       "owner": "hyg-09"
     },
     {
-      "path": "scripts/media/shoot-og.mjs",
-      "reason": "media rig that shoots the OG card; archived under scripts/media/ and loses its cross-repo default, never deleted",
-      "owner": "hyg-09"
-    },
-    {
       "path": "src/components/ui/avatar.tsx",
       "reason": "unused shadcn primitive; deletion is build-safe today but npx shadcn add can re-create it, so it is kept",
       "owner": "question-31"

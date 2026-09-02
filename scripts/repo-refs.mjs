@@ -58,7 +58,14 @@ export const EXCLUDED_PREFIXES = [
 ];
 
 /** Exact paths dropped from the scan set. */
-export const EXCLUDED_PATHS = ["package-lock.json"];
+export const EXCLUDED_PATHS = [
+  "package-lock.json",
+  // hyg-09: the media rig's optional-dependency loader imports a COMPUTED
+  // module name by design — an acknowledged-unresolvable import that would
+  // otherwise turn every file's verdict INDETERMINATE. It references
+  // nothing; its allow-listed callers are checked by the guide's fence.
+  "scripts/media/_deps.mjs",
+];
 
 /** Patterns dropped from the scan set. */
 export const EXCLUDED_PATTERNS = [/^prisma\/[^/]*\.db.*$/];

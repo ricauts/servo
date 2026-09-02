@@ -414,13 +414,8 @@ paths-exempt:
   # the way every delivered target does.)
   # (tests/dockerignore.test.ts rode here until hyg-07 wrote it — the
   # target resolves now, so it left the way every delivered target does.)
-  - target:
-      - scripts/media
-    paths:
-      - docs/design/hygiene.md
-    until: hyg-09
-    reason: the hygiene design document names the archived media rig
-      (hyg-09).
+  # (scripts/media rode here until hyg-09 archived the rig — the directory
+  # resolves now, so it left the way every delivered target does.)
   - target:
       - scripts/encrypt-secrets.cjs
       - scripts/reset-sso.cjs
