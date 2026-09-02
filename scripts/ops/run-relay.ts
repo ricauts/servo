@@ -14,7 +14,11 @@ async function main() {
   await db.$disconnect();
   const child = spawn(
     process.execPath,
-    [path.join(process.cwd(), "scripts", "imap-relay.mjs")],
+    // hyg-09 moved the relay to scripts/ops/. This spawn target was the one
+    // reference the move missed, and it is the only one that breaks at RUNTIME
+    // rather than misleading a reader: `npm run relay` reached a path that no
+    // longer exists.
+    [path.join(process.cwd(), "scripts", "ops", "imap-relay.mjs")],
     {
       stdio: "inherit",
       env: { ...process.env, INBOUND_EMAIL_SECRET: row.value },

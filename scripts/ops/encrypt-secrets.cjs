@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 // One-time migration: encrypt secrets that predate SERVO_ENCRYPTION_KEY.
 //
-//   node scripts/encrypt-secrets.cjs
+//   node scripts/ops/encrypt-secrets.cjs
 //
 // Reads SERVO_ENCRYPTION_KEY from the environment (or .env), then seals every
 // sensitive value that is still plaintext: Setting rows for secret keys,

@@ -1,7 +1,7 @@
 // Color-contrast audit for Servo's theme tokens (light + dark + banner).
 // Converts oklch() to sRGB and computes WCAG 2.1 contrast ratios for every
 // foreground/background pairing the UI actually uses.
-// Usage: node scripts/color-audit.mjs
+// Usage: node scripts/dev/color-audit.mjs
 
 // ---- oklch -> sRGB ----------------------------------------------------------
 function oklchToSrgb(L, C, Hdeg) {

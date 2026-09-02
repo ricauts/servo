@@ -2,7 +2,7 @@
 // demo mode (cookie user switcher) on the next request. Use it when a
 // misconfigured issuer/client locks every admin out of the UI.
 //
-//   node scripts/reset-sso.cjs
+//   node scripts/ops/reset-sso.cjs
 //
 // Provider name, admin emails and allowed domains are kept so re-enabling
 // SSO from Integrations only needs the issuer + client credentials again.

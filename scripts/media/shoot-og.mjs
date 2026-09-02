@@ -1,6 +1,6 @@
 // Renders servoai-site/og-card.html to assets/og-card.png at exactly 1200x630.
 //
-//   node scripts/shoot-og.mjs [siteDir]
+//   node scripts/media/shoot-og.mjs [siteDir]
 //
 // Waits on document.fonts.ready: Chivo and IBM Plex Mono arrive from the Google
 // CDN, and shooting before they land bakes the fallback metrics into the card.

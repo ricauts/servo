@@ -1,6 +1,6 @@
 // Role/permission audit: exercises the API as each demo role and asserts the
 // expected status codes, so RBAC regressions show up as a failing script.
-// Usage: node scripts/permissions-audit.mjs [baseUrl]
+// Usage: node scripts/dev/permissions-audit.mjs [baseUrl]
 const base = process.argv[2] ?? "http://localhost:3000";
 
 async function cookieFor(userName) {

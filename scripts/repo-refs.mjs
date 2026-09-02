@@ -802,7 +802,7 @@ export function extractImportBindings(text) {
  * Package names a file ASSERTS are on disk — `node_modules/<pkg>` written in
  * prose or a comment. This is not an import, and the report never calls it
  * one; it is here because such a sentence is a claim about the repository that
- * the lockfile can falsify. scripts/record-hero.mjs:8 says the repo "carries
+ * the lockfile can falsify. scripts/media/record-hero.mjs:8 says the repo "carries
  * one at node_" + "modules/<a package>"; package-lock.json has never heard of
  * it, so `npm ci` never creates that directory. (Written broken on purpose:
  * this scanner reads its own source, and a literal example here would be

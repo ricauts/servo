@@ -29,7 +29,7 @@ const TICKET = process.argv[2];
 const OUT = process.argv[3] ?? "hero-film.webm";
 const BASE = process.argv[4] ?? "http://localhost:3000";
 if (!TICKET) {
-  console.error("usage: node scripts/record-hero.mjs <ticketId> [out.webm] [baseUrl]");
+  console.error("usage: node scripts/media/record-hero.mjs <ticketId> [out.webm] [baseUrl]");
   process.exit(1);
 }
 
