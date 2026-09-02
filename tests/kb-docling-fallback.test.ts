@@ -33,6 +33,7 @@ import {
 } from "@/lib/kb/extractors/docling-health";
 import type { DoclingTransport } from "@/lib/kb/extractors/docling-client";
 import { chunkDoclingDocument } from "@/lib/kb/extractors/docling-chunker";
+import { OCR_UNAVAILABLE_ERROR } from "@/lib/kb/extract-pdf";
 import { parseCappedDocument } from "@/lib/kb/extractors/docling-schema";
 import type { ExtractInput } from "@/lib/kb/extractors";
 
@@ -300,11 +301,14 @@ describe("the fallback taxonomy — one test per reason, upload succeeds on base
     });
     const lane = makeDoclingExtractor(laneConfig(), { transport: transport.transport, now: () => 1_000_000 });
     // A scanned PDF: baseline ALSO returns nothing, so the document lands
-    // UNSUPPORTED — never a silently empty EXTRACTED.
+    // UNSUPPORTED — never a silently empty EXTRACTED. The copy is dcl-08's
+    // CONDITIONAL string: this install HAS the high-fidelity extractor
+    // configured (the conversion came back near-empty, not unreachable),
+    // so kb-07's "OCR is not available" would be a false claim here.
     const scanned = readFileSync("tests/fixtures/kb/scanned.pdf");
     const outcome = await lane.extract(input(scanned));
     expect(outcome.status).toBe("UNSUPPORTED");
-    expect(outcome.status === "UNSUPPORTED" && outcome.error).toMatch(/scanned document/);
+    expect(outcome.status === "UNSUPPORTED" && outcome.error).toBe(OCR_UNAVAILABLE_ERROR);
   }, 30_000);
 });
 

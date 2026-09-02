@@ -45,6 +45,7 @@ import {
   unterminatedFences,
   validateCanon,
   validateSections,
+  scanOcrClaims,
 } from "../scripts/claims-audit.mjs";
 
 const CANON_TEXT = readFileSync("docs/POSITIONING.md", "utf8");
@@ -1801,5 +1802,50 @@ describe("hyg-03 follow-up — two false positives an adversarial pass reproduce
     // ...and an ANCHORED two-segment path is unaffected: the rule is about the
     // extension escape, not about depth in general.
     expect(classifyPathRef("src/missing.ts", "code", FIXTURE_TOP).path).toBe("src/missing.ts");
+  });
+});
+
+describe("dcl-08 — the unconditional-OCR rule", () => {
+  const canon = { selfExclude: { appliesTo: "none" } };
+
+  it("fires on an unconditional claim", () => {
+    const v = scanOcrClaims("docs/x.md", "Servo performs OCR on every scanned upload, automatically.", canon);
+    expect(v).toHaveLength(1);
+    expect(v[0]).toMatchObject({ file: "docs/x.md", phrase: "OCR (unconditional)" });
+    expect(v[0].line).toBe(1);
+  });
+
+  it("a conditioned claim passes — optional, configured, unavailable, cap", () => {
+    const lines = [
+      "OCR runs only when the optional high-fidelity extractor is configured.",
+      "With the sidecar unreachable, OCR was unavailable — re-extract retries.",
+      "No text layer and no sidecar: OCR is not available on this install.",
+      "Over the 40-page cap, OCR was not attempted.",
+    ];
+    for (const l of lines) {
+      expect(scanOcrClaims("docs/y.md", l, canon), l).toEqual([]);
+    }
+  });
+
+  it("the condition must be NEAR the claim — 300 chars away does not rescue it", () => {
+    const far = "Servo performs OCR on every scanned upload. " + "x".repeat(300) + " (when the optional extractor is configured)";
+    expect(scanOcrClaims("docs/z.md", far, canon)).toHaveLength(1);
+  });
+
+  it("self-exclusion applies: the canon fence may name the rule it carries", () => {
+    const NL = String.fromCharCode(10);
+    const fenced = [
+      "prose before",
+      "```banned-phrases",
+      "OCR (unconditional)",
+      "```",
+      "prose after",
+    ].join(NL);
+    const withFence = scanOcrClaims("docs/canon.md", fenced, {
+      selfExclude: { appliesTo: "all-scanned-files" },
+    });
+    expect(withFence).toEqual([]);
+    const withoutFence = scanOcrClaims("docs/canon.md", fenced, canon);
+    expect(withoutFence.length).toBeGreaterThan(0);
   });
 });

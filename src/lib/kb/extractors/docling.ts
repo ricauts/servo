@@ -27,6 +27,7 @@
 import { DoclingClient, type DoclingTransport } from "./docling-client";
 import { DoclingError } from "./docling-schema";
 import { chunkDoclingDocument } from "./docling-chunker";
+import { OCR_UNAVAILABLE_ERROR, SCANNED_PDF_ERROR, ocrPageCapError } from "@/lib/kb/extract-pdf";
 import {
   allow as circuitAllow,
   initialCircuit,
@@ -117,17 +118,17 @@ export function makeDoclingExtractor(
     extract: async (input: ExtractInput): Promise<DoclingExtractOutcome> => {
       // The circuit: while open, NO connection is attempted.
       if (circuitOpen(circuit, now())) {
-        return fallback(input, "docling-circuit-open");
+        return fallback(input, "docling-circuit-open", config.maxPages);
       }
       // The page cap is enforced BEFORE the bytes are sent.
       const pages = countPdfPages(input.bytes);
       if (pages > config.maxPages) {
-        return fallback(input, "docling-page-cap");
+        return fallback(input, "docling-page-cap", config.maxPages);
       }
       const outcome = await enqueue(async () => {
         // Re-check the circuit inside the queue: earlier failures while we
         // waited may have opened it.
-        if (circuitOpen(circuit, now())) return fallback(input, "docling-circuit-open");
+        if (circuitOpen(circuit, now())) return fallback(input, "docling-circuit-open", config.maxPages);
         const client = new DoclingClient({
           baseUrl: config.url,
           apiKey: config.apiKey || undefined,
@@ -152,18 +153,17 @@ export function makeDoclingExtractor(
             // taxonomy has exactly the eight members the acceptance names,
             // and a conversion too empty to use is an invalid-for-purpose
             // result. If baseline cannot read it either, the document
-            // lands UNSUPPORTED with kb-07's message.
-            const base = await fallback(input, "docling-schema-invalid");
-            if (base.status === "EXTRACTED") return base;
-            return {
-              status: "UNSUPPORTED" as const,
-              error: "No text layer — this looks like a scanned document. OCR is not available.",
-            };
+            // lands UNSUPPORTED — with the CONDITIONAL OCR copy: this
+            // install has the high-fidelity extractor configured, so the
+            // "OCR is not available" string would be false. fallback()
+            // already rewrote the error for exactly this shape.
+            const base = await fallback(input, "docling-schema-invalid", config.maxPages);
+            return base;
           }
           return { status: "EXTRACTED" as const, text: chunks.map((c) => c.text).join("\n\n"), chunks };
         } catch (err) {
           circuit = recordFailure(circuit, now());
-          return fallback(input, classify(err));
+          return fallback(input, classify(err), config.maxPages);
         }
       });
       return outcome;
@@ -197,13 +197,32 @@ function classify(err: unknown): DoclingFallbackReason {
 }
 
 /** Run the BASELINE extractor for this sniffed type and tag the outcome
- *  with the fallback reason. The upload succeeds on baseline's terms. */
-async function fallback(input: ExtractInput, reason: DoclingFallbackReason): Promise<DoclingExtractOutcome> {
+ *  with the fallback reason. The upload succeeds on baseline's terms.
+ *
+ *  THE CONDITIONAL OCR COPY (dcl-08): when baseline lands a scanned PDF
+ *  UNSUPPORTED, the message must tell the truth about THIS install. An
+ *  install with the high-fidelity extractor configured did not fail for
+ *  lack of OCR — it failed to reach it (or never tried, over the page
+ *  cap) — and kb-07's "OCR is not available" would be a false claim on
+ *  such an install. The rewrite is reason-driven, exactly three strings,
+ *  all pinned by tests/kb-ocr-copy.test.ts. */
+async function fallback(
+  input: ExtractInput,
+  reason: DoclingFallbackReason,
+  maxPages?: number,
+): Promise<DoclingExtractOutcome> {
   const base = BASELINE_EXTRACTORS.find((e) => e.supports(input.sniffedType));
   if (!base) {
     return { status: "UNSUPPORTED", error: `No extractor for ${input.declaredType} yet.`, fallbackOf: reason };
   }
   const outcome = await base.extract(input);
+  if (outcome.status === "UNSUPPORTED" && outcome.error === SCANNED_PDF_ERROR) {
+    const error =
+      reason === "docling-page-cap" && typeof maxPages === "number"
+        ? ocrPageCapError(maxPages)
+        : OCR_UNAVAILABLE_ERROR;
+    return { ...outcome, error, fallbackOf: reason };
+  }
   return { ...outcome, fallbackOf: reason };
 }
 
