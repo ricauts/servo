@@ -428,9 +428,12 @@ describe("hyg-04 · the real tree", () => {
     expect(dangling).toEqual([]);
   });
 
-  it("removes nothing: gifenc is still declared", () => {
+  it("hyg-05 removed gifenc from both manifests; the baseline covers the fixture's test-data mention", () => {
     const pkg = JSON.parse(read("package.json"));
-    expect(pkg.devDependencies.gifenc).toBeTruthy();
+    expect(pkg.devDependencies.gifenc).toBeUndefined();
+    expect(read("package-lock.json")).not.toContain('"node_modules/gifenc"');
+    const row = depRows.find((r) => r.name === "gifenc");
+    expect(row).toMatchObject({ finding: "claimed-absent", owner: "hyg-05" });
   });
 
   it("is wired as npm run hygiene:check and as its own CI step", () => {

@@ -425,6 +425,20 @@ paths-exempt:
   # (docs/KB-DOCLING.md rode here until dcl-06 wrote the sidecar operator
   # guide — the target resolves now, so it left the way every delivered
   # target does and docs/design/docling.md's reference to it is checked.)
+  - target:
+      - src/components/legacy/Button.tsx
+      - src/components/legacy/Card.tsx
+      - src/components/legacy/Field.tsx
+    paths:
+      - docs/design/hygiene.md
+      - docs/hygiene/hyg-05-evidence.md
+      - docs/hygiene/audit-2026-08-30-evidence.md
+      - docs/hygiene/audit-2026-08-30-2-evidence.md
+    reason: negative and historical references, permanent - hyg-05 deleted
+      the three components, and the DEAD-PROVEN table and the audit/evidence
+      reports name exactly what was deleted. An evidence report must still be
+      able to name what no longer exists; history does not un-happen, so this
+      exemption does not retire.
 ```
 
 Why the block is shaped that way:
