@@ -89,13 +89,76 @@ A document over `maxPages` never sends bytes: it records the
 
 ## If the container will not boot read-only
 
-`read_only: true` is shipped in the overlay, but whether this image boots
-read-only is UNVERIFIED — the baked artifacts path is outside `/tmp` and
-lock files may write there. **The recorded deviation: drop `read_only`,
-keep every other control** (`cap_drop`, `no-new-privileges`, empty
-`volumes`, `internal: true`, the limits). dcl-07's live lane is what
-actually finds out; until then the YAML shape is asserted offline, and the
-deviation above is the only supported change to it.
+**This is no longer a hypothetical - the live lane confirmed it (dcl-07).**
+The image exits code 3 (gunicorn worker boot failure) about a minute into
+model load under `read_only: true`, with tmpfs on `/tmp` alone AND with
+tmpfs on both `/tmp` and `/root/.cache` - a live bisect exonerated
+`cap_drop`, `no-new-privileges`, the memory limit and the pids limit;
+`read_only` is the sole killer, and nothing it writes survives to stderr.
+**The recorded deviation - drop `read_only`, keep every other control - is
+what actually runs.** The overlay keeps the control as shipped YAML shape
+per dcl-06 (its criterion was shape only); apply the deviation there when
+you deploy.
+
+**The healthcheck needs the same correction.** The overlay's
+`DOCLING_SERVE_ARTIFACTS_PATH=/opt/artifacts` knob is NOT implemented by
+this image - the variable sits in the container's environment but the
+directory is never created, so the overlay's healthcheck can never go green
+and `depends_on: condition: service_healthy` would never be satisfied on a
+real deployment. The models are baked under `/opt/app-root` (4.3 GB at this
+digest). The one-line fix, for both files:
+
+```yaml
+    healthcheck:
+      test: ["CMD-SHELL", "test -n \"$(ls -A /opt/app-root)\""]
+```
+
+The test rig (`docker-compose.docling.test.yml`) already carries the
+corrected assertion; the overlay's edit is a docker-compose diff - Tier C
+under the landing rule - and is recorded as an owner question rather than
+smuggled into a Tier-A tick.
+
+## The live lane (`npm run test:docling`, opt-in)
+
+Everything above is asserted offline. The LIVE lane drives a real container
+of the same image, digest-pinned by `docker-compose.docling.test.yml` (an
+offline test asserts that file's digest equals the overlay's — the lane can
+never drift onto an unrecorded image). It is **gated on
+`SERVO_TEST_DOCLING=1`**, is **not part of `npm test`**, and **never runs in
+CI** — a 4.4 GB image is not a CI prerequisite:
+
+```
+SERVO_TEST_DOCLING=1 npm run test:docling
+```
+
+The command brings the rig up (`docker compose -f docker-compose.docling.test.yml
+up -d --wait`), runs `vitest.live.config.ts` (whose include is
+`tests/live/**/*.live.ts` — a different suffix than the default suite's
+`tests/**/*.test.ts`, so a live test can never leak into `npm test` or have
+to self-skip), and tears the rig down either way. The rig differs from the
+production overlay in exactly two ways, both documented in its header: the
+port is published to loopback only, and the network is the default bridge
+(publishing on an internal network does not route — the no-egress production
+shape lives in the overlay and is asserted offline).
+
+The lane asserts **structure, never bytes** — an ML pipeline is not
+bit-deterministic across versions and hardware — and it records what only a
+running container can settle, below.
+
+## What the live lane settled (dcl-07)
+
+<!-- dcl-07-live-lane-begin -->
+
+observed 2026-09-02 against docling-serve@1.31.0 at http://172.26.4.57:5002
+
+- the models are baked under `/opt/app-root` (4.3 GB at this digest), NOT `/opt/artifacts`: the dcl-06 overlay's `DOCLING_SERVE_ARTIFACTS_PATH` knob is not implemented by this image (the var sits in the environment; the directory is never created) — the overlay's healthcheck needs the one-line fix to `/opt/app-root`, recorded as an owner question
+- `id -u` inside the container: 1001 (non-root; the uid is baked by the image, not pinned by us)
+- DEVIATION CONFIRMED LIVE: the root mount is NOT read-only; the image exits code 3 during model load under read_only (bisected live: tmpfs on /tmp and /root/.cache both tried; cap_drop, no-new-privileges, memory and pids limits exonerated). The recorded deviation — drop read_only, keep every other control — is what the rig runs and what the overlay's operator applies
+- a remote-source request (`/v1/convert/source`, kind http) is REFUSED by the server — observed "URL is not allowed" (category source_unavailable), zero content in the result; the openapi exposes no per-request remote-engine knob
+- observed status of `DELETE /v1/result/{task_id}` on docling-serve docling-serve@1.31.0: 405 — the dcl-03 client's 405-as-success handling is the correct one
+- structure observed live: manual 3 chunks over 3 page(s), scanned 3 non-empty chunk(s), workbook 2 table chunk(s) with the header row intact — every locator valid against dcl-02's schemas
+
+<!-- dcl-07-live-lane-end -->
 
 ## Every control, asserted in CI without pulling anything
 
