@@ -2,7 +2,7 @@
 // approval card so the loop closes on a single state change — the exact tool
 // input on screen, a human presses Approve, the paused run resumes.
 //
-//   node scripts/record-approval.mjs [out.webm] [baseUrl]
+//   node scripts/media/record-approval.mjs [out.webm] [baseUrl]
 //
 // Record against the demo seed (prisma/demo.db): its pending queue is #1004
 // `DROP TABLE employees_backup;` and #1005, both HIGH risk, both English. The

@@ -1,5 +1,5 @@
 // Screenshot helper for docs/assets — drives the system Chrome via puppeteer-core.
-// Usage: node scripts/screenshot.mjs <url> <outfile> [--dark] [--width=1440]
+// Usage: node scripts/media/screenshot.mjs <url> <outfile> [--dark] [--width=1440]
 //        [--height=900] [--click="Tab label"]
 // --click clicks the first element whose trimmed text matches, before shooting
 // (used to capture a specific tab).
@@ -14,7 +14,7 @@ const CHROME_PATHS = [
 
 const [url, outfile, ...flags] = process.argv.slice(2);
 if (!url || !outfile) {
-  console.error("Usage: node scripts/screenshot.mjs <url> <outfile> [--dark] [--width=N] [--height=N]");
+  console.error("Usage: node scripts/media/screenshot.mjs <url> <outfile> [--dark] [--width=N] [--height=N]");
   process.exit(1);
 }
 const dark = flags.includes("--dark");

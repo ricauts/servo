@@ -3,7 +3,7 @@
 // dataset) with the system Chrome via puppeteer-core, authenticating as a
 // demo user through the same /api/auth/switch the user switcher uses.
 //
-//   node scripts/readme-screenshots.mjs [baseUrl]
+//   node scripts/media/readme-screenshots.mjs [baseUrl]
 import puppeteer from "puppeteer-core";
 import { existsSync } from "node:fs";
 

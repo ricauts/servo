@@ -3,7 +3,7 @@
 //   OIDC_ISSUER=http://localhost:4747  OIDC_CLIENT_ID=servo-test
 //   OIDC_CLIENT_SECRET=test-secret
 // Every sign-in is auto-approved as the email given on the command line.
-// Usage: node scripts/mock-idp.mjs [email] [name]
+// Usage: node scripts/dev/mock-idp.mjs [email] [name]
 import { OAuth2Server } from "oauth2-mock-server";
 
 const email = process.argv[2] ?? "sso.user@acme.dev";

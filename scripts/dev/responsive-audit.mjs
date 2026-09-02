@@ -1,7 +1,7 @@
 // Responsive audit: renders every page at standard viewport widths and flags
 // horizontal overflow (document wider than the viewport — the classic broken
 // -layout symptom). Optionally saves screenshots of failures.
-// Usage: node scripts/responsive-audit.mjs [baseUrl] [shotDir]
+// Usage: node scripts/dev/responsive-audit.mjs [baseUrl] [shotDir]
 import fs from "fs";
 import puppeteer from "puppeteer-core";
 

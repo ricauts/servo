@@ -3,7 +3,7 @@
 // (pg_dump); `npm run demo` is deliberately NOT used because it wipes in
 // place.
 //
-//   node scripts/make-capture-db.mjs
+//   node scripts/media/make-capture-db.mjs
 //
 // (The old invocation note said `node --experimental-sqlite` — that flag has
 // not been needed since Node shipped node:sqlite stable, and the script left

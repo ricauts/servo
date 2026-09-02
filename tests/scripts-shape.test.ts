@@ -54,16 +54,52 @@ describe("hyg-09 — scripts/ has a shape", () => {
       "scripts/make-before-after.mjs", "scripts/screenshot.mjs", "scripts/shoot-og.mjs",
       "scripts/readme-screenshots.mjs",
     ];
-    for (const f of [
+    // The surfaces named by the item's acceptance...
+    const surfaces = [
       "README.md", "SECURITY.md", "docs/USER-GUIDE.md", "docs/DESIGN.md",
       "docs/MEDIA-GUIDE.md", "docs/design/postgres.md", "docs/design/hygiene.md",
       ".env.example", "src/lib/secret-store.ts", "package.json",
-    ]) {
+    ];
+    // ...plus every tracked file under scripts/ itself, which the first pass of
+    // this test did NOT cover. That gap let fourteen pre-move paths survive the
+    // move: each script's own usage line still printed the path it had before
+    // it was moved, so an operator copy-pasting the header of the file they
+    // were reading got "cannot find module". `npm run relay` was worse than
+    // misleading — scripts/ops/run-relay.ts spawned scripts/imap-relay.mjs,
+    // which no longer exists, so the command hyg-09 added and documented
+    // failed at runtime. Neither claims-audit (its dead-path scan set is
+    // README/SECURITY/ROADMAP/THIRD_PARTY plus docs/**) nor this test could
+    // see any of it.
+    const inScripts = execFileSync("git", ["ls-files", "scripts"], {
+      cwd: REPO,
+      encoding: "utf8",
+    })
+      .split("\n")
+      .filter(Boolean)
+      // .sh and .sql carry no module paths; keeping the filter narrow keeps the
+      // failure message pointed at real code.
+      .filter((f) => /\.(mjs|cjs|ts|js)$/.test(f));
+    expect(inScripts.length).toBeGreaterThan(15);
+
+    for (const f of [...surfaces, ...inScripts]) {
       const text = readFileSync(path.join(REPO, f), "utf8");
       for (const old of moved) {
         expect(text.includes(old), `${f} still names ${old}`).toBe(false);
       }
     }
+  });
+
+  it("run-relay spawns a relay that exists", () => {
+    // The spawn target is COMPOSED (path.join(cwd, "scripts", ...)), so no
+    // grep for a literal "scripts/imap-relay.mjs" can see it — which is exactly
+    // why the move missed it and why this assertion resolves the segments
+    // instead of matching a string.
+    const src = readFileSync(path.join(REPO, "scripts/ops/run-relay.ts"), "utf8");
+    const segments = /path\.join\(process\.cwd\(\),([^)]*)\)/.exec(src)?.[1];
+    expect(segments, "run-relay.ts no longer composes its spawn target").toBeDefined();
+    const parts = [...segments!.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(parts.length).toBeGreaterThan(0);
+    expect(existsSync(path.join(REPO, ...parts)), parts.join("/")).toBe(true);
   });
 });
 

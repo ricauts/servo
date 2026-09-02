@@ -4,7 +4,7 @@
 //
 //   IMAP_HOST=imap.gmail.com IMAP_USER=tickets@company.com \
 //   IMAP_PASSWORD=<app-password> SERVO_URL=http://localhost:3000 \
-//   INBOUND_EMAIL_SECRET=<shared secret> node scripts/imap-relay.mjs
+//   INBOUND_EMAIL_SECRET=<shared secret> node scripts/ops/imap-relay.mjs
 //
 // Gmail/Workspace notes: enable IMAP for the mailbox and use an app password
 // (requires 2-Step Verification). Messages are marked \Seen only after Servo

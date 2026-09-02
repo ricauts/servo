@@ -10,7 +10,7 @@ const sharp = await loadOptional("sharp");
 
 const [ticketUrl, outfile] = process.argv.slice(2);
 if (!ticketUrl || !outfile) {
-  console.error("Usage: node scripts/make-before-after.mjs <ticketUrl> <outfile>");
+  console.error("Usage: node scripts/media/make-before-after.mjs <ticketUrl> <outfile>");
   process.exit(1);
 }
 const origin = new URL(ticketUrl).origin;
