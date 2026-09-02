@@ -124,6 +124,52 @@ a permissive code licence says nothing about what ships beside it.
   the dependency: its licence travels inside `node_modules` to every
   install. Nothing of it is copied into this tree.
 
+### docling / docling-serve — the optional high-fidelity extractor (dcl-03..dcl-08)
+
+- **Upstream:** <https://github.com/docling-project/docling> and
+  <https://github.com/docling-project/docling-serve> (served as
+  `ghcr.io/docling-project/docling-serve-cpu`, pinned by digest).
+- **Licence:** **MIT**, both. Verified from inside the pinned container on
+  2026-09-02: `docling_serve-1.31.0.dist-info/METADATA` carries
+  `License: MIT`; the `docling*` packages' `License-Expression: MIT` with
+  licence files reading `Copyright (c) 2024 International Business
+  Machines`. The project is governed under **LF AI & Data** with
+  contributions Copyright The Docling Contributors.
+- **Model weights — recorded individually because they differ from the code
+  licence** (sources: the upstream model cards; NOT re-verified inside the
+  image):
+  - `docling-layout-heron` — Apache-2.0
+  - `docling-models` / TableFormer — CDLA-Permissive-2.0 + Apache-2.0
+  - `CodeFormulaV2` — CDLA-Permissive-2.0
+  - `DocumentFigureClassifier` — MIT
+  - `granite-docling-258M` — Apache-2.0
+- **What Servo does NOT do, written down before anyone does it by
+  accident:** the upstream image is **pulled by digest and never rebuilt,
+  re-packaged or redistributed** — `docker-compose.docling.yml` runs it as
+  shipped, and `dcl-07`'s live lane confirmed there is nowhere a rebuild
+  could even hook in (no entrypoint override). CDLA-Permissive-2.0's
+  pass-along obligation on the weights is therefore **not triggered**. It
+  WOULD be triggered the day a Servo-branded image baked the weights — and
+  that day this entry changes.
+- **What we use:** an OPTIONAL sidecar behind `kb.extract.docling.url`
+  (unset by default; the whole lane is inert without it). The client is
+  Servo's own (`src/lib/kb/extractors/docling-client.ts`) — no docling SDK
+  is an npm dependency of this tree.
+- **Rejected alternatives, with reasons:**
+  - **marker** — OpenRAIL-M model licence with a **$5M revenue threshold**;
+    a compliance cliff this project will not ship next to.
+  - **MinerU** — additional terms on top of the licence plus a
+    visible-attribution obligation.
+  - **PyMuPDF4LLM** — AGPL-3.0, disqualifying under §0.4 outright.
+  - **unstructured** — clean licence, but slower here with no capability
+    gain over the adopted stack.
+  - **docling-ts / docling.rs clients** — below §0.4's proven-implementation
+    bar (adoption maturity); Servo's own client against the HTTP API is the
+    smaller surface anyway.
+- **Obligations:** none for the CODE beyond this attribution record — the
+  image is upstream's, pulled by digest, never redistributed. The weights
+  ride inside upstream's image under their own licences (above).
+
 ### @modelcontextprotocol/sdk (cnp-02)
 
 - **Upstream:** <https://github.com/modelcontextprotocol/typescript-sdk>
