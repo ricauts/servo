@@ -28,8 +28,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import Badge from "@/components/legacy/Badge";
-import Spinner from "@/components/legacy/Spinner";
+import Badge from "@/components/common/Badge";
+import Spinner from "@/components/common/Spinner";
 import { SENIORITY_LABEL, SENIORITY_TONE } from "@/lib/labels";
 import type { Seniority } from "@/lib/types";
 import { nextLevel } from "@/lib/escalation-rules";

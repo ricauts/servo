@@ -30,9 +30,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import Badge from "@/components/legacy/Badge";
-import Spinner from "@/components/legacy/Spinner";
-import EmptyState from "@/components/legacy/EmptyState";
+import Badge from "@/components/common/Badge";
+import Spinner from "@/components/common/Spinner";
+import EmptyState from "@/components/common/EmptyState";
 import { CATEGORY_LABEL, RISK_LABEL, RISK_TONE } from "@/lib/labels";
 import type { Category, RiskLevel } from "@/lib/types";
 import { cn } from "@/lib/utils";

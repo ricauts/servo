@@ -32,7 +32,7 @@ Four clauses, binding on every tick, not only `hyg-*` ticks.
 
 - **`.claude/` holds two full worktree copies.** Any scan that does not exclude it reports every file as referenced. Excluded, with `node_modules/`, `.next/`, `.git/`, `.spec-build/`, `package-lock.json` and `prisma/*.db*`.
 - **`spec.md` names paths it plans to create.** Excluded as a *referencing* source. The cost is that a file only `spec.md` mentions reads as unreferenced — correct today, wrong the day a tick creates it, and absorbed by the baseline. A tick must never delete on that signal alone.
-- **Dynamic imports and barrel files are reported, never guessed.** Today there is exactly one dynamic import (`src/lib/screenshot.ts:56`, importing `puppeteer-core`) and no barrel file in `src/components/legacy/` or `src/components/ui/`. An unresolved dynamic import makes the run report `INDETERMINATE` for that target — never `unreferenced`.
+- **Dynamic imports and barrel files are reported, never guessed.** Today there is exactly one dynamic import (`src/lib/screenshot.ts:56`, importing `puppeteer-core`) and no barrel file in `src/components/common/` (was `legacy/` until hyg-06) or `src/components/ui/`. An unresolved dynamic import makes the run report `INDETERMINATE` for that target — never `unreferenced`.
 - **Dependencies are part of the reference graph.** Declared-and-unused (`gifenc`) and used-but-undeclared (`sharp` in `make-before-after.mjs`, `ffmpeg-static` in `record-hero.mjs` — the latter absent from `package-lock.json` entirely, so it cannot work after `npm ci`) are both findings.
 
 ### 13.3 The guard — extend the claims linter, do not add a second one
@@ -107,9 +107,9 @@ True as of 2026-08-27 at `6b41b52`. `hyg-01`'s scanner is what keeps them true.
 | `src/components/legacy/Field.tsx` | `ui/label` (17) + `ui/input` (19) | `hyg-05` |
 | `src/lib/utils.ts` → `formatDate`, `timeAgo`, `formatDateTime` | — | `hyg-05` |
 | `gifenc` in `devDependencies` | ended by `d44c3c4` | `hyg-05` |
-| `src/components/ui/{avatar,badge,scroll-area,skeleton,tooltip}.tsx` | `legacy/Badge.tsx` (23) and friends | **kept** — `shadcn add` output; §17 q31 |
+| `src/components/ui/{avatar,badge,scroll-area,skeleton,tooltip}.tsx` | `common/Badge.tsx` (23; `legacy/` until hyg-06) and friends | **kept** — `shadcn add` output; §17 q31 |
 
-`legacy/Avatar` (7 importers), `Badge` (23), `EmptyState` (11) and `Spinner` (16) are alive and are the most-used components in the app; the directory name is the lie, not the code (`hyg-06`).
+`Avatar` (7 importers), `Badge` (23), `EmptyState` (11) and `Spinner` (16) are alive and are the most-used components in the app; the directory said `legacy`, which was the lie, not the code — `hyg-06` renamed it to `common/`.
 
 **Broken references (four documents asserting a file that does not exist):** `package.json`'s `prisma.seed` → `prisma/seed.ts` (the directory holds `seed-core.ts` and `seed-demo.ts`), so `prisma db seed` fails today; `README.md`'s project-structure block, same target; `docs/PORTING-LEDGER.md:13,86,127` → `THIRD-PARTY.md`, which §0.4 spells `THIRD_PARTY.md` and which **does not exist in either spelling** — while `kb-06`, `kb-07` and `cnp-02` already have acceptance criteria that write to it; `docs/history/CONTRACT.md:19,22,188` → `tailwind.config.ts` and `src/lib/ai/tools.ts`, both gone (the second is a directory now, and `src/lib/ai/tools/index.ts:5` says so).
 

@@ -4,7 +4,7 @@ import { can } from "@/lib/permissions";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import Link from "next/link";
 import { BookOpen, Lock } from "lucide-react";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import KbUpload from "@/components/kb/KbUpload";
 import KbDocumentList from "@/components/kb/KbDocumentList";
 import KbAdminPanel from "@/components/kb/KbAdminPanel";

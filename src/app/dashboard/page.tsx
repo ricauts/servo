@@ -1,6 +1,6 @@
 import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import PageHeader from "@/components/shell/PageHeader";
 import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";

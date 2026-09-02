@@ -28,8 +28,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import Badge from "@/components/legacy/Badge";
-import EmptyState from "@/components/legacy/EmptyState";
+import Badge from "@/components/common/Badge";
+import EmptyState from "@/components/common/EmptyState";
 import { CATEGORY_LABEL } from "@/lib/labels";
 import type { Category } from "@/lib/types";
 

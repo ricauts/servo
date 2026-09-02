@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import PageHeader from "@/components/shell/PageHeader";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import RunsManager from "@/components/runs/RunsManager";
 import { listRuns } from "@/lib/runs-views";
 

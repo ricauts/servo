@@ -7,7 +7,7 @@
 
 import type { AgentRun, AgentStep, Approval, User } from "@prisma/client";
 import { ChevronRight, ClipboardCheck } from "lucide-react";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import Markdown, { toPlainText } from "@/components/tickets/Markdown";
 import RelativeTime from "@/components/tickets/RelativeTime";
 

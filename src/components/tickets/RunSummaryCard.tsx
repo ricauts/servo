@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import { toPlainText } from "@/components/tickets/Markdown";
 import RelativeTime from "@/components/tickets/RelativeTime";
 import { RUN_STATUS_LABEL, RUN_STATUS_TONE } from "@/lib/labels";

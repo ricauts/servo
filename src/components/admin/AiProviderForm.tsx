@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import Spinner from "@/components/legacy/Spinner";
+import Spinner from "@/components/common/Spinner";
 
 export interface AiSettingsView {
   provider: string; // "anthropic" | "openai" | "mock" (as configured)

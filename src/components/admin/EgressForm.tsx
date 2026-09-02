@@ -12,7 +12,7 @@ import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import Spinner from "@/components/legacy/Spinner";
+import Spinner from "@/components/common/Spinner";
 
 export interface EgressSettingsView {
   allowlist: string[];

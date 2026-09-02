@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { getAuthConfig } from "@/lib/authjs";
 import PageHeader from "@/components/shell/PageHeader";
-import EmptyState from "@/components/legacy/EmptyState";
+import EmptyState from "@/components/common/EmptyState";
 import IntegrationsShell, {
   type IntegrationSection,
 } from "@/components/admin/IntegrationsShell";

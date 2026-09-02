@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {

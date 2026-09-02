@@ -17,7 +17,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import Badge from "@/components/legacy/Badge";
+import Badge from "@/components/common/Badge";
 import { NAV_ICONS } from "@/components/shell/nav-icons";
 import type { NavEntry } from "@/components/shell/nav-items";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
