@@ -13,7 +13,8 @@
     "demo": "prisma generate && prisma migrate deploy && tsx prisma/seed-demo.ts",
     "lint:hex": "node scripts/no-hex-lint.mjs",
     "claims:audit": "node scripts/claims-audit.mjs",
-    "hygiene:check": "node scripts/repo-refs.mjs --check"
+    "hygiene:check": "node scripts/repo-refs.mjs --check",
+    "test:docling": "test \"$SERVO_TEST_DOCLING\" = \"1\" || { echo \"test:docling is opt-in: set SERVO_TEST_DOCLING=1 (pulls the ~4.4GB docling image)\" >&2; exit 1; }; docker compose -f docker-compose.docling.test.yml up -d --wait && { node node_modules/vitest/vitest.mjs run -c vitest.live.config.ts; rc=$?; docker compose -f docker-compose.docling.test.yml down -v --remove-orphans; exit $rc; }"
   },
   "prisma": {
     "seed": "tsx prisma/seed-core.ts"
