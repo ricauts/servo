@@ -249,7 +249,12 @@ export async function silos(): Promise<SiloWorld> {
         await lockedSetup();
         break;
       } catch (err) {
-        if (setupAttempt >= 3 || !/P2021|P1004|P1017|does not exist/i.test(String(err))) throw err;
+        // PrismaClientUnknownRequestError can carry an EMPTY message with
+        // the code only on `.code` (P1017 shows up this way) — String(err)
+        // alone never matches, so the retry below never fired for exactly
+        // the error class it was written for.
+        const errText = `${String(err)} ${String((err as { code?: string }).code ?? "")}`;
+        if (setupAttempt >= 3 || !/P2021|P1004|P1017|does not exist/i.test(errText)) throw err;
         await db.$disconnect().catch(() => undefined);
         db = new PrismaClient({ datasourceUrl: withLimit(urlForDatabase(WAREHOUSE_DB), 4) });
         await new Promise((r) => setTimeout(r, setupAttempt * 1_000));
