@@ -521,15 +521,19 @@ describe("backfillFacts", () => {
 });
 
 describe("kb-08's keyword/entity pass is untouched by this item", () => {
-  it("neither the tokenizer nor the graph builder knows facts exist", () => {
+  it("the tokenizer still knows nothing of facts; the graph builder knows them ONLY as ext-05's SHARED_FACT edge", () => {
     const keywords = readFileSync("src/lib/kb/keywords.ts", "utf8");
     const graph = readFileSync("src/lib/kb/graph.ts", "utf8");
-    for (const [name, src] of [["keywords.ts", keywords], ["graph.ts", graph]] as const) {
-      expect(src.toLowerCase().includes("documentfact"), `${name} must not reference facts`).toBe(false);
-      expect(src.includes("kb/facts"), `${name} must not import the facts module`).toBe(false);
-    }
-    // SHARED_FACT is ext-05's edge, not this item's.
-    expect(graph.includes("SHARED_FACT")).toBe(false);
+    // keywords.ts is untouched by facts to this day.
+    expect(keywords.toLowerCase().includes("documentfact")).toBe(false);
+    expect(keywords.includes("kb/facts")).toBe(false);
+    // ext-05 landed: graph.ts reads DocumentFact and emits SHARED_FACT —
+    // but imports nothing from the facts module (it reads the table
+    // through the client), and SHARED_FACT is the ONLY fact token it
+    // knows. This guard was ratified at ext-05 from "knows nothing".
+    expect(graph.toLowerCase().includes("documentfact")).toBe(true);
+    expect(graph.includes("kb/facts")).toBe(false);
+    expect(graph.includes("SHARED_FACT")).toBe(true);
   });
 
   it("an ingested document's chunk keywords are still exactly keywordPass's output", async () => {
