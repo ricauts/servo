@@ -525,7 +525,7 @@ model KnowledgeEdge {
   from      Document @relation("edgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
   toId      String
   to        Document @relation("edgeTo", fields: [toId], references: [id], onDelete: Cascade)
-  kind      String // SHARED_ENTITY | SHARED_KEYWORD | SAME_COLLECTION
+  kind      String // SHARED_ENTITY | SHARED_KEYWORD | SAME_COLLECTION | SHARED_FACT
   weight    Float    @default(0)
   evidence  Json     @default("[]") // the shared entities/keywords — withheld unless both nodes entitled
   createdAt DateTime @default(now())

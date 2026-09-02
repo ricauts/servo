@@ -31,6 +31,18 @@ export async function rebuildEdgesFor(documentId: string): Promise<number> {
     select: { collectionId: true },
   });
 
+  // This document's EXACT facts, keyed on the (kind, norm) pair. ASSUMED
+  // facts NEVER build an edge (ext-05 criterion 4, absolute — the open
+  // questions and the extraction design document state it three more
+  // times): an assumption that narrows a search costs results, an
+  // assumption that invents a graph relationship is a lie that outlives
+  // the query.
+  const myFacts = await db.documentFact.findMany({
+    where: { documentId, confidence: "EXACT" },
+    select: { kind: true, norm: true },
+  });
+  const myFactKeys = new Set(myFacts.map((f) => `${f.kind} ${f.norm}`));
+
   // Corpus profiles for rarity weighting and overlap.
   const others = await db.document.findMany({
     where: { id: { not: documentId } },
@@ -38,6 +50,7 @@ export async function rebuildEdgesFor(documentId: string): Promise<number> {
       id: true,
       collectionId: true,
       chunks: { select: { text: true } },
+      facts: { where: { confidence: "EXACT" }, select: { kind: true, norm: true } },
     },
   });
   const corpusEntityDocs = new Map<string, Set<string>>();
@@ -49,6 +62,33 @@ export async function rebuildEdgesFor(documentId: string): Promise<number> {
       }
     }
   }
+
+  // Fact rarity counts DISTINCT DOCUMENTS per (kind, norm), never
+  // occurrences (ext-05 criterion 2): kb-06 repeats a workbook's header
+  // row into every chunk of its region, so occurrence counting would
+  // invert the weighting. My document counts toward the distinct total.
+  const factKeyDocs = new Map<string, Set<string>>();
+  for (const f of myFacts) {
+    const key = `${f.kind} ${f.norm}`;
+    if (!factKeyDocs.has(key)) factKeyDocs.set(key, new Set());
+    factKeyDocs.get(key)!.add(documentId);
+  }
+  for (const other of others) {
+    for (const f of other.facts) {
+      const key = `${f.kind} ${f.norm}`;
+      if (!factKeyDocs.has(key)) factKeyDocs.set(key, new Set());
+      factKeyDocs.get(key)!.add(other.id);
+    }
+  }
+  const totalDocuments = others.length + 1;
+  // Criterion 3: a norm present in more than 20% of the corpus produces NO
+  // edge — without this, a year every document mentions turns the graph
+  // into a clique on that norm.
+  const shareableFactKeys = (keys: Set<string>) =>
+    [...keys].filter((key) => {
+      const docs = factKeyDocs.get(key)?.size ?? 0;
+      return docs / totalDocuments <= 0.2;
+    });
 
   const edges: {
     fromId: string;
@@ -92,6 +132,32 @@ export async function rebuildEdgesFor(documentId: string): Promise<number> {
         kind: "SHARED_KEYWORD",
         weight: Number((sharedKeywords.length / 10).toFixed(4)),
         evidence: sharedKeywords.slice(0, 8),
+      });
+    }
+
+    // SHARED_FACT (ext-05): EXACT facts keyed on (kind, norm), rarity by
+    // DISTINCT documents, >20%-of-corpus norms excluded, ASSUMED never
+    // admitted (filtered at both profile loads above). Criterion 5 as
+    // restated by question 59's answer (A): explicit currency codes on
+    // both sides — "USD 2,400.00" and "USD 2.400,00" share USD:240000.
+    const otherFactKeys = new Set(other.facts.map((f) => `${f.kind} ${f.norm}`));
+    const sharedFactKeys = shareableFactKeys(
+      new Set([...myFactKeys].filter((k) => otherFactKeys.has(k))),
+    );
+    if (sharedFactKeys.length > 0) {
+      const weight =
+        sharedFactKeys.reduce(
+          (sum, key) => sum + 1 / Math.max(1, factKeyDocs.get(key)?.size ?? 1),
+          0,
+        ) / Math.max(1, sharedFactKeys.length);
+      edges.push({
+        fromId: documentId,
+        toId: other.id,
+        kind: "SHARED_FACT",
+        weight: Number(weight.toFixed(4)),
+        // The evidence names the NORM — the joinable form, not either
+        // document's raw spelling.
+        evidence: sharedFactKeys.map((k) => k.split(" ").slice(1).join(" ")).slice(0, 8),
       });
     }
 
