@@ -1,0 +1,55 @@
+# docker-compose.docling.test.yml — the OPT-IN live lane rig (dcl-07).
+# Run by `npm run test:docling` (gated on SERVO_TEST_DOCLING=1); NEVER part of
+# npm test and NEVER in CI — a 4.4 GB image is not a CI prerequisite, and
+# tests/docling-live-isolation.test.ts proves both facts from the configs.
+#
+# THE IMAGE IS THE OVERLAY'S, BY DIGEST: docker-compose.docling.yml's exact
+# sha256. An offline test asserts the two files agree, so the lane can never
+# drift onto an image whose fixtures were not recorded (the failure message
+# names scripts/record-docling-fixture.mjs).
+#
+# THE TWO DELIBERATE DELTAS FROM THE OVERLAY (a test rig, not a deployment):
+#   1. the port is published to LOOPBACK ONLY (127.0.0.1:5001:5001) so the
+#      host's vitest can drive the lane;
+#   2. the network is the default bridge, not internal: true — publishing on
+#      an internal network does not route. The no-egress production shape
+#      lives in the overlay and is asserted offline by dcl-06's tests; the
+#      egress behaviour itself is what this lane's source-policy probe
+#      observes live (a remote-source request cannot produce content).
+services:
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cpu@sha256:7deed6ddba54908925c039d69a95806416c90cfc9b5486ca8554d3ce30a50289
+    ports:
+      - "127.0.0.1:5001:5001"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes: [] # read-only root, no mounts
+    mem_limit: 4g
+    cpus: 2.0
+    pids_limit: 512
+    # THE RECORDED DEVIATION, APPLIED (observed live by the dcl-07 lane):
+    # the image does NOT boot read-only — with tmpfs on BOTH /tmp and
+    # /root/.cache the container still exits code 3 (gunicorn worker boot
+    # failure) about a minute into model load, before any stderr survives;
+    # without read_only, keeping every other control, it boots and serves.
+    # The control matrix was bisected live: cap_drop, no-new-privileges,
+    # memory and pids limits are all exonerated; read_only is the sole
+    # killer. Keep /tmp tmpfs for the app's own scratch space.
+    tmpfs:
+      - /tmp
+    environment:
+      DOCLING_SERVE_ENGINE: local # local ONLY — no remote-service key may appear here
+    healthcheck:
+      # THE CORRECTED ARTIFACTS ASSERTION (observed live by the dcl-07
+      # lane): the models are baked under /opt/app-root (4.3 GB at this
+      # digest). The dcl-06 overlay's DOCLING_SERVE_ARTIFACTS_PATH knob is
+      # NOT implemented by this image — /opt/artifacts is never created and
+      # that healthcheck can never go green on the real image. The rig
+      # asserts the path that exists; the overlay needs the same one-line
+      # fix (recorded as a question for the owner).
+      test: ["CMD-SHELL", "test -n \"$(ls -A /opt/app-root)\""]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 120s # model load on first boot is slow; do not kill it early

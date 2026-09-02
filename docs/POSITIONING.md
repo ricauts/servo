@@ -386,16 +386,10 @@ paths-exempt:
   # (The docling fixtures, recorder and now the overlay are all DELIVERED:
   # dcl-03 delivered the first two, dcl-06 the overlay — which the
   # docling-fixture-lint treats as the sidecar's arrival, so synthetic
-  # fixtures are banned and the recorded ones must carry the digest. Only
-  # the opt-in live lane remains for dcl-07.)
-  - target:
-      - tests/live
-      - tests/live/*
-    paths:
-      - docs/design/docling.md
-    until: dcl-07
-    reason: the Docling document names the opt-in live lane dcl-07 creates.
-      The sidecar area is optional even when it ships.
+  # fixtures are banned and the recorded ones must carry the digest.)
+  # (tests/live rode here until dcl-07 shipped the live lane — the
+  # directory, its .live.ts file, the compose rig and the live config all
+  # resolve now, so the target left the way every delivered target does.)
   # ext-02 delivered the golden fact corpora (tests/fixtures/facts/), so
   # that target left this list.
   - target:
