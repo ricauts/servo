@@ -2,9 +2,11 @@
 // attached to a ticket: crops both to the region that changed, labels them,
 // and stacks them into one crisp PNG.
 //
-// Usage: node scripts/make-before-after.mjs <ticketUrl> <outfile>
+// Usage: node scripts/media/make-before-after.mjs <ticketUrl> <outfile
 import { writeFileSync } from "node:fs";
-import sharp from "sharp";
+import { loadOptional } from "./_deps.mjs";
+
+const sharp = await loadOptional("sharp");
 
 const [ticketUrl, outfile] = process.argv.slice(2);
 if (!ticketUrl || !outfile) {

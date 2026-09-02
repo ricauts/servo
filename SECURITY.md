@@ -26,7 +26,7 @@ Rows written before the key existed stay readable (legacy plaintext passes
 through) — migrate them once with:
 
 ```bash
-node scripts/encrypt-secrets.cjs
+node scripts/ops/encrypt-secrets.cjs
 ```
 
 Losing the key means re-entering the secrets; it is never stored anywhere by
@@ -54,7 +54,7 @@ Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
   trust.
 - **Roles**: REQUESTERs only see their own tickets (pages and API). Agents
   and admins see the queue; HIGH-risk approvals and settings are admin-only.
-- Locked out by a bad SSO config: `node scripts/reset-sso.cjs`.
+- Locked out by a bad SSO config: `node scripts/ops/reset-sso.cjs`.
 
 ## AI agents & tools
 

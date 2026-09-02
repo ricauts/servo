@@ -18,7 +18,7 @@ The retired green OKLCH palette this document used to describe is gone
 from the product; if you hold an old screenshot, the sidebar is now the
 graphite ramp with servo-blue accents.
 
-Every pairing listed here is verified by `node scripts/color-audit.mjs`
+Every pairing listed here is verified by `node scripts/dev/color-audit.mjs`
 (oklch → sRGB → WCAG 2.1 contrast). **Run it whenever you touch a token**;
 the audit must report zero FAILs. Current status: ✅ 0 fails (light, dark,
 banner).
@@ -68,7 +68,7 @@ The wordmark is "Servo" + servo-blue period; the period always uses
 ## Verifying
 
 ```bash
-node scripts/color-audit.mjs   # WCAG pairings
+node scripts/dev/color-audit.mjs   # WCAG pairings
 node scripts/no-hex-lint.mjs   # every colour a token, every token defined
 ```
 

@@ -36,7 +36,7 @@ Everything lives in two places: **Integrations** (external systems) and
 |---|---|---|
 | **Single sign-on** | Real login for your org; requesters auto-provision on first sign-in | Issuer URL, client ID/secret; set **Allowed email domains** if your IdP accepts outside accounts |
 | **Email notifications** | Ticket confirmations, resolutions, approval alerts, approved AI replies | An SMTP URL (`smtp://user:app-password@host:587`) + the enable switch |
-| **Inbound email** | Mail becomes tickets; replies thread by the `#123` tag in subjects | A shared secret + your provider's webhook to `POST /api/inbound/email`, or the bundled Gmail/Workspace relay: `node scripts/imap-relay.mjs` |
+| **Inbound email** | Mail becomes tickets; replies thread by the `#123` tag in subjects | A shared secret + your provider's webhook to `POST /api/inbound/email`, or the bundled Gmail/Workspace relay: `npm run relay` (runs `scripts/ops/imap-relay.mjs` via `scripts/ops/run-relay.ts`) |
 | **GitHub** | Real repos, feature branches and PRs from tickets | A fine-grained PAT (Contents; Administration only if the AI may create repos) |
 | **Azure** | Live read-only resource queries | A service principal with the Reader role |
 | **Outbound webhooks** | Signed JSON events (`ticket.created`, `reply.sent`…) to your systems | An endpoint URL; verify the `x-servo-signature` HMAC |
@@ -224,7 +224,7 @@ latency throughput.
 
 | Symptom | Fix |
 |---|---|
-| Locked out after a bad SSO config | `node scripts/reset-sso.cjs` → reconfigure from Integrations |
+| Locked out after a bad SSO config | `node scripts/ops/reset-sso.cjs` → reconfigure from Integrations |
 | "Sign-in failed / account not allowed" | The email's domain isn't in **Allowed email domains** (or the IdP rejected it) |
 | AI answers look scripted | You're in mock mode — check Settings → AI provider (missing/invalid key falls back to mock) |
 | Drafts not appearing for inbound mail | *Draft replies for inbound email* toggle (Settings → AI) and the inbound integration status |
@@ -234,7 +234,7 @@ latency throughput.
 | An upgraded agent never uses `fetch_url` | Specialists you have edited keep their saved allowlist — add the tool under Agents → Tools |
 | An agent ignores a desk skill | Its allowlist is missing `read_skill` — add it from **Agents → Tools** |
 | `SERVO_ENCRYPTION_KEY is not set but…` errors | The DB holds encrypted secrets; set the original key in the environment |
-| Secrets saved before enabling encryption | `node scripts/encrypt-secrets.cjs` seals them once |
+| Secrets saved before enabling encryption | `node scripts/ops/encrypt-secrets.cjs` seals them once |
 
 ## 8. Good habits
 

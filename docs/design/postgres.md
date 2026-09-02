@@ -20,7 +20,7 @@ Servo's main database moves from SQLite to PostgreSQL. This section is the work 
 
 1. **The zero-infrastructure contributor path.** `npm install && npm run setup && npm run dev` currently needs nothing but Node. After the cutover it needs a running Postgres. Mitigation: `docker compose up -d db` is one command and is the documented first step; there is no supported "SQLite fallback" mode, because two datasources in `schema.prisma` is not a thing Prisma supports and a second schema file would double every migration forever.
 2. **"One container."** It becomes two. `docker compose up --build` is still one command, but the public claim changes (see *Claims discipline*).
-3. **A database you can `cp`.** `scripts/make-capture-db.mjs` builds the recording fixture with `copyFileSync` + `node:sqlite` `DatabaseSync` — that trick dies. It becomes `pg_dump` → `createdb servo_capture` → `psql`, with the same redaction statements run through `psql` instead of `db.prepare()`. Recordings get slower to stage; they do not get less deterministic.
+3. **A database you can `cp`.** `scripts/media/make-capture-db.mjs` builds the recording fixture with `copyFileSync` + `node:sqlite` `DatabaseSync` — that trick dies. It becomes `pg_dump` → `createdb servo_capture` → `psql`, with the same redaction statements run through `psql` instead of `db.prepare()`. Recordings get slower to stage; they do not get less deterministic.
 4. **`prisma db push`'s forgiving boot.** `scripts/docker-entrypoint.sh` runs `db push` on every start because it is idempotent and never needs a history. That is replaced by `prisma migrate deploy` + a real `prisma/migrations/` directory: drift becomes possible, and a bad migration can wedge a boot. This is a cost paid deliberately, because `schema.prisma` cannot express `CREATE EXTENSION`, `CREATE INDEX … USING hnsw`, generated `tsvector` columns or RLS policies — and the KB area needs all four.
 5. **CI gains a service container.** `.github/workflows/ci.yml:2` currently says "SQLite means no services are needed". That stops being true.
 6. **Disk and memory footprint** grow by a Postgres container (~250 MB image, ~50 MB RSS idle). Irrelevant on a server, noticeable on a laptop.
@@ -106,7 +106,7 @@ A **documented one-shot script**, not an automatic import.
 
 `scripts/migrate-sqlite-to-postgres.mjs`:
 
-- Opens the legacy file with `node:sqlite`'s `DatabaseSync` read-only — the same dependency-free pattern already proven in `scripts/make-capture-db.mjs:16`.
+- Opens the legacy file with `node:sqlite`'s `DatabaseSync` read-only — the same dependency-free pattern already proven in `scripts/media/make-capture-db.mjs:16`.
 - Copies every table in FK dependency order through a `PrismaClient` bound to the new `DATABASE_URL`, preserving `cuid()` ids and all timestamps so nothing re-numbers.
 - `Attachment.data` copies as a `Buffer` into `bytea`.
 - Sealed secrets (`enc:v1:…`) copy **verbatim**, so the same `SERVO_ENCRYPTION_KEY` keeps opening them; the script never decrypts.
@@ -235,7 +235,7 @@ The rebrand area's claims linter gains `sqlite` as a banned word outside `docs/m
 
 **db-09 — Backup, restore and operator docs** · one-tick · depends-on: db-01
 - `SECURITY.md` and `README.md` replace "back up the SQLite files" with `pg_dump`/`pg_restore` against the `db` service, covering both `servo` and `servo_ops`, and say plainly that a dump contains sealed secrets and is only as safe as `SERVO_ENCRYPTION_KEY`.
-- `scripts/make-capture-db.mjs` is repointed at `pg_dump` → `createdb servo_capture` → `psql`, with the redaction statements unchanged in substance; the header comment's `--experimental-sqlite` invocation is corrected.
+- `scripts/media/make-capture-db.mjs` is repointed at `pg_dump` → `createdb servo_capture` → `psql`, with the redaction statements unchanged in substance; the header comment's `--experimental-sqlite` invocation is corrected.
 - Offline check: dump, restore into a fresh database, boot the app against it, ticket counts match.
 
 **db-10 — SQLite residue sweep and a lint that keeps it swept** · one-tick · depends-on: db-01, db-05

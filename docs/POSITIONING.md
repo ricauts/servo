@@ -414,14 +414,35 @@ paths-exempt:
   # the way every delivered target does.)
   # (tests/dockerignore.test.ts rode here until hyg-07 wrote it — the
   # target resolves now, so it left the way every delivered target does.)
+  # (scripts/media rode here until hyg-09 archived the rig — the directory
+  # resolves now, so it left the way every delivered target does.)
   - target:
-      - scripts/media
+      - scripts/encrypt-secrets.cjs
+      - scripts/reset-sso.cjs
+      - scripts/imap-relay.mjs
+      - scripts/run-relay.ts
+      - scripts/mock-idp.mjs
+      - scripts/permissions-audit.mjs
+      - scripts/responsive-audit.mjs
+      - scripts/color-audit.mjs
+      - scripts/record-hero.mjs
+      - scripts/record-approval.mjs
+      - scripts/record-cursor.mjs
+      - scripts/make-capture-db.mjs
+      - scripts/make-before-after.mjs
+      - scripts/screenshot.mjs
+      - scripts/shoot-og.mjs
+      - scripts/readme-screenshots.mjs
     paths:
-      - docs/design/hygiene.md
-    until: hyg-09
-    reason: the hygiene design document names the archived media rig
-      (hyg-09).
-  # loop-07 delivered docs/integrations/ (the one mining procedure), so
+      - docs/hygiene/hyg-05-evidence.md
+      - docs/hygiene/audit-2026-08-30-evidence.md
+      - docs/hygiene/audit-2026-08-30-2-evidence.md
+      - docs/hygiene/audit-2026-09-02-evidence.md
+      - docs/hygiene/audit-2026-09-02-2-evidence.md
+    reason: historical references, permanent - hyg-09 gave scripts/ its
+      shape (ops/ dev/ media/) and the frozen evidence snapshots still name
+      the pre-move root paths. Evidence does not get edited to match later
+      reality; history does not un-happen.  # loop-07 delivered docs/integrations/ (the one mining procedure), so
   # that target left this list.
   # (docs/KB-DOCLING.md rode here until dcl-06 wrote the sidecar operator
   # guide — the target resolves now, so it left the way every delivered

@@ -58,7 +58,14 @@ export const EXCLUDED_PREFIXES = [
 ];
 
 /** Exact paths dropped from the scan set. */
-export const EXCLUDED_PATHS = ["package-lock.json"];
+export const EXCLUDED_PATHS = [
+  "package-lock.json",
+  // hyg-09: the media rig's optional-dependency loader imports a COMPUTED
+  // module name by design — an acknowledged-unresolvable import that would
+  // otherwise turn every file's verdict INDETERMINATE. It references
+  // nothing; its allow-listed callers are checked by the guide's fence.
+  "scripts/media/_deps.mjs",
+];
 
 /** Patterns dropped from the scan set. */
 export const EXCLUDED_PATTERNS = [/^prisma\/[^/]*\.db.*$/];
@@ -924,6 +931,29 @@ export function neverDeleteReason(relPath, isIgnored = () => false) {
  */
 
 /**
+ * hyg-09: the media rig's optional-dependency allow-list, read from
+ * docs/MEDIA-GUIDE.md's fenced media-imports block (one bare module name
+ * per line). Modules listed there may be imported by scripts/media/ files
+ * without being declared in package.json: the scripts import them guarded
+ * and dynamically (a missing module is a message, never a stack trace),
+ * and CI never downloads them. The policy lives in the guide the operator
+ * reads, not in this scanner's source.
+ * @param {string} guideText
+ * @returns {Set<string>}
+ */
+export function mediaImportAllowlist(guideText) {
+  const text = String(guideText ?? "");
+  const fence = text.match(/```media-imports\n([\s\S]*?)```/);
+  if (!fence) return new Set();
+  return new Set(
+    fence[1]
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith("#")),
+  );
+}
+
+/**
  * Build the whole graph and every finding.
  *
  * @param {object} input
@@ -938,6 +968,7 @@ export function neverDeleteReason(relPath, isIgnored = () => false) {
  * @param {string} [input.gitignoreText]
  * @returns {RepoRefsReport}
  */
+
 export function analyze({
   trackedFiles = [],
   read = () => "",
@@ -1184,8 +1215,14 @@ export function analyze({
       dependencyFindings.push({ name, declaredIn: block, status: "unreferenced", usedBy: [], useCount: 0, inLockfile: inLockfile(name) });
     }
   }
+  const mediaAllowed = mediaImportAllowlist(readFileSync(path.join(REPO_ROOT, "docs", "MEDIA-GUIDE.md"), "utf8"));
   for (const [name, uses] of packageUses) {
     if (declared.has(name)) continue;
+    // hyg-09: scripts/media/** may import the guide's allow-listed optional
+    // modules without declaring them (guarded dynamic imports; a message,
+    // never a stack trace). Uses OUTSIDE the media rig still report.
+    const nonMediaUses = uses.filter((u) => !u.file.startsWith("scripts/media/"));
+    if (mediaAllowed.has(name) && nonMediaUses.length === 0) continue;
     dependencyFindings.push({ name, declaredIn: null, status: "undeclared", usedBy: uses.slice(0, 5), useCount: uses.length, inLockfile: inLockfile(name) });
   }
   // A source comment claiming node_modules/<pkg> is on disk, where neither the

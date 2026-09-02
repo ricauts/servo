@@ -2,14 +2,27 @@
 // cursor, one full loop of the desk — request filed, agent works it, human
 // approves, answer sent — ending pixel-identical to where it started.
 //
-//   node scripts/record-hero.mjs <ticketId> [out.webm] [baseUrl]
+//   node scripts/media/record-hero.mjs <ticketId> [out.webm] [baseUrl]
 //
 // Needs ffmpeg on PATH (puppeteer's screencast spawns it). The repo carries one
 // at node_modules/ffmpeg-static; prepend that directory if the system has none.
 // Record against a throwaway database with the mock provider and no per-agent
 // credentials, or the run will call a real model and cost money.
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { dirname } from "node:path";
 import puppeteer from "puppeteer-core";
+import { loadOptional } from "./_deps.mjs";
+
+// ffmpeg comes from ffmpeg-static when present (guarded: NOT a declared
+// dependency), else from the system PATH; only NEITHER is fatal.
+const ffmpegStatic = await loadOptional("ffmpeg-static", () => {
+  const which = spawnSync("ffmpeg", ["-version"], { encoding: "utf8" });
+  return which.status === 0; // system ffmpeg suffices — handled
+});
+if (ffmpegStatic?.path) {
+  process.env.PATH = `${dirname(realpathSync(ffmpegStatic.path))}:${process.env.PATH}`;
+}
 import { CURSOR } from "./record-cursor.mjs";
 
 const TICKET = process.argv[2];

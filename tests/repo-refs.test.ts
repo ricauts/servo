@@ -756,20 +756,23 @@ describe("the real tree — the findings the hygiene audit recorded", () => {
     }
   });
 
-  it("still reports sharp undeclared and ffmpeg-static absent; gifenc's finding flipped when hyg-05 removed it", () => {
+  it("ffmpeg-static stays claimed-absent; gifenc flipped at hyg-05 and sharp RETIRED at hyg-09 (the media allow-list)", () => {
     // hyg-05 removed the real devDependency, so the name survives only inside
     // the scanner's own unit fixture as TEST DATA — a claimed-absent package,
     // the same shape as the media rig's comment claim below.
     expect(dep("gifenc")).toMatchObject({ status: "claimed-absent", declaredIn: null });
     expect(dep("gifenc").usedBy[0].file).toContain("virtual-repo");
-    expect(dep("sharp")).toMatchObject({ status: "undeclared", declaredIn: null });
+    // hyg-09: sharp is imported (guarded, dynamically) by scripts/media
+    // only, and the media-imports allow-list covers exactly that — the
+    // finding is gone, and with it its baseline row.
+    expect(report.dependencies.find((d) => d.name === "sharp")).toBeUndefined();
     // The design doc says the media rig "uses" that package. It does not: the
     // name appears only in a comment claiming the tree carries it, and the
     // lockfile never has. The scanner reports the true shape. (Written without
     // the literal name and path: this comment is inside the scan set, and a
     // literal here would show up as a second location for the finding.)
     expect(dep("ffmpeg-static")).toMatchObject({ status: "claimed-absent", inLockfile: false });
-    expect(dep("ffmpeg-static").usedBy[0].file).toBe("scripts/record-hero.mjs");
+    expect(dep("ffmpeg-static").usedBy[0].file).toBe("scripts/media/record-hero.mjs");
   });
 
   it("never reports a never-delete path as deletable", () => {
