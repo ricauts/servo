@@ -12,5 +12,26 @@ docs
 # never wanted Docling must not bake them into the image.
 tests
 
-# agents/*.md are data, not documentation — the seed loads them.
+# agents/*.md are data, not documentation — the seed loads them. THE DOCKER
+# PATTERN, named instead of guessed (hyg-07): `*.md` has no slash, so Go's
+# filepath.Match anchors it to the CONTEXT ROOT — agents/*.md is never
+# matched by it in the first place. The re-include is kept anyway, as
+# belt-to-braces: syncAgentProfiles() returns 0 on a missing directory
+# instead of failing (src/lib/bootstrap.ts:80), so a future rule that DID
+# match the directory would ship a desk with no procedures and no error,
+# and this line is what would keep it shippable. skills/ needs no such
+# line for the same root-only reason — and the same silent-zero failure
+# mode is why tests/dockerignore.test.ts asserts no rule ever matches it.
 !agents
+
+# hyg-07: the design system ships ONLY its tokens. globals.css imports
+# servo_design_system/tokens/{fonts,colors,effects}.css (ds-01), so
+# excluding the directory wholesale breaks `next build`. The exclusion is
+# written as `servo_design_system/*` — the CONTENTS, not the directory —
+# because Docker's `!` cannot re-include under a directory that is itself
+# excluded; the `/*` form leaves the parent includable and re-includes
+# the one child the build needs.
+.claude
+.spec-build
+servo_design_system/*
+!servo_design_system/tokens

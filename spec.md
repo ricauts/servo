@@ -1709,8 +1709,8 @@ acceptance:
 
 ```
 ### [hyg-07] Stop shipping the design system into the image, and prove the desk still has its procedures
-status: todo
-date: -
+status: review
+date: 2026-09-02
 size: one-tick
 tier: C
 depends-on: ds-01, hyg-01
