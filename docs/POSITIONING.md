@@ -412,14 +412,15 @@ paths-exempt:
   # (docs/hygiene rode here too until hyg-audit-01 wrote its first audit
   # file there — the directory reference resolves now, so it left this list
   # the way every delivered target does.)
+  # (tests/dockerignore.test.ts rode here until hyg-07 wrote it — the
+  # target resolves now, so it left the way every delivered target does.)
   - target:
       - scripts/media
-      - tests/dockerignore.test.ts
     paths:
       - docs/design/hygiene.md
     until: hyg-09
     reason: the hygiene design document names the archived media rig
-      (hyg-09) and the dockerignore test (hyg-07).
+      (hyg-09).
   # loop-07 delivered docs/integrations/ (the one mining procedure), so
   # that target left this list.
   # (docs/KB-DOCLING.md rode here until dcl-06 wrote the sidecar operator
