@@ -681,23 +681,28 @@ describe("the evidence report", () => {
  * The DEAD-PROVEN table of docs/design/hygiene.md §13.6, read from the document
  * itself. Column one holds backticked things — file paths, a path plus its dead
  * symbols, a package name — and one row uses brace form for five siblings.
+ * The disposition column (third) says who owns each row; `hyg-05` rows name
+ * things hyg-05 has since DELETED, so they are returned separately — they must
+ * appear in the COMMITTED evidence but can never appear in a fresh report.
  */
-function deadProvenEntries(): string[] {
+function deadProvenEntries(): { kept: string[]; deleted: string[] } {
   const doc = readFileSync(path.resolve(__dirname, "..", "docs", "design", "hygiene.md"), "utf8");
   const start = doc.indexOf("DEAD-PROVEN");
   expect(start, "the DEAD-PROVEN table").toBeGreaterThan(-1);
-  const out: string[] = [];
+  const out: { kept: string[]; deleted: string[] } = { kept: [], deleted: [] };
   for (const line of doc.slice(start).split("\n")) {
     if (!line.startsWith("|")) {
-      if (out.length > 0) break; // the table has ended
+      if (out.kept.length + out.deleted.length > 0) break; // the table has ended
       continue;
     }
-    const column = line.split("|")[1] ?? "";
-    for (const m of column.matchAll(/`([^`]+)`/g)) {
+    const columns = line.split("|");
+    const disposition = (columns[3] ?? "").trim();
+    const bucket = disposition.includes("hyg-05") ? out.deleted : out.kept;
+    for (const m of (columns[1] ?? "").matchAll(/`([^`]+)`/g)) {
       const token = m[1].trim();
       const braces = token.match(/^(.*)\{([^}]*)\}(.*)$/);
-      if (braces) out.push(...braces[2].split(",").map((p) => braces[1] + p.trim() + braces[3]));
-      else out.push(token);
+      if (braces) bucket.push(...braces[2].split(",").map((p) => braces[1] + p.trim() + braces[3]));
+      else bucket.push(token);
     }
     // "`src/lib/utils.ts` → `formatDate`, `timeAgo`, `formatDateTime`" also
     // yields the three symbols, which the loop above already collected.
@@ -710,13 +715,16 @@ describe("the real tree — the findings the hygiene audit recorded", () => {
   const find = (p: string) => must(report.files.find((f) => f.path === p), p);
   const dep = (n: string) => must(report.dependencies.find((d) => d.name === n), n);
 
-  it("still reports the three orphaned legacy components as having no code reference", () => {
+  it("no longer reports the three legacy components hyg-05 deleted — and the four live ones keep their references", () => {
+    // hyg-05 removed Button/Card/Field with committed evidence; a report that
+    // still lists them would mean the deletion never landed on this tree.
     for (const p of [
       "src/components/legacy/Button.tsx",
       "src/components/legacy/Card.tsx",
       "src/components/legacy/Field.tsx",
     ]) {
-      expect(find(p).codeReferenceCount, p).toBe(0);
+      expect(report.files.find((f) => f.path === p), p).toBeUndefined();
+      expect(report.exports.find((e) => e.file === p), p).toBeUndefined();
     }
     // …while the live ones in the same directory are not touched.
     for (const p of [
@@ -729,14 +737,14 @@ describe("the real tree — the findings the hygiene audit recorded", () => {
     }
   });
 
-  it("still reports the three dead exports of src/lib/utils.ts, and none of the live ones", () => {
+  it("no longer reports the three dead exports of src/lib/utils.ts — and none of the live ones", () => {
     const utils = (name: string) =>
-      must(report.exports.find((e) => e.file === "src/lib/utils.ts" && e.name === name), `utils.ts ${name}`);
+      report.exports.find((e) => e.file === "src/lib/utils.ts" && e.name === name);
     for (const name of ["formatDate", "formatDateTime", "timeAgo"]) {
-      expect(utils(name).status, name).toBe("unreferenced");
+      expect(utils(name), `utils.ts ${name}`).toBeUndefined();
     }
     for (const name of ["cn", "jsonSafe", "initials"]) {
-      expect(utils(name).status, name).toBe("referenced");
+      expect(must(utils(name), `utils.ts ${name}`).status, name).toBe("referenced");
     }
   });
 
@@ -746,8 +754,12 @@ describe("the real tree — the findings the hygiene audit recorded", () => {
     }
   });
 
-  it("still reports gifenc unused, sharp undeclared, and ffmpeg-static absent from the lockfile", () => {
-    expect(dep("gifenc").status).toBe("unreferenced");
+  it("still reports sharp undeclared and ffmpeg-static absent; gifenc's finding flipped when hyg-05 removed it", () => {
+    // hyg-05 removed the real devDependency, so the name survives only inside
+    // the scanner's own unit fixture as TEST DATA — a claimed-absent package,
+    // the same shape as the media rig's comment claim below.
+    expect(dep("gifenc")).toMatchObject({ status: "claimed-absent", declaredIn: null });
+    expect(dep("gifenc").usedBy[0].file).toContain("virtual-repo");
     expect(dep("sharp")).toMatchObject({ status: "undeclared", declaredIn: null });
     // The design doc says the media rig "uses" that package. It does not: the
     // name appears only in a comment claiming the tree carries it, and the
@@ -792,10 +804,27 @@ describe("the real tree — the findings the hygiene audit recorded", () => {
       // The list is READ from the design document rather than copied here: a
       // path written literally in this file would be a path mention in the
       // scan set, and the test would change the verdict it is checking.
-      const entries = deadProvenEntries();
-      expect(entries.length).toBeGreaterThanOrEqual(12);
-      for (const entry of entries) {
+      const { kept, deleted } = deadProvenEntries();
+      expect(deleted.length).toBeGreaterThanOrEqual(8); // hyg-05's removals, still named by the table
+      expect(kept.length).toBeGreaterThanOrEqual(5); // the shadcn keep row (§14 q31)
+      for (const entry of kept) {
         expect(md, entry).toContain(entry);
+      }
+      // The hyg-05-disposed rows are the DELETED things. The COMMITTED
+      // pre-deletion evidence names every one of them (that is §13.1: the
+      // proof exists before anything is removed)…
+      const committed = readFileSync(
+        path.resolve(__dirname, "..", "docs", "hygiene", "hyg-05-evidence.md"),
+        "utf8",
+      );
+      for (const entry of deleted) {
+        expect(committed, entry).toContain(entry);
+      }
+      // …while a FRESH report can no longer list the three deleted FILES.
+      // (The dead symbols are covered by their own test above; the package
+      // name survives as a claimed-absent finding — the fixture's test data.)
+      for (const entry of deleted.filter((t) => t.startsWith("src/components/legacy/"))) {
+        expect(md, entry).not.toContain(entry);
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
