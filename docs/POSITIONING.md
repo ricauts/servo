@@ -412,15 +412,15 @@ paths-exempt:
   # (docs/hygiene rode here too until hyg-audit-01 wrote its first audit
   # file there — the directory reference resolves now, so it left this list
   # the way every delivered target does.)
-  # (scripts/media rode here until hyg-09 archived the rig — the
-  # directory resolves now, so it left the way every delivered target does.)
+  # (tests/dockerignore.test.ts rode here until hyg-07 wrote it — the
+  # target resolves now, so it left the way every delivered target does.)
   - target:
-      - tests/dockerignore.test.ts
+      - scripts/media
     paths:
       - docs/design/hygiene.md
-    until: hyg-07
-    reason: the hygiene design document names the dockerignore test
-      (hyg-07).
+    until: hyg-09
+    reason: the hygiene design document names the archived media rig
+      (hyg-09).
   - target:
       - scripts/encrypt-secrets.cjs
       - scripts/reset-sso.cjs
@@ -447,8 +447,7 @@ paths-exempt:
     reason: historical references, permanent - hyg-09 gave scripts/ its
       shape (ops/ dev/ media/) and the frozen evidence snapshots still name
       the pre-move root paths. Evidence does not get edited to match later
-      reality; history does not un-happen.
-  # loop-07 delivered docs/integrations/ (the one mining procedure), so
+      reality; history does not un-happen.  # loop-07 delivered docs/integrations/ (the one mining procedure), so
   # that target left this list.
   # (docs/KB-DOCLING.md rode here until dcl-06 wrote the sidecar operator
   # guide — the target resolves now, so it left the way every delivered
