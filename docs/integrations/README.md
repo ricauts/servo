@@ -91,6 +91,17 @@ Verbatim, because each one closes a hole the spec's history named:
 - **Gated tools stay unreachable over MCP** — the MCP surface never serves
   a tool whose policy requires approval.
 
+## Intakes on file
+
+One row per completed mining tick, so the rotation position can be read off
+this file rather than reconstructed from the changelog. Each row names its
+intake document by its repo-relative path, which is also what makes the
+document a referenced file.
+
+| Intake | Source (rotation position) | Stage 0 verdict |
+|---|---|---|
+| [docs/integrations/mcp-builder.md](mcp-builder.md) | `anthropics/skills` (1 of 4) | Apache-2.0 by licence — taken as IDEAS ONLY, nothing vendored |
+
 ## Adopt-first is step 0 of EVERY tick
 
 Not only mining ticks. Before building any component, the loop records in
