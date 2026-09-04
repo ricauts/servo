@@ -240,7 +240,8 @@ describe("the rules that are greps and tree facts", () => {
   });
 
   it("LANE 1: the shipped registry carries NO docling extractor — nothing runs unconfigured", () => {
-    expect(BASELINE_EXTRACTORS.map((e) => e.id)).toEqual(["baseline-xlsx", "baseline-pdf", "baseline-text"]);
+    // baseline-docx joined the registry with kb-lib-4; still no docling lane here.
+    expect(BASELINE_EXTRACTORS.map((e) => e.id)).toEqual(["baseline-xlsx", "baseline-pdf", "baseline-docx", "baseline-text"]);
   });
 
   it("the record script REFUSES to run in CI", () => {
