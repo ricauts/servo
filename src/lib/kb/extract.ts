@@ -138,8 +138,15 @@ export function detectXxe(xmlBytes: Buffer): boolean {
  * document (kb-05's UNSUPPORTED fixture depends on that).
  */
 export function sniffRoute(bytes: Buffer, declaredType: string): string {
-  if (looksLikeZip(bytes) && bytes.toString("latin1").includes("[Content_Types].xml")) {
-    return "xlsx";
+  if (looksLikeZip(bytes)) {
+    const members = bytes.toString("latin1");
+    // Office Open XML containers all carry [Content_Types].xml; the part
+    // that tells a Word document from a workbook is its main member name.
+    // docx is checked FIRST (kb-lib-4): before it, every OOXML zip routed to
+    // the workbook path and a .docx died as "The workbook contains no data
+    // rows" — a true sentence about the wrong question.
+    if (members.includes("word/document.xml")) return "docx";
+    if (members.includes("[Content_Types].xml")) return "xlsx";
   }
   if (bytes.length > 4 && bytes.subarray(0, 5).toString("latin1") === "%PDF-") {
     return "pdf";

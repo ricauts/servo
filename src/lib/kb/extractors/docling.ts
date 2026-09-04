@@ -231,6 +231,7 @@ async function fallback(
 function declaredEquivalent(sniffedType: string): string {
   if (sniffedType === "pdf") return "application/pdf";
   if (sniffedType === "xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (sniffedType === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   if (sniffedType === "text") return "text/plain";
   return sniffedType;
 }

@@ -23,10 +23,32 @@ const UNPDF_VERSION = "1.8.1";
  *  worker's declared-type branches (the legacy-.xls refusal among them)
  *  still answer exactly as before. */
 function routeFor(sniffedType: string, declaredType: string): string {
-  return sniffedType === "xlsx" || sniffedType === "pdf" || sniffedType === "text"
+  return sniffedType === "xlsx" || sniffedType === "pdf" || sniffedType === "text" || sniffedType === "docx"
     ? sniffedType
     : declaredType;
 }
+
+const JSZIP_VERSION = "3.10.1";
+
+/** Word documents (kb-lib-4): the worker renders WordprocessingML to
+ *  markdown-shaped text (headings, bullets, table rows), and the line
+ *  chunker cites it by {lines} exactly as it cites a markdown upload. */
+export const docxExtractor: Extractor = {
+  id: "baseline-docx",
+  version: `jszip@${JSZIP_VERSION};kb-lib-4@1`,
+  supports: (sniffedType) => sniffedType === "docx" || /wordprocessingml/.test(sniffedType),
+  extract: async (input: ExtractInput): Promise<ExtractOutcome> => {
+    const raw = await runExtractionJob(input.bytes, routeFor(input.sniffedType, input.declaredType), { signal: input.signal });
+    if (!raw.ok) return { status: raw.status, error: raw.error, ...(raw.breach ? { breach: raw.breach } : {}) };
+    const text = raw.kind === "text" ? raw.text : "";
+    const chunks = chunkMarkdown(text);
+    return {
+      status: "EXTRACTED",
+      text,
+      chunks: chunks.map((c) => ({ text: c.text, locator: c.locator as Record<string, unknown> })),
+    };
+  },
+};
 
 /** xlsx: the Office Open XML family plus the legacy-.xls declared types —
  *  the same set the worker dispatches on, so the worker's specific
@@ -109,5 +131,6 @@ export function locatorContractOk(
 export const BASELINE_EXTRACTORS: readonly Extractor[] = [
   xlsxExtractor,
   pdfExtractor,
+  docxExtractor,
   textExtractor,
 ];

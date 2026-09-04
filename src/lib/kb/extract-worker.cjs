@@ -103,6 +103,7 @@ async function extract(bytes, contentType) {
   if (ct === "pdf" || ct === "application/pdf") {
     return extractPdf(bytes);
   }
+  if (ct === "docx" || ct.indexOf("wordprocessingml") !== -1) return extractDocx(bytes);
   if (isXlsxFamily(ct)) return extractSpreadsheet(bytes);
   if (ct.indexOf("ms-excel") !== -1 || ct.indexOf("excel") !== -1 || ct.indexOf("sheet") !== -1) {
     // exceljs reads the Office Open XML format only: the legacy binary BIFF
@@ -115,6 +116,98 @@ async function extract(bytes, contentType) {
     };
   }
   return { text: "", status: "UNSUPPORTED", error: "No extractor for " + contentType + " yet." };
+}
+
+/**
+ * Word (.docx) → text (kb-lib-4). The document is word/document.xml inside
+ * the OOXML zip; the parent has already refused XXE and oversized
+ * containers before this fork existed. No XML library: the WordprocessingML
+ * subset that carries prose is small and regular, and a regex walk over
+ * paragraphs is deterministic and cheap. What survives:
+ *   - each <w:p> becomes one line; runs' <w:t> text is joined, <w:tab/> is a
+ *     tab, <w:br/> a newline inside the paragraph;
+ *   - a paragraph styled Heading1..6 / Title becomes a markdown heading, so
+ *     the line chunker and the keyword pass see the structure;
+ *   - list paragraphs (<w:numPr>) get a "- " bullet;
+ *   - tables become markdown-ish rows, one line per <w:tr>, cells joined
+ *     with " | " — the same shape the xlsx chunker renders, so facts and
+ *     keywords read them the same way.
+ * Headers, footers, footnotes and comments are NOT extracted: they repeat
+ * on every page (the PDF lane has the same boilerplate problem) and a
+ * comment is a conversation about the document, not the document.
+ */
+async function extractDocx(bytes) {
+  const JSZip = require("jszip");
+  const zip = await JSZip.loadAsync(bytes);
+  const entry = zip.file("word/document.xml");
+  if (!entry) {
+    return { text: "", status: "UNSUPPORTED", error: "Not a Word document: word/document.xml is missing." };
+  }
+  const xml = await entry.async("string");
+  const lines = [];
+  // Tables first: replace each <w:tbl> with its rendered rows so the
+  // paragraph walk below never sees a cell paragraph twice.
+  const withoutTables = xml.replace(/<w:tbl\b[\s\S]*?<\/w:tbl>/g, (tbl) => {
+    const rows = [];
+    for (const tr of tbl.match(/<w:tr\b[\s\S]*?<\/w:tr>/g) || []) {
+      const cells = [];
+      for (const tc of tr.match(/<w:tc\b[\s\S]*?<\/w:tc>/g) || []) {
+        const paras = [];
+        for (const p of tc.match(/<w:p\b[\s\S]*?<\/w:p>|<w:p\b[^>]*\/>/g) || []) paras.push(paragraphText(p));
+        cells.push(paras.filter(Boolean).join(" ").trim());
+      }
+      if (cells.some((c) => c)) rows.push("| " + cells.join(" | ") + " |");
+    }
+    // A marker paragraph carries the rendered table through the walk.
+    return rows.length ? '<w:p><w:t xml:space="preserve">' + escapeXml(rows.join("\n")) + "</w:t></w:p>" : "";
+  });
+  for (const p of withoutTables.match(/<w:p\b[\s\S]*?<\/w:p>|<w:p\b[^>]*\/>/g) || []) {
+    const text = paragraphText(p);
+    const style = (p.match(/<w:pStyle\b[^>]*w:val="([^"]+)"/) || [])[1] || "";
+    const heading = style.match(/^(?:Heading|Titre|T[ií]tulo|berschrift)?\s*([1-6])$/i) || style.match(/^Heading([1-6])$/i);
+    if (!text.trim()) {
+      if (lines.length && lines[lines.length - 1] !== "") lines.push("");
+      continue;
+    }
+    if (/^Title$/i.test(style)) lines.push("# " + text.trim());
+    else if (heading) lines.push("#".repeat(Number(heading[1])) + " " + text.trim());
+    else if (/<w:numPr\b/.test(p)) lines.push("- " + text.trim());
+    else lines.push(text);
+  }
+  const text = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (!text) {
+    return { text: "", status: "UNSUPPORTED", error: "The document has no extractable text (images or empty pages only)." };
+  }
+  return { kind: "text", text, status: "EXTRACTED" };
+}
+
+/** The text of one <w:p>: every <w:t> in run order, tabs and breaks kept. */
+function paragraphText(p) {
+  let out = "";
+  const re = /<w:t\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:t>)|<w:tab\b[^>]*\/>|<w:br\b[^>]*\/>|<w:cr\b[^>]*\/>/g;
+  let m;
+  while ((m = re.exec(p)) !== null) {
+    // "<w:tab" also starts with "<w:t" — test the specific tags first.
+    if (m[0].startsWith("<w:tab")) out += "\t";
+    else if (m[0].startsWith("<w:br") || m[0].startsWith("<w:cr")) out += "\n";
+    else out += decodeXml(m[1] || "");
+  }
+  return out;
+}
+
+function decodeXml(s) {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function escapeXml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** The xlsx family: the Office Open XML workbook types (extension .xlsx /

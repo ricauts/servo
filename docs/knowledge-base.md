@@ -60,6 +60,15 @@ embeddings endpoint; when one is configured, chunks are vectorized and
 search blends keyword and vector scores. The endpoint's host follows the
 same egress allowlist rules as every other outbound destination.
 
+## Formats
+
+Uploads are routed on their bytes, never on the declared type: PDF (text
+layer; scanned pages need the Docling sidecar with OCR), Excel workbooks
+(.xlsx), **Word documents (.docx)** — headings, lists and tables rendered as
+markdown-shaped text and cited by line — plus Markdown and plain text.
+Legacy binary Office formats (.doc, .xls) and everything else are stored and
+shareable but not indexed; the document page says which.
+
 ## The library view — keywords, shelves, visibility
 
 Every indexed document carries a **keyword profile**: the terms that top the
