@@ -41,10 +41,16 @@ export interface IntegrationSection {
 
 export default function IntegrationsShell({
   sections,
+  initialId,
 }: {
   sections: IntegrationSection[];
+  /** kb-lib-5: `/integrations?section=<id>` opens that section — the Packs
+   *  catalog links straight to the form it describes. */
+  initialId?: string;
 }) {
-  const [activeId, setActiveId] = useState(sections[0]?.id);
+  const [activeId, setActiveId] = useState(
+    initialId && sections.some((s) => s.id === initialId) ? initialId : sections[0]?.id,
+  );
   const active = sections.find((s) => s.id === activeId) ?? sections[0];
 
   return (

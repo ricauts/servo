@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   Plug,
   ServerCog,
+  Blocks,
   Plus,
   Settings2,
   ShieldCheck,
@@ -34,6 +35,7 @@ export const NAV_ICONS = {
   knowledge: Database,
   integrations: Plug,
   sources: ServerCog,
+  packs: Blocks,
   settings: Settings2,
 } satisfies Record<string, LucideIcon>;
 

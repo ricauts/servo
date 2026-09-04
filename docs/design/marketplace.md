@@ -7,7 +7,7 @@
 
 It is also the one place the word is allowed. Per Ruling 7 the string `marketplace` (case-insensitive) may appear only in this Roadmap section of `spec.md` and in the single Roadmap row of `docs/POSITIONING.md`'s ledger. `reb-07`'s claims lint (`scripts/claims-audit.mjs`) treats §7 as a Roadmap section and everything else in the tree as banned. There is no `/marketplace` page, no nav entry, no `docs/marketplace.md`, no README section, no `marketplace.*` permission actions and no `MarketplaceSource` model. The reason is the standing constraint, not a preference: a hosted cloud offering is planned and does not exist, and this is the single word most likely to make a reader believe otherwise.
 
-**When the surface eventually ships, it ships as "Packs" at `/packs`, with `packs.view` / `packs.manage`.** "Marketplace" is never a product-surface name in this repo — it implies a hosted registry, and no hosted anything exists.
+**When the surface eventually ships, it ships as "Packs" at `/packs`, with `packs.view` / `packs.manage`.** (Shipped 2026-09-04 as kb-lib-5 in exactly that shape: a catalog curated in the repo — `src/lib/packs/catalog.ts` — merged with the install's state, and the local bundles `syncPlugins()` registered, promoted item by item through the owning routes. Remote install, pinning and updates below remain Roadmap.) "Marketplace" is never a product-surface name in this repo — it implies a hosted registry, and no hosted anything exists.
 
 The design is fixed now so a future tick does not redesign it:
 

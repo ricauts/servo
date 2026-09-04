@@ -63,8 +63,9 @@ a permissive code licence says nothing about what ships beside it.
 
 - **Upstream:** <https://github.com/Stuk/jszip>
 - **Licence:** dual "MIT OR GPL-3.0-or-later"; used under **MIT**, verified
-  from the `LICENSE.markdown` shipped in the installed package
-  (`node_modules/jszip/LICENSE.markdown`) on 2026-09-04.
+  from the LICENSE.markdown file shipped in the installed package (identical
+  to <https://github.com/Stuk/jszip/blob/main/LICENSE.markdown>) on
+  2026-09-04.
 - **Copyright:** `Copyright (c) 2009-2016 Stuart Knightley, David Duponchel, Franz Buchinger, António Afonso`
 - **What we use:** an ordinary npm dependency (3.10.1), not vendored code. It
   was already in the tree as exceljs's zip layer; kb-lib-4 declares it

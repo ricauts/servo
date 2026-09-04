@@ -38,8 +38,14 @@ export const dynamic = "force-dynamic";
  * Integrations get their own surface: this list grows with every release
  * (SSO, email in/out, GitHub, Azure, webhooks…) and would drown Settings.
  */
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ section?: string | string[] }>;
+}) {
   const user = await getCurrentUser();
+  const params = (await searchParams) ?? {};
+  const initialSection = typeof params.section === "string" ? params.section : undefined;
   if (user.role !== "ADMIN") {
     return (
       <>
@@ -243,7 +249,7 @@ export default async function IntegrationsPage() {
         title="Integrations"
         description="Connect Servo to your identity provider, mail, code and cloud — every credential stays server-side and is never returned by the API."
       />
-      <IntegrationsShell sections={sections} />
+      <IntegrationsShell sections={sections} initialId={initialSection} />
     </>
   );
 }

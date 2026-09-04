@@ -27,7 +27,12 @@ export type Action =
   // creating or editing one is an admin act, because a source's scope is the
   // whole security model of the connection.
   | "kb.sources.view"
-  | "kb.sources.manage";
+  | "kb.sources.manage"
+  // Packs (kb-lib-5): the curated catalog of connectors and local plugin
+  // bundles. Browsing is a staff read; promoting pack content is an admin
+  // act (docs/design/marketplace.md fixes the names and the trust model).
+  | "packs.view"
+  | "packs.manage";
 
 const MATRIX: Record<Action, Role[]> = {
   "ticket.create": ["ADMIN", "AGENT", "REQUESTER"],
@@ -55,6 +60,8 @@ const MATRIX: Record<Action, Role[]> = {
   // Additive exactly as rbac-01's rows are: never REQUESTER, never AI_AGENT.
   "kb.sources.view": ["ADMIN", "AGENT"],
   "kb.sources.manage": ["ADMIN"],
+  "packs.view": ["ADMIN", "AGENT"],
+  "packs.manage": ["ADMIN"],
 };
 
 export function can(user: Pick<User, "role">, action: Action): boolean {

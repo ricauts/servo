@@ -38,6 +38,9 @@ export const NAV_ENTRIES: NavEntry[] = [
   { href: "/kb", label: "Knowledge", icon: "knowledge", section: "fleet", action: "kb.view" },
   // External data sources (xds-09): admins manage, kb.view roles browse.
   { href: "/kb/sources", label: "Sources", icon: "sources", section: "fleet", action: "kb.sources.manage" },
+  // Packs (kb-lib-5): the curated catalog — connectors, extraction lanes,
+  // tool servers and local plugin bundles — with what is configured today.
+  { href: "/packs", label: "Packs", icon: "packs", section: "fleet", action: "packs.view" },
   { href: "/integrations", label: "Integrations", icon: "integrations", section: "admin", adminOnly: true },
   { href: "/settings", label: "Settings", icon: "settings", section: "admin", adminOnly: true },
 ];
