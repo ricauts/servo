@@ -5,15 +5,42 @@
 // capitalized multi-word names, column headers); keywords are the top-N
 // frequent non-stopword terms.
 
-/** Small English stopword list — enough to keep furniture out of the top-N. */
+/** Small English + Spanish stopword list — enough to keep furniture out of
+ *  the top-N in either language. Both lists ride in one set: the pass never
+ *  detects a language, so a bilingual manual is handled the same as either
+ *  monolingual one. */
 const STOPWORDS = new Set([
+  // English
   "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "at",
   "by", "from", "is", "are", "was", "were", "be", "been", "it", "its", "this",
   "that", "these", "those", "as", "if", "then", "than", "so", "we", "you",
   "they", "he", "she", "our", "their", "your", "not", "no", "yes", "all",
   "any", "can", "will", "may", "must", "should", "would", "could", "into",
   "per", "via", "due", "up", "down", "out", "over", "under", "new", "each",
+  // Spanish (kb-lib-1)
+  "de", "del", "la", "las", "el", "los", "un", "una", "unos", "unas", "y", "o",
+  "u", "e", "que", "qué", "con", "sin", "por", "para", "como", "cómo", "más",
+  "mas", "pero", "sino", "también", "muy", "ya", "aún", "aun", "ser", "es",
+  "son", "era", "eran", "fue", "fueron", "está", "están", "estar", "hay",
+  "ha", "han", "he", "has", "hemos", "se", "su", "sus", "lo", "le", "les",
+  "al", "ante", "bajo", "cada", "desde", "donde", "dónde", "entre", "hacia",
+  "hasta", "mediante", "según", "sobre", "tras", "este", "esta", "estos",
+  "estas", "ese", "esa", "esos", "esas", "esto", "eso", "aquel", "aquella",
+  "aquellos", "aquellas", "mi", "mis", "tu", "tus", "nos", "nosotros", "ellos",
+  "vosotros", "ella", "él",
+  "ellas", "usted", "ustedes", "todo", "toda", "todos", "todas", "otro", "otra",
+  "otros", "otras", "mismo", "misma", "mismos", "mismas", "puede", "pueden",
+  "debe", "deben", "debería", "deberían", "cuando", "cuándo", "porque", "así",
+  "solo", "sólo", "si", "sí", "no", "ni", "cual", "cuál", "cuales", "cuáles",
+  "cualquier", "cualquiera", "sea", "sean", "tiene", "tienen", "tener",
+  "hacer", "hace", "hacen", "ver", "dos", "tres", "primer", "primera",
+  "segundo", "segunda", "durante", "además", "luego", "entonces",
 ]);
+
+/** The keyword tokenizer: a letter followed by at least two letters, digits
+ *  or hyphens, in any script. Unicode-aware on purpose — the pre-kb-lib-1
+ *  `[a-z]` class split "planeación" at the accent and kept "planeaci". */
+const TOKEN = /\p{L}[\p{L}\p{N}-]{2,}/gu;
 
 export interface KeywordPass {
   keywords: string[];
@@ -63,14 +90,51 @@ export function keywordPass(text: string, topN = 8, opts: { prefixEnd?: number }
     typeof opts.prefixEnd === "number" && opts.prefixEnd > 0 && opts.prefixEnd < normalized.length
       ? normalized.slice(opts.prefixEnd)
       : normalized;
-  for (const token of keywordRegion.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []) {
+  for (const token of keywordRegion.toLowerCase().match(TOKEN) ?? []) {
     if (STOPWORDS.has(token)) continue;
     counts.set(token, (counts.get(token) ?? 0) + 1);
   }
-  const keywords = [...counts.entries()]
+  const keywords = rankTerms(counts, topN);
+
+  return { keywords, entities };
+}
+
+/** Top-N terms by count, ties broken by term — fully deterministic. */
+function rankTerms(counts: Map<string, number>, topN: number): string[] {
+  return [...counts.entries()]
     .sort((a, b) => (b[1] - a[1] !== 0 ? b[1] - a[1] : a[0].localeCompare(b[0])))
     .slice(0, topN)
     .map(([term]) => term);
+}
 
-  return { keywords, entities };
+/**
+ * The document-level profile (kb-lib-1): the keywords and entities that
+ * describe a WHOLE document, derived from its chunks. A term is scored by
+ * how many chunks it appears in, not how often it appears overall — a word
+ * repeated fifty times on one page is a local matter; a word present on
+ * most pages is what the document is about. Repeated boilerplate (a header
+ * on every page) still wins by this rule; the deterministic pass has no
+ * way to tell a running header from a theme, and the graph has the same
+ * blind spot. Same determinism contract as keywordPass: no clock, no model.
+ */
+export function documentProfile(
+  chunkTexts: readonly string[],
+  opts: { topKeywords?: number; topEntities?: number } = {},
+): KeywordPass {
+  const topKeywords = opts.topKeywords ?? 12;
+  const topEntities = opts.topEntities ?? 10;
+  const keywordDocFreq = new Map<string, number>();
+  const entityDocFreq = new Map<string, number>();
+  for (const text of chunkTexts) {
+    // Per-chunk keywords are the top-8 already ranked by keywordPass; the
+    // profile counts chunks in which a term reached that top-8, so a term
+    // must matter locally before it can matter globally.
+    const pass = keywordPass(text);
+    for (const k of new Set(pass.keywords)) keywordDocFreq.set(k, (keywordDocFreq.get(k) ?? 0) + 1);
+    for (const e of new Set(pass.entities)) entityDocFreq.set(e, (entityDocFreq.get(e) ?? 0) + 1);
+  }
+  return {
+    keywords: rankTerms(keywordDocFreq, topKeywords),
+    entities: rankTerms(entityDocFreq, topEntities),
+  };
 }

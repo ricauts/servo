@@ -33,7 +33,8 @@ describe("hyg-09 — scripts/ has a shape", () => {
 
   it("ops/, dev/ and media/ hold exactly the named files — nothing else moved, nothing deleted", () => {
     expect(readdirSync(path.join(REPO, "scripts", "ops")).sort()).toEqual([
-      "encrypt-secrets.cjs", "imap-relay.mjs", "reset-sso.cjs", "run-relay.ts",
+      // kb-backfill-keywords.ts arrived with kb-lib-1 (the library view), after the move.
+      "encrypt-secrets.cjs", "imap-relay.mjs", "kb-backfill-keywords.ts", "reset-sso.cjs", "run-relay.ts",
     ]);
     expect(readdirSync(path.join(REPO, "scripts", "dev")).sort()).toEqual([
       "color-audit.mjs", "mock-idp.mjs", "permissions-audit.mjs", "responsive-audit.mjs",

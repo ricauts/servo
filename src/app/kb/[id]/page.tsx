@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, Lock } from "lucide-react";
+import { ArrowLeft, Download, FolderOpen, Lock } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import { relatedDocuments } from "@/lib/kb/graph";
-import { statusCopy } from "@/components/kb/KbDocumentList";
+import { statusCopy } from "@/lib/kb/library";
 import KbSharePanel from "@/components/kb/KbSharePanel";
 import KbReextractButton from "@/components/kb/KbReextractButton";
 import KbFactChips from "@/components/kb/KbFactChips";
@@ -48,6 +48,8 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       visibility: true,
       updatedAt: true,
       ownerId: true,
+      keywords: true,
+      collection: { select: { name: true } },
       extractor: true,
       extractorVersion: true,
       extractorFallback: true,
@@ -66,6 +68,9 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
     db.kbGrant.count({ where: { subjectType: "AGENT" } }),
   ]);
   const status = statusCopy(doc);
+  const keywords = Array.isArray(doc.keywords)
+    ? doc.keywords.filter((k): k is string => typeof k === "string")
+    : [];
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
@@ -93,6 +98,27 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       </div>
       {status.hint && <p className="mt-1.5 text-xs text-muted-foreground">{status.hint}</p>}
       {doc.summary && <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{doc.summary}</p>}
+
+      {/* kb-lib-1: the document-level keyword profile and its shelf. Chips
+          link back to the library pre-filtered on that keyword. */}
+      {(keywords.length > 0 || doc.collection) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1" aria-label="Keywords">
+          {doc.collection && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-px font-mono text-[10.5px] leading-4 text-muted-foreground">
+              <FolderOpen size={11} /> {doc.collection.name}
+            </span>
+          )}
+          {keywords.map((k) => (
+            <Link
+              key={k}
+              href={`/kb?q=${encodeURIComponent(k)}`}
+              className="rounded-full border border-border px-1.5 py-px font-mono text-[10.5px] leading-4 text-muted-foreground transition-colors hover:bg-accent"
+            >
+              {k}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* dcl-09: extractor provenance — NEVER a silent baseline. */}
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-sans text-xs">

@@ -59,3 +59,21 @@ shipped default. An operator may configure an OpenAI-compatible
 embeddings endpoint; when one is configured, chunks are vectorized and
 search blends keyword and vector scores. The endpoint's host follows the
 same egress allowlist rules as every other outbound destination.
+
+## The library view — keywords, shelves, visibility
+
+Every indexed document carries a **keyword profile**: the terms that top the
+deterministic keyword pass in the most chunks (a running header on every
+page wins by this rule, a word repeated fifty times on one page does not).
+The pass is English- and Spanish-aware and keeps accented words whole; it
+never calls a model, so a profile is reproducible and nothing leaves the
+container to compute it.
+
+The Knowledge list renders the profile as chips and filters on three axes
+at once: **text** (name or keyword), **visibility** (private / staff /
+public) and **collection**, with an *Uncategorized* shelf for documents no
+one has filed. Chips on a document page link back to the list pre-filtered
+on that keyword. Documents indexed before this view existed get their
+profile from `npx tsx scripts/ops/kb-backfill-keywords.ts` (`--force`
+recomputes every document after a stopword or tokenizer change); the
+Re-extract button recomputes one.

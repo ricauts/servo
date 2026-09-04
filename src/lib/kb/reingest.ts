@@ -18,7 +18,7 @@ import { db } from "@/lib/db";
 import { extractDocument } from "@/lib/kb/extractors/run";
 import { getKbExtractBudgetMs, getDoclingConfig } from "@/lib/kb/settings";
 import { chunkMarkdown, type Chunked } from "@/lib/kb/chunk";
-import { keywordPass } from "@/lib/kb/keywords";
+import { documentProfile, keywordPass } from "@/lib/kb/keywords";
 import { persistFactsForDocument } from "@/lib/kb/facts/persist";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
 import { backfillEmbeddings } from "@/lib/kb/backfill";
@@ -92,6 +92,7 @@ export async function reextractDocument(documentId: string): Promise<ReextractRe
         textStatus: "EXTRACTED",
         textError: null,
         summary: (chunked[0]?.text ?? "").slice(0, 300),
+        keywords: documentProfile(chunked.map((c) => c.text)).keywords, // kb-lib-1
         extractor: ran.extractorId || "baseline",
         extractorVersion: ran.extractorVersion,
         // A successful NON-FALLBACK run clears the queue entry; a fallback

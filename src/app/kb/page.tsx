@@ -17,8 +17,15 @@ export const dynamic = "force-dynamic";
  *  through the same entitlement resolver retrieval uses. Requesters meet
  *  the KB only as cited answers — the nav entry is absent for them and the
  *  route denies (kb.view). */
-export default async function KnowledgePage() {
+export default async function KnowledgePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ q?: string | string[] }>;
+}) {
   const user = await getCurrentUser();
+  // kb-lib-1: a keyword chip on a document page lands here pre-filtered.
+  const params = (await searchParams) ?? {};
+  const initialText = typeof params.q === "string" ? params.q.slice(0, 80) : "";
   if (!can(user, "kb.view")) {
     // The route-level EmptyState (the nav entry is already absent for this
     // role); the API routes answer 403 — asserted in kb-ui-permissions.
@@ -37,7 +44,7 @@ export default async function KnowledgePage() {
   }
 
   const ids = await entitledDocumentIds(db, { humanId: user.id, agentId: null });
-  const documents = await db.document.findMany({
+  const rows = await db.document.findMany({
     where: { id: { in: ids } },
     select: {
       id: true,
@@ -49,9 +56,28 @@ export default async function KnowledgePage() {
       summary: true,
       visibility: true,
       updatedAt: true,
+      keywords: true,
+      collectionId: true,
+      collection: { select: { name: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
+  // kb-lib-1: the library rows — keywords as a plain string[] (the column is
+  // Json) and the collection name flattened for the filter chips.
+  const documents = rows.map(({ collection, keywords, ...doc }) => ({
+    ...doc,
+    keywords: Array.isArray(keywords) ? keywords.filter((k): k is string => typeof k === "string") : [],
+    collectionName: collection?.name ?? null,
+  }));
+  // The collection filter lists every collection with at least one readable
+  // document — the same scoping /api/kb/collections applies (kb-17).
+  const filterCollections = Array.from(
+    new Map(
+      documents
+        .filter((d) => d.collectionId && d.collectionName)
+        .map((d) => [d.collectionId as string, { id: d.collectionId as string, name: d.collectionName as string }]),
+    ).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
   const agentGrants = await db.kbGrant.count({ where: { subjectType: "AGENT" } });
 
   // The admin panel (kb-17): collections, embeddings with the query-egress
@@ -105,7 +131,12 @@ export default async function KnowledgePage() {
       {can(user, "kb.upload") && <KbUpload />}
       {/* ext-08: search with the parse shown back as removable chips. */}
       <KbSearch />
-      <KbDocumentList documents={documents} anyAgentGrant={agentGrants > 0} />
+      <KbDocumentList
+        documents={documents}
+        collections={filterCollections}
+        anyAgentGrant={agentGrants > 0}
+        initialText={initialText}
+      />
       {documents.length === 0 && (
         <div className="mt-6">
         <EmptyState

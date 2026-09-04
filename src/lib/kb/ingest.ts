@@ -14,7 +14,7 @@ import { db } from "@/lib/db";
 import { chunkMarkdown } from "@/lib/kb/chunk";
 import { extractDocument } from "@/lib/kb/extractors/run";
 import { getKbExtractBudgetMs, getDoclingConfig } from "@/lib/kb/settings";
-import { keywordPass } from "@/lib/kb/keywords";
+import { documentProfile, keywordPass } from "@/lib/kb/keywords";
 import { persistFactsForDocument } from "@/lib/kb/facts/persist";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
 
@@ -192,6 +192,9 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
         textError: null,
         // Deterministic extract: the first chunk, capped. No provider call.
         summary: (chunks[0]?.text ?? "").slice(0, 300),
+        // kb-lib-1: the document-level keyword profile the library view
+        // renders and filters on — the same deterministic pass, aggregated.
+        keywords: documentProfile(chunks.map((c) => c.text)).keywords,
         // dcl-01 provenance: the exact extractor and its library versions;
         // extractorFallback NULL on every successful non-fallback
         // extraction, so a future "the sidecar was down" queue drains by
