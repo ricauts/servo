@@ -19,7 +19,13 @@ const ticketId = ticketUrl.split("/tickets/")[1];
 const WIDTH = 1200;
 const BAR = 58;
 const GAP = 20;
-const BG = { r: 4, g: 23, b: 15, alpha: 1 };
+// The light frame the README uses (servo_design_system light tokens):
+// page surface, white label bars, graphite ink, servo-blue for the fix.
+const BG = { r: 245, g: 247, b: 251, alpha: 1 };
+const BAR_BG = "#FFFFFF";
+const LINE = "#DDE1EA";
+const INK = "#0D0F14";
+const MUTED = "#5B6577";
 
 const { ticket } = await (await fetch(`${origin}/api/tickets/${ticketId}`)).json();
 const attachments = ticket?.attachments ?? [];
@@ -27,7 +33,7 @@ const before = attachments.find((a) => /before/i.test(a.caption));
 const after = attachments.find((a) => /after/i.test(a.caption));
 if (!before || !after) throw new Error("ticket has no before/after attachments");
 
-async function panel(id, label, colour) {
+async function panel(id, kind, label, colour) {
   const buf = Buffer.from(await (await fetch(`${origin}/api/attachments/${id}`)).arrayBuffer());
   const meta = await sharp(buf).metadata();
   const crop = await sharp(buf)
@@ -41,9 +47,12 @@ async function panel(id, label, colour) {
     .toBuffer();
   const { height } = await sharp(crop).metadata();
   const bar = Buffer.from(
-    `<svg width="${WIDTH}" height="${BAR}">
-       <rect width="100%" height="100%" fill="#072318"/>
-       <text x="24" y="38" font-family="Helvetica,Arial,sans-serif" font-size="26" font-weight="bold" fill="${colour}">${label}</text>
+    `<svg width="${WIDTH}" height="${BAR}" xmlns="http://www.w3.org/2000/svg">
+       <rect width="100%" height="100%" fill="${BAR_BG}"/>
+       <rect y="${BAR - 1}" width="100%" height="1" fill="${LINE}"/>
+       <circle cx="30" cy="29" r="6" fill="${colour}"/>
+       <text x="48" y="36" font-family="Chivo,Helvetica,Arial,sans-serif" font-size="22" font-weight="700" fill="${INK}">${kind}</text>
+       <text x="${kind === "BEFORE" ? 148 : 128}" y="36" font-family="Chivo,Helvetica,Arial,sans-serif" font-size="20" fill="${MUTED}">${label}</text>
      </svg>`,
   );
   return {
@@ -60,8 +69,8 @@ async function panel(id, label, colour) {
   };
 }
 
-const top = await panel(before.id, "BEFORE  ·  label unreadable — 2.4:1 contrast", "#f3a4a4");
-const bottom = await panel(after.id, "AFTER  ·  fixed by the agent — 9.4:1, WCAG AA", "#25d97f");
+const top = await panel(before.id, "BEFORE", "label unreadable — 2.4:1 contrast", "#9E332A");
+const bottom = await panel(after.id, "AFTER", "fixed by the agent — 9.4:1, WCAG AA", "#2F44C9");
 
 const out = await sharp({
   create: {

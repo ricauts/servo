@@ -7,8 +7,17 @@
 import puppeteer from "puppeteer-core";
 import { existsSync } from "node:fs";
 
-const base = process.argv[2] ?? "http://localhost:3000";
-const OUT = "docs/assets";
+// Arguments: [baseUrl] [--theme=light|dark] [--out=<dir>]. The README ships
+// the LIGHT theme (owner ask, 2026-09-04); --theme=dark is kept for the
+// dark variants and for reviewing both.
+const positional = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const flag = (name, fallback) => {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : fallback;
+};
+const base = positional[0] ?? "http://localhost:3000";
+const OUT = flag("out", "docs/assets");
+const THEME = flag("theme", "light") === "dark" ? "dark" : "light";
 
 const CHROME_PATHS = [
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -44,7 +53,9 @@ if (!executablePath) {
 
 const adminCookie = await cookieFor("Ana");
 const agentCookie = await cookieFor("Bruno");
-const detailId = await ticketId(agentCookie, "VPN") ?? (await (await fetch(base + "/api/tickets", { headers: { cookie: agentCookie } })).json()).tickets?.[0]?.id;
+// The detail shot wants a ticket with a run paused for approval — the demo's
+// status-page hotfix (#1005) — so the folded run and the gate are visible.
+const detailId = await ticketId(agentCookie, "status-page hotfix") ?? await ticketId(agentCookie, "VPN") ?? (await (await fetch(base + "/api/tickets", { headers: { cookie: agentCookie } })).json()).tickets?.[0]?.id;
 if (!detailId) throw new Error("no demo ticket found for the detail shot");
 
 const jobs = [
@@ -69,15 +80,16 @@ const browser = await puppeteer.launch({ executablePath, headless: "shell" });
 try {
   for (const job of jobs) {
     const page = await browser.newPage();
-    // The README shows the dark charcoal theme; pin next-themes' persisted
-    // choice before any app script runs so no light flash reaches the shot.
-    await page.evaluateOnNewDocument(() => {
+    // Pin next-themes' persisted choice before any app script runs so no
+    // theme flash reaches the shot (the stored value is the theme NAME —
+    // ThemeProvider maps "light" to the .servo-light class).
+    await page.evaluateOnNewDocument((theme) => {
       try {
-        localStorage.setItem("theme", "dark");
+        localStorage.setItem("theme", theme);
       } catch {
         /* storage unavailable — the app default (light) applies */
       }
-    });
+    }, THEME);
     await page.setViewport({
       width: job.width ?? 1440,
       height: job.height ?? 900,
