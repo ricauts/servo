@@ -55,6 +55,13 @@ const jobs = [
   { url: "/agents", out: `${OUT}/screenshot-agents.png`, cookie: adminCookie },
   { url: "/integrations", out: `${OUT}/screenshot-integrations.png`, cookie: adminCookie },
   { url: "/settings", out: `${OUT}/screenshot-settings.png`, cookie: adminCookie, click: "Tool permissions" },
+  // The library (kb-lib-*): the list with its filters and chips, the graph
+  // with a node selected, Packs, and the fleet pages the README names.
+  { url: "/kb", out: `${OUT}/screenshot-knowledge.png`, cookie: adminCookie, wait: 1800 },
+  { url: "/kb/graph", out: `${OUT}/screenshot-graph.png`, cookie: adminCookie, wait: 2500, clickSelector: "[data-node]" },
+  { url: "/packs", out: `${OUT}/screenshot-packs.png`, cookie: adminCookie },
+  { url: "/skills", out: `${OUT}/screenshot-skills.png`, cookie: adminCookie },
+  { url: "/runs", out: `${OUT}/screenshot-runs.png`, cookie: adminCookie },
   { url: "/tickets", out: `${OUT}/screenshot-mobile.png`, cookie: agentCookie, width: 390, height: 844 },
 ];
 
@@ -92,6 +99,13 @@ try {
       }, job.click);
       const element = handle.asElement();
       if (element) await element.click();
+    }
+    if (job.clickSelector) {
+      await new Promise((r) => setTimeout(r, 1200));
+      const nodes = await page.$$(job.clickSelector);
+      // The first document node: a selected node opens the side panel, which
+      // is the point of the graph shot.
+      if (nodes[0]) await nodes[0].click();
     }
     await new Promise((r) => setTimeout(r, job.wait ?? 1200));
     await page.screenshot({ path: job.out });

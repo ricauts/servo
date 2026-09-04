@@ -59,7 +59,7 @@ export default async function Sidebar() {
             Servo<span className="text-primary">.</span>
           </div>
           <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/50">
-            AI service desk
+            AI desk for the team
           </div>
         </div>
         <ThemeToggle />

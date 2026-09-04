@@ -1,24 +1,38 @@
-<svg width="1200" height="280" viewBox="0 0 1200 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Servo — the open-source AI desk for the whole team">
+  <title>Servo — the open-source AI desk for the whole team</title>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="280" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0B1512"/>
-      <stop offset="1" stop-color="#10231B"/>
+    <!-- Graphite ramp and servo-blue accent from servo_design_system/tokens/colors.css -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D0F14"/>
+      <stop offset="1" stop-color="#171B24"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.75">
-      <stop stop-color="#12B76A" stop-opacity="0.30"/>
-      <stop offset="1" stop-color="#12B76A" stop-opacity="0"/>
+    <radialGradient id="glow" cx="0.5" cy="0.35" r="0.7">
+      <stop stop-color="#4E66E4" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#4E66E4" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="1200" height="280" fill="url(#bg)"/>
-  <rect width="1200" height="280" fill="url(#glow)"/>
+  <rect width="1200" height="300" fill="url(#bg)"/>
+  <rect width="1200" height="300" fill="url(#glow)"/>
 
   <!-- grid texture -->
-  <g stroke="#1C3A2C" stroke-width="1" opacity="0.5">
-    <path d="M0 70h1200M0 140h1200M0 210h1200"/>
-    <path d="M150 0v280M350 0v280M550 0v280M750 0v280M950 0v280"/>
+  <g stroke="#232A35" stroke-width="1" opacity="0.6">
+    <path d="M0 75h1200M0 150h1200M0 225h1200"/>
+    <path d="M150 0v300M350 0v300M550 0v300M750 0v300M950 0v300"/>
   </g>
 
-  <text x="600" y="140" text-anchor="middle" font-family="Lato, 'Segoe UI', Arial, sans-serif" font-size="72" font-weight="900" letter-spacing="-2.5" fill="#F3FBF6">Servo<tspan fill="#12B76A">.</tspan></text>
-  <text x="600" y="185" text-anchor="middle" font-family="Lato, 'Segoe UI', Arial, sans-serif" font-size="17" fill="#9DB8A9">The open-source desk where humans and AI agents work one queue — every resolved ticket can become a skill</text>
-  <text x="600" y="222" text-anchor="middle" font-family="'Roboto Mono', Consolas, monospace" font-size="12.5" letter-spacing="3" fill="#7FA893">TRIAGE · RESOLVE · APPROVE · QA · MEASURE</text>
+  <!-- the loop, as five nodes on a line: what the desk does, in order -->
+  <g font-family="'IBM Plex Mono', 'Roboto Mono', Consolas, monospace" font-size="12.5" letter-spacing="3" fill="#93A8F7">
+    <line x1="330" y1="236" x2="870" y2="236" stroke="#2B3A6B" stroke-width="1.5"/>
+    <g fill="#4E66E4">
+      <circle cx="330" cy="236" r="4"/><circle cx="465" cy="236" r="4"/><circle cx="600" cy="236" r="4"/><circle cx="735" cy="236" r="4"/><circle cx="870" cy="236" r="4"/>
+    </g>
+    <text x="330" y="262" text-anchor="middle">TRIAGE</text>
+    <text x="465" y="262" text-anchor="middle">RESOLVE</text>
+    <text x="600" y="262" text-anchor="middle">APPROVE</text>
+    <text x="735" y="262" text-anchor="middle">LEARN</text>
+    <text x="870" y="262" text-anchor="middle">MEASURE</text>
+  </g>
+
+  <text x="600" y="138" text-anchor="middle" font-family="Chivo, Lato, 'Segoe UI', Arial, sans-serif" font-size="76" font-weight="900" letter-spacing="-2.5" fill="#EEF1F6">Servo<tspan fill="#4E66E4">.</tspan></text>
+  <text x="600" y="184" text-anchor="middle" font-family="Chivo, Lato, 'Segoe UI', Arial, sans-serif" font-size="18" fill="#D3D9E4">The open-source AI desk for the whole team — agents, skills, knowledge and human approvals in one queue</text>
 </svg>

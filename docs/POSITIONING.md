@@ -28,25 +28,19 @@ owner has applied it by hand.
 
 ## The one-liner
 
-> The open-source desk where humans and AI agents work one queue — and every
-> resolved ticket can become a skill your AI runs next time.
+> The open-source AI desk for the whole team — agents, skills, knowledge and
+> human approvals in one queue, where a resolved ticket can become a skill
+> and a document a cited answer.
 
-That is the canonical form. The three surfaces carrying it today carry three
-different strings, and this file does not pretend otherwise:
+That is the canonical form (rewritten 2026-09-04 with the library work: the
+knowledge base, enrichment and Packs made "service desk" too narrow a noun).
+`package.json` carries it with an ASCII hyphen; the README opens with it; the
+banner in `docs/assets/banner.svg` stops after "one queue" to fit the artwork.
 
-- `package.json` has the whole sentence with an ASCII hyphen for the dash, plus
-  a second sentence — "Self-host it, bring your own key."
-- The README's opening paragraph ends with the second half of it: "Humans and
-  AI agents work one queue — and every resolved ticket can become a skill your
-  AI runs next time." The opening clause is not there.
-- The banner tagline in `docs/assets/banner.svg` is shortened to fit the
-  artwork: it drops the "and" and stops at "can become a skill".
-
-The load-bearing half is the second one, and specifically the word *can* — the
-ROADMAP row below turns on it, because the ticket-to-skill path is manual. A
-surface with room for the whole sentence should carry the canonical form; the
-three are not verbatim-aligned today, which is filed as an owner question
-rather than fixed here (this item's scope is this file).
+The load-bearing words are *can* and *cited*: the ticket-to-skill path is a
+human act (an admin writes the skill), and a document answers only through
+retrieval that quotes it. "Grows", "learns" and "self-improving" stay off
+every surface — see the ROADMAP row on automatic distillation.
 
 The title of `spec.md` is the **destination**, not a claim. It describes what
 the backlog is building toward and **must not appear on any user-visible
@@ -96,8 +90,14 @@ earlier.
 | Resolver runs record each model turn, tool call, tool result and approval request as an `AgentStep` row, and the ticket UI replays them verbatim. | `AgentRun` / `AgentStep` in `prisma/schema.prisma`, `src/lib/ai/engine.ts` |
 | A role and permission matrix gates the app's API routes, and the requester-facing reads — the ticket list, the ticket detail and attachments — are scoped to the requester's own tickets. Scoping is applied per route, not by a global filter. | `src/lib/permissions.ts`, `src/app/api/tickets/route.ts`, `src/app/api/tickets/[id]/route.ts`, `src/app/api/attachments/[id]/route.ts` |
 | An admin-managed egress allowlist constrains outbound tool traffic. The web tools (`fetch_url`, `take_screenshot`) and admin-defined HTTP integrations resolve the host first, refuse loopback, private, CGNAT and link-local addresses, and re-check each redirect. | `src/lib/egress.ts`, `src/lib/ai/tools/web.ts`, `src/app/api/settings/route.ts` |
-| Self-hostable and MIT-licensed. Bring your own key (Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint), or run entirely offline on the deterministic mock provider, which is the default when no key is configured. SSO against any OIDC provider. | `LICENSE`, `src/lib/ai/settings.ts`, `src/lib/ai/provider.ts`, `src/lib/ai/mock.ts`, `src/lib/authjs.ts` |
-| Secrets stored through Settings are encrypted at rest with AES-256-GCM **when `SERVO_ENCRYPTION_KEY` is set**. Without that variable they are stored in plain text, and the docs say so. | `src/lib/secret-store.ts`, `SECURITY.md` |
+| Self-hostable and Apache-2.0-licensed. Bring your own key (Anthropic, Z.AI GLM, or any OpenAI-compatible endpoint), or run entirely offline on the deterministic mock provider, which is the default when no key is configured. SSO against any OIDC provider. | `LICENSE`, `src/lib/ai/settings.ts`, `src/lib/ai/provider.ts`, `src/lib/ai/mock.ts`, `src/lib/authjs.ts` |
+| Secrets stored through Settings are encrypted at rest with AES-256-GCM. The container generates a key on first boot and keeps it on the `/data` volume when `SERVO_ENCRYPTION_KEY` is not set; a bare `npm run dev` without the variable stores them in plain text, and the docs say so. | `src/lib/secret-store.ts`, `scripts/docker-entrypoint.sh`, `SECURITY.md` |
+| A knowledge base: uploaded PDF, Excel, Word, Markdown and text files are extracted in a forked worker, chunked with locators, and retrieved through an entitlement chain evaluated inside the SQL statement — a passage the reader may not see never reaches a prompt. Retrieval is keyword-only until an embeddings endpoint is configured. | `src/lib/kb/ingest.ts`, `src/lib/kb/extractors/`, `src/lib/kb/entitlement.ts`, `src/lib/kb/search.ts`, `src/lib/ai/tools/kb.ts` |
+| A library view over the knowledge base: deterministic Spanish- and English-aware keywords per document, filters by text, visibility and collection, and an interactive graph of documents, shelves and external data sources drawn only over what the reader may see. | `src/lib/kb/keywords.ts`, `src/lib/kb/library.ts`, `src/app/kb/graph/page.tsx`, `src/app/api/kb/graph/route.ts` |
+| Opt-in AI enrichment (off by default): topics, a summary in the document's language and a shelf per document, with the switch stating that content goes to the model provider. Documents a person filed are never moved by it. | `src/lib/kb/enrich.ts`, `src/components/kb/KbAdminPanel.tsx` |
+| PostgreSQL with `pgvector` is the datasource; the schema arrives as numbered migrations. | `prisma/schema.prisma`, `prisma/migrations/`, `docker-compose.yml` |
+| Servo is an MCP client as well as a server: an admin adds Streamable HTTP MCP servers and every imported tool arrives quarantined. Local plugin bundles under `plugins/` are registered by `syncPlugins()` with everything disabled. | `src/lib/mcp-client.ts`, `src/lib/bootstrap.ts` (`syncPlugins`), `docs/connectors.md`, `docs/plugins.md` |
+| Packs: a catalog curated in the repository of connectors, extraction lanes, models, identity, tools and local bundles, showing what is configured on the install. Nothing is fetched. | `src/lib/packs/catalog.ts`, `src/lib/packs/state.ts`, `src/app/packs/page.tsx` |
 | One `docker compose up`: the app and its Postgres (pgvector) container, both on local volumes; the schema arrives as numbered migrations applied on boot. The agent's SQL sandbox is a second database on that same server, `servo_ops`, whose two login roles have `CONNECT` on the desk database revoked. | `docker-compose.yml`, `scripts/docker-entrypoint.sh`, `Dockerfile`, `scripts/postgres-init.sql` |
 | External data sources in INDEX mode: an S3 bucket or a PostgreSQL database is crawled on demand into ordinary documents, gated by a **source ceiling** — a source grant alone entitles nothing, a document path alone reaches nothing source-backed, and a complete crawl propagates upstream deletions while an incomplete one erases nothing. | `src/lib/kb/sources/` (`s3.ts`, `sql.ts`, `sync.ts`, `prune.ts`), `src/lib/kb/entitlement.ts` (`readable`), `tests/kb-source-s3.test.ts`, `tests/kb-source-sql.test.ts`, `tests/kb-source-sync.test.ts`, `tests/kb-source-prune.test.ts` |
 
@@ -107,11 +107,8 @@ Nothing here may be stated in the present tense on any user-visible surface.
 
 | Claim | Status | Note |
 |---|---|---|
-| A company knowledge base: uploading files, ACL-filtered retrieval, cited answers | ROADMAP (`kb-*`) | Nothing today ingests uploaded documents. There is no document, chunk or embedding model, no upload endpoint, no per-user grants and no citation machinery. The only documents read into the database are the repo's own Markdown procedures and agent profiles. |
-| PostgreSQL with `pgvector`, and row-level security as a backstop | ROADMAP (`db-01`, `db-08`, `kb-15`) | The datasource has not been cut over. |
-| Connecting to external MCP servers, and installing plugin bundles | ROADMAP (`cnp-02`, `cnp-06`) | Servo is an MCP **server**. It is not an MCP client, and there is no bundle loader. |
 | Distilling a resolved ticket into a draft skill automatically | ROADMAP (`reb-05`) | Today an admin writes the skill from the ticket timeline. The one-liner's "can become a skill" describes that manual path, which is why it says *can*. |
-| An interchange surface for sharing skills and bundles between installs | ROADMAP (`cnp-06`) | If it ever ships it ships under a neutral name. It is never described as a marketplace — not as a page, a nav entry, a permission action or a product noun. |
+| Fetching a bundle from a remote location, verifying and pinning it | ROADMAP (the Packs design note under `docs/design/`) | Packs (`/packs`) is a catalog curated in the repo plus the local bundles `syncPlugins()` registered; nothing is fetched. The surface is never described as a marketplace — not as a page, a nav entry, a permission action or a product noun. |
 | Knowledge ingestion from Slack, Drive or a wiki; anything worded as "learns automatically" | ROADMAP (unscheduled) | No item schedules it. |
 | A Servo-operated service that customers sign in to, run by us | ROADMAP (planned, unscheduled, unnamed) | **One is planned and it does not exist.** No surface may state or imply that it does, and no surface may be worded so that launching one would make the old wording a lie. |
 

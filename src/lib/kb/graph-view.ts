@@ -111,7 +111,9 @@ export function layoutGraph(view: GraphView, opts: LayoutOptions): LaidOutNode[]
   if (n === 1) return [{ ...view.nodes[0], x: xs[0], y: ys[0] }];
 
   const area = width * height;
-  const k = Math.sqrt(area / n) * 0.6; // ideal edge length
+  // Ideal edge length. Capped: the textbook sqrt(area / n) is right for a
+  // hundred nodes and absurd for five, where it pins every node to an edge.
+  const k = Math.min(Math.sqrt(area / n) * 0.6, Math.min(width, height) * 0.22);
   const edges = view.edges
     .map((e) => ({
       a: index.get(e.from),
@@ -140,6 +142,10 @@ export function layoutGraph(view: GraphView, opts: LayoutOptions): LaidOutNode[]
           ddy = (random() - 0.5) * 0.1;
           dist = Math.hypot(ddx, ddy) || 0.01;
         }
+        // Repulsion has a horizon (2k): beyond it two nodes ignore each
+        // other, so an island is not shoved into a corner by a cluster it
+        // shares nothing with — gravity brings it back toward the middle.
+        if (dist > 2 * k) continue;
         const force = (k * k) / dist;
         const fx = (ddx / dist) * force;
         const fy = (ddy / dist) * force;
@@ -162,10 +168,12 @@ export function layoutGraph(view: GraphView, opts: LayoutOptions): LaidOutNode[]
       dx[e.b] += fx;
       dy[e.b] += fy;
     }
-    // Gravity toward the centre, so islands stay on screen.
+    // Gravity toward the centre, so islands stay on screen. Stronger than
+    // the textbook value on purpose: with a handful of nodes the repulsion
+    // otherwise pins every island to the canvas edge.
     for (let i = 0; i < n; i++) {
-      dx[i] += (width / 2 - xs[i]) * 0.02;
-      dy[i] += (height / 2 - ys[i]) * 0.02;
+      dx[i] += (width / 2 - xs[i]) * 0.08;
+      dy[i] += (height / 2 - ys[i]) * 0.08;
     }
     // Move, capped by the temperature, clamped to the canvas.
     for (let i = 0; i < n; i++) {

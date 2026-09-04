@@ -43,9 +43,10 @@ services:
       # clean install (never combine with real use):
       # SERVO_DEMO: "1"
     volumes:
-      # Legacy SQLite volume: kept one release so upgraders can run the
-      # one-shot import (db-07) against /data/servo.db; removable after.
-      # The app itself no longer reads it.
+      # /data holds the auto-generated encryption key (encryption.key) when
+      # SERVO_ENCRYPTION_KEY is not set — keep this volume, and back it up
+      # with the database. (It also still carries a pre-Postgres servo.db
+      # for the one-shot import, docs/migrating-to-postgres.md.)
       - servo-data:/data
     restart: unless-stopped
 

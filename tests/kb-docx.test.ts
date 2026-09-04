@@ -34,7 +34,7 @@ async function docx(body: string, opts: { withDocument?: boolean } = {}): Promis
 }
 
 const SAMPLE =
-  para("Respuesta SkanControl", { style: "Title" }) +
+  para("Respuesta Northwind", { style: "Title" }) +
   para("1. Alcance", { style: "Heading1" }) +
   `<w:p><w:r><w:t>El diccionario </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>WITS</w:t></w:r><w:r><w:t xml:space="preserve"> es la fuente única de verdad &amp; base del contrato.</w:t></w:r></w:p>` +
   `<w:p><w:r><w:t>Columna</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>Valor</w:t></w:r><w:r><w:br/></w:r><w:r><w:t>Segunda línea</w:t></w:r></w:p>` +
@@ -67,7 +67,7 @@ describe("docx extraction (kb-lib-4)", () => {
     expect(ran.outcome.status).toBe("EXTRACTED");
     if (ran.outcome.status !== "EXTRACTED") return;
     const text = ran.outcome.text;
-    expect(text).toContain("# Respuesta SkanControl");
+    expect(text).toContain("# Respuesta Northwind");
     expect(text).toContain("# 1. Alcance");
     expect(text).toContain("## 2. Cierre");
     // Runs join without losing the bold word; entities decode.

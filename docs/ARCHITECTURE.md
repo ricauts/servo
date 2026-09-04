@@ -367,3 +367,54 @@ wins over the URL stored in Settings, the URL is never returned by the API
 setup can never break a ticket flow. `POST /api/settings/test-email` sends
 a real test message for the Settings UI.
 
+
+
+## Project tree
+
+```
+agents/                specialized resolver agents (frontmatter + system prompt)
+skills/<slug>/SKILL.md the procedures the AI reads before it acts
+plugins/               local bundles syncPlugins() registers (absent by default)
+prisma/
+  schema.prisma        data model (PostgreSQL; enum-likes are strings by choice)
+  migrations/          numbered SQL migrations applied on boot
+  seed-core.ts         fresh-install bootstrap: AI users, default policies,
+                       agent profiles, skills, the ops schema. Idempotent.
+  seed-demo.ts         the showcase dataset (`npm run demo`). Wipes first.
+src/
+  app/                 Next.js App Router pages + API routes
+    tickets/ dashboard/ approvals/ groups/ agents/ runs/ skills/
+    kb/                the library, a document, the graph, sources
+    packs/             the catalog
+    integrations/ settings/
+  lib/
+    ai/                provider abstraction, mock provider, prompts, engine,
+                       credential pool; ai/tools/ is the built-in registry
+    kb/                ingest, extractors (worker-isolated), chunking, facts,
+                       entitlement, search, graph, enrichment, sources
+    packs/             the catalog and its install state
+    db.ts / opsdb.ts   app DB and sandboxed ops DB clients
+    permissions.ts     role/action matrix + approval risk rules
+    types.ts           shared unions and payload shapes (source of truth)
+  components/          UI primitives, shell, and feature components
+tests/                 the vitest suite (`npm test`) and fixtures
+scripts/               repo guards and lints, operator utilities, the
+                       container entrypoint, the media rig
+servo_design_system/   design truth: tokens/*.css are the only files the
+                       build imports; read SKILL.md before UI work
+docs/                  this documentation; design/ holds the rationale
+```
+
+`spec.md` at the root is the live work order; `THIRD_PARTY.md` the
+attribution register.
+
+## The loop, in one paragraph
+
+Tickets are the capture loop: mail, web, or API — every request lands in
+one queue. Agents work them under the gate: every tool carries a risk level
+and an approval flag; anything gated pauses the run for a named human and
+resumes from persisted state once they decide. Procedures become skills the
+resolver loads before it acts, and QA is told which skills applied and which
+the run actually read. Documents become cited answers through retrieval the
+entitlement chain filters inside the query. Every run persists every step,
+and every MCP call — executed or refused — is recorded.

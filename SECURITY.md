@@ -19,18 +19,24 @@ stored in the application database. They are **never returned by any API** — t
 settings endpoints redact them structurally (`tokenSet: true`, never the
 value).
 
-**Encryption at rest.** Set `SERVO_ENCRYPTION_KEY` (64 hex chars, 32-byte
-base64, or a long passphrase) and every secret is sealed with AES-256-GCM
-before it is written; values are decrypted only at the moment of use.
-Rows written before the key existed stay readable (legacy plaintext passes
-through) — migrate them once with:
+**Encryption at rest.** Every secret is sealed with AES-256-GCM before it
+is written and decrypted only at the moment of use. The key comes from
+`SERVO_ENCRYPTION_KEY` (64 hex chars, 32-byte base64, or a long
+passphrase). **The container generates one on first boot** when the
+variable is unset and keeps it in `/data/encryption.key` on the
+`servo-data` volume (`SERVO_ENCRYPTION_KEY_FILE` moves it); every later
+boot reads the same file, and the entrypoint seals any row written before
+a key existed. A bare `npm run dev` without the variable stores secrets in
+plain text — fine for a local evaluation, not for anything real. Rows
+written before the key existed can also be sealed by hand:
 
 ```bash
 node scripts/ops/encrypt-secrets.cjs
 ```
 
-Losing the key means re-entering the secrets; it is never stored anywhere by
-Servo. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
+Losing the key means re-entering the secrets; Servo never writes it to the
+database. Back up the key file together with the database — a dump without
+it holds ciphertext nobody can open. Environment-variable credentials (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`,
 `SMTP_URL`…) always win over stored ones and never touch the database.
 
 **Least privilege for integration credentials:**

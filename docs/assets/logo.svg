@@ -1,3 +1,6 @@
-<svg width="300" height="80" viewBox="0 0 300 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <text x="10" y="58" font-family="Lato, 'Segoe UI', Arial, sans-serif" font-size="56" font-weight="900" letter-spacing="-2" fill="#12261B">Servo<tspan fill="#12B76A">.</tspan></text>
+<svg width="300" height="80" viewBox="0 0 300 80" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Servo">
+  <title>Servo</title>
+  <!-- The wordmark the app's sidebar renders: graphite ink, servo-blue dot
+       (servo_design_system/tokens/colors.css: --ink-950 / --accent-500). -->
+  <text x="10" y="58" font-family="Chivo, Lato, 'Segoe UI', Arial, sans-serif" font-size="56" font-weight="900" letter-spacing="-2" fill="#0D0F14">Servo<tspan fill="#4E66E4">.</tspan></text>
 </svg>

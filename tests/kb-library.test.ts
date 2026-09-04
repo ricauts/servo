@@ -10,7 +10,7 @@ import { filterDocuments, type KbDocumentRow } from "@/lib/kb/library";
 
 describe("keywordPass — Spanish text (kb-lib-1)", () => {
   const es =
-    "Este documento planea la Fase 0 del frente de datos de SkanControl: la " +
+    "Este documento planea la Fase 0 del frente de datos de Northwind: la " +
     "planeación del frente de datos con los riesgos, las historias y las tareas " +
     "de la infraestructura de datos. Los datos y la planeación son el foco.";
 

@@ -2,7 +2,8 @@
   "name": "servo",
   "version": "1.0.0",
   "private": true,
-  "description": "The open-source desk where humans and AI agents work one queue - and every resolved ticket can become a skill your AI runs next time. Self-host it, bring your own key.",
+  "license": "Apache-2.0",
+  "description": "The open-source AI desk for the whole team - agents, skills, knowledge and human approvals in one queue, where a resolved ticket can become a skill and a document a cited answer. Self-host it, bring your own key.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",

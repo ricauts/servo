@@ -25,9 +25,9 @@ const robotoMono = Roboto_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Servo — AI service desk",
+  title: "Servo — the AI desk for the whole team",
   description:
-    "Open-source service desk where tickets are resolved by humans and AI agents, with approvals, QA and KPIs built in.",
+    "The open-source AI desk for the whole team — agents, skills, knowledge and human approvals in one queue.",
 };
 
 // The whole app is a live database UI; never prerender.

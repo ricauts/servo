@@ -35,7 +35,7 @@ export default async function LoginPage({
           Servo<span className="text-primary">.</span>
         </div>
         <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
-          AI service desk
+          AI desk for the team
         </p>
         <Card className="mt-6">
           <CardContent className="flex flex-col gap-3 pt-2">

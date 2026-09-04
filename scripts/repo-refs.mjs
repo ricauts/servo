@@ -206,7 +206,7 @@ export const ENTRY_POINTS = [
   { re: /^\.github\/workflows\/.*\.ya?ml$/, reason: "GitHub Actions workflow" },
   { re: /^(Dockerfile|docker-compose[^/]*\.yml|\.dockerignore)$/, reason: "container build entry point" },
   { re: /^(\.gitignore|\.gitattributes|\.npmrc|\.env\.example)$/, reason: "tool config read by name" },
-  { re: /^(README|SECURITY|ROADMAP|LICENSE)(\.md)?$/, reason: "repository front-door document" },
+  { re: /^(README|SECURITY|ROADMAP|LICENSE|NOTICE)(\.md)?$/, reason: "repository front-door document" },
   { re: /^spec\.md$/, reason: "the loop's work order — spec.md §0.1" },
 ];
 

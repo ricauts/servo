@@ -63,20 +63,27 @@ for (const key of ["auth.oidc.issuer", "auth.oidc.clientId", "auth.oidc.clientSe
   run(`UPDATE "Setting" SET value='' WHERE key='${key}'`);
 }
 
-// 2. real accounts -> invented ones on acme.dev. Dana Whitfield and Tomas Berg
-//    are already fictional (@northwind.example) and stay: #1061 is the page's
-//    proof story and its screenshots already ship in the README.
-const people = [
-  ["sricaurte@servoai.org", "Marta Oliveira", "marta@acme.dev"],
-  ["pancakesiscool@gmail.com", "Nils Ericsson", "nils@acme.dev"],
-  ["support@servoai.org", "Acme Support", "support@acme.dev"],
-  ["mail-noreply@google.com", "Mail Team", "mail@acme.dev"],
-  ["no-reply@accounts.google.com", "Accounts", "accounts@acme.dev"],
-  ["workspace-noreply@google.com", "Workspace Team", "workspace@acme.dev"],
-];
-for (const [email, name, next] of people) {
-  run(`UPDATE "User" SET name='${name.replace(/'/g, "''")}', email='${next}' WHERE email='${email}'`);
-}
+// 2. real accounts -> invented ones on acme.dev. The rule is generic on
+//    purpose: no real address is written down here (the repository is
+//    public), and any human whose email is not already on a reserved
+//    documentation domain (.example / .invalid / .test) is renamed. Dana
+//    Whitfield and Tomas Berg (@northwind.example) therefore stay: #1061 is
+//    the page's proof story and its screenshots already ship in the README.
+const NAMES = ["Marta Oliveira", "Nils Ericsson", "Acme Support", "Mail Team", "Accounts", "Workspace Team", "Priya Raman", "Leo Santos"];
+run(`
+  WITH humans AS (
+    SELECT id, row_number() OVER (ORDER BY "createdAt", id) AS n
+      FROM "User"
+     WHERE role <> 'AI_AGENT'
+       AND email !~* '@[a-z0-9.-]+\.(example|invalid|test)$'
+  )
+  UPDATE "User" u
+     SET name = (ARRAY[${NAMES.map((n) => `'${n}'`).join(",")}])[((h.n - 1) % ${NAMES.length}) + 1]
+           || CASE WHEN h.n > ${NAMES.length} THEN ' ' || h.n ELSE '' END,
+         email = 'person' || h.n || '@acme.dev'
+    FROM humans h
+   WHERE u.id = h.id
+`);
 
 // 3. settings that render as text on /integrations
 run(`UPDATE "Setting" SET value='Acme Support <support@acme.dev>' WHERE key='integration.smtp.from'`);

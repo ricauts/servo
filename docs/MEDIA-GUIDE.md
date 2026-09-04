@@ -10,7 +10,7 @@ is a guarded dynamic import — a missing one is a message with the exact
 
 | script | produces | regenerates |
 |---|---|---|
-| `readme-screenshots.mjs` | the desk's UI stills | `docs/assets/screenshot-{dashboard,tickets,ticket-detail,approvals,agents,integrations,settings,mobile}.png` (the README stills) |
+| `readme-screenshots.mjs` | the desk's UI stills | `docs/assets/screenshot-{dashboard,tickets,ticket-detail,approvals,agents,integrations,settings,knowledge,graph,packs,skills,runs,mobile}.png` (the README stills) |
 | `make-before-after.mjs` | the before/after figure from a ticket's two attachments | `docs/assets/before-after-fix.png` |
 | `shoot-og.mjs` | the Open Graph card at exactly 1200x630 | `assets/og-card.png` **inside the servoai-site repository** (its site directory is a REQUIRED argument — see below) |
 | `record-hero.mjs` | HERO-FILM, one full desk loop, pixel-identical start and end | the landing page's hero film |
