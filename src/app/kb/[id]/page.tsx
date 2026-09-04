@@ -6,7 +6,10 @@ import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import { relatedDocuments } from "@/lib/kb/graph";
-import { statusCopy } from "@/lib/kb/library";
+import { statusCopy, stringList } from "@/lib/kb/library";
+import { canAdministerDocument } from "@/lib/kb/grants";
+import { getEnrichSettings } from "@/lib/kb/enrich";
+import KbDocumentFiling from "@/components/kb/KbDocumentFiling";
 import KbSharePanel from "@/components/kb/KbSharePanel";
 import KbReextractButton from "@/components/kb/KbReextractButton";
 import KbFactChips from "@/components/kb/KbFactChips";
@@ -48,7 +51,13 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       visibility: true,
       updatedAt: true,
       ownerId: true,
+      kind: true,
       keywords: true,
+      topics: true,
+      aiSummary: true,
+      enrichedAt: true,
+      enrichModel: true,
+      collectionId: true,
       collection: { select: { name: true } },
       extractor: true,
       extractorVersion: true,
@@ -58,7 +67,8 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
   });
   if (!doc) notFound();
 
-  const [chunks, related, agentReaders] = await Promise.all([
+  const canFile = doc.kind !== "CATALOG" && (can(user, "kb.manage") || (await canAdministerDocument(user.id, id)));
+  const [chunks, related, agentReaders, collections, enrich] = await Promise.all([
     db.documentChunk.findMany({
       where: { documentId: id },
       select: { id: true, index: true, text: true, locator: true },
@@ -66,11 +76,12 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
     }),
     relatedDocuments(db, { humanId: user.id, agentId: null }, id),
     db.kbGrant.count({ where: { subjectType: "AGENT" } }),
+    canFile ? db.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : [],
+    canFile ? getEnrichSettings() : null,
   ]);
   const status = statusCopy(doc);
-  const keywords = Array.isArray(doc.keywords)
-    ? doc.keywords.filter((k): k is string => typeof k === "string")
-    : [];
+  const keywords = stringList(doc.keywords);
+  const topics = stringList(doc.topics);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
@@ -97,17 +108,33 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
         </a>
       </div>
       {status.hint && <p className="mt-1.5 text-xs text-muted-foreground">{status.hint}</p>}
-      {doc.summary && <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{doc.summary}</p>}
+      {/* kb-lib-2: the model's summary when there is one, the deterministic
+          extract otherwise — never both, never blended. */}
+      {doc.aiSummary ? (
+        <p className="mt-2 max-w-3xl text-[13px] leading-relaxed" title={`Written by ${doc.enrichModel}`}>{doc.aiSummary}</p>
+      ) : (
+        doc.summary && <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{doc.summary}</p>
+      )}
 
       {/* kb-lib-1: the document-level keyword profile and its shelf. Chips
-          link back to the library pre-filtered on that keyword. */}
-      {(keywords.length > 0 || doc.collection) && (
+          link back to the library pre-filtered on that keyword; topics
+          (kb-lib-2) come first when the model wrote any. */}
+      {(keywords.length > 0 || topics.length > 0 || doc.collection) && (
         <div className="mt-2 flex flex-wrap items-center gap-1" aria-label="Keywords">
           {doc.collection && (
             <span className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-px font-mono text-[10.5px] leading-4 text-muted-foreground">
               <FolderOpen size={11} /> {doc.collection.name}
             </span>
           )}
+          {topics.map((t) => (
+            <Link
+              key={`t:${t}`}
+              href={`/kb?q=${encodeURIComponent(t)}`}
+              className="rounded-full border border-primary/40 px-1.5 py-px font-heading text-[10.5px] leading-4 transition-colors hover:bg-accent"
+            >
+              {t}
+            </Link>
+          ))}
           {keywords.map((k) => (
             <Link
               key={k}
@@ -138,6 +165,15 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
           <KbReextractButton documentId={doc.id} />
         )}
       </div>
+      {canFile && enrich && (
+        <KbDocumentFiling
+          documentId={doc.id}
+          collectionId={doc.collectionId}
+          visibility={doc.visibility}
+          collections={collections}
+          enrichment={{ enabled: enrich.enabled, enrichedAt: doc.enrichedAt?.toISOString() ?? null, model: doc.enrichModel }}
+        />
+      )}
       {can(user, "kb.share") && <KbSharePanel documentId={doc.id} />}
 
       {agentReaders === 0 && (

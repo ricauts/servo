@@ -455,6 +455,17 @@ model Document {
   // xds-05: when THIS document's last crawl run started — the honest
   // companion to externalSeenAt (a document seen unchanged was still seen).
   runStartedAt    DateTime?
+
+  // kb-lib-2: OPT-IN model enrichment (kb.enrich.enabled). Everything above
+  // this line is computed without a model call; these four fields are the
+  // only ones a model writes, and they are additive — the deterministic
+  // summary/keywords stay as they were. topics is string[]; aiSummary is
+  // one or two sentences in the document's own language; enrichModel names
+  // the provider model that wrote them; enrichedAt is NULL until it did.
+  topics      Json      @default("[]")
+  aiSummary   String    @default("")
+  enrichModel String    @default("")
+  enrichedAt  DateTime?
 }
 
 

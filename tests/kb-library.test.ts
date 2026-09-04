@@ -79,6 +79,8 @@ describe("filterDocuments (kb-lib-1)", () => {
     visibility: "PRIVATE",
     updatedAt: new Date(0),
     keywords: [],
+    topics: [],
+    aiSummary: "",
     collectionId: null,
     collectionName: null,
     ...over,
@@ -104,8 +106,10 @@ describe("filterDocuments (kb-lib-1)", () => {
     expect(filterDocuments(docs, { ...all, collection: "NONE" }).map((d) => d.id)).toEqual(["b"]);
   });
 
-  it("matches text against the name or any keyword, case-insensitively", () => {
+  it("matches text against the name, any keyword or any topic, case-insensitively", () => {
     expect(filterDocuments(docs, { ...all, text: "PLANEACIÓN" }).map((d) => d.id)).toEqual(["b"]);
+    const withTopic = [row({ id: "t", topics: ["Data Contracts"] })];
+    expect(filterDocuments(withTopic, { ...all, text: "contracts" }).map((d) => d.id)).toEqual(["t"]);
     expect(filterDocuments(docs, { ...all, text: "vpn" }).map((d) => d.id)).toEqual(["a"]);
     expect(filterDocuments(docs, { ...all, text: "faq" }).map((d) => d.id)).toEqual(["c"]);
     expect(filterDocuments(docs, { ...all, text: "nothing" })).toEqual([]);

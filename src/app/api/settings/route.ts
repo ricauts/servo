@@ -10,6 +10,7 @@ import { getInboundConfig, INBOUND_SETTING_KEYS } from "@/lib/inbound-email";
 import { AUTH_SETTING_KEYS } from "@/lib/authjs";
 import { getMcpConfig, MCP_SETTING_KEYS } from "@/lib/mcp";
 import { EGRESS_SETTING_KEYS, getEgressConfig } from "@/lib/egress";
+import { KB_ENRICH_SETTING_KEYS } from "@/lib/kb/enrich";
 import { forbid } from "@/lib/permissions";
 import { isSensitiveSettingKey } from "@/lib/secret-store";
 import { SETTING_KEYS } from "@/lib/types";
@@ -107,6 +108,9 @@ const putSchema = z.object({
   kbEmbedDimensions: z.string().optional(), // "", "0", or "1".."1536"
   kbAutodeliverCategories: z.string().optional(), // comma-separated Category values
   kbAutodeliverDailyCap: z.string().optional(), // digits; "" = default 20
+  // kb-lib-2: opt-in model enrichment (sends document content to the provider).
+  kbEnrichEnabled: z.boolean().optional(),
+  kbEnrichAutoFile: z.boolean().optional(),
 });
 
 /** PUT /api/settings — upsert any subset of the AI settings (admin only). */
@@ -188,6 +192,12 @@ export async function PUT(req: NextRequest) {
   }
   if (data.kbEmbedDimensions !== undefined) {
     updates.push({ key: "kb.embed.dimensions", value: data.kbEmbedDimensions });
+  }
+  if (data.kbEnrichEnabled !== undefined) {
+    updates.push({ key: KB_ENRICH_SETTING_KEYS.enabled, value: String(data.kbEnrichEnabled) });
+  }
+  if (data.kbEnrichAutoFile !== undefined) {
+    updates.push({ key: KB_ENRICH_SETTING_KEYS.autoFile, value: String(data.kbEnrichAutoFile) });
   }
   if (data.kbAutodeliverCategories !== undefined) {
     // Remove every per-category key, then set the requested ones — the

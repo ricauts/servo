@@ -15,6 +15,9 @@ export interface KbDocumentRow {
   updatedAt: Date;
   /** The document-level keyword profile (Document.keywords). */
   keywords: string[];
+  /** kb-lib-2: model-written topics and summary; empty until enriched. */
+  topics: string[];
+  aiSummary: string;
   collectionId: string | null;
   collectionName: string | null;
 }
@@ -68,6 +71,12 @@ export interface LibraryFilters {
   collection: string;
 }
 
+/** Document.keywords / Document.topics are Json columns: read them as the
+ *  string[] they are documented to be, dropping anything else. */
+export function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((k): k is string => typeof k === "string") : [];
+}
+
 /** Pure: the rows that survive the three filters, in the given order. */
 export function filterDocuments(
   documents: readonly KbDocumentRow[],
@@ -83,7 +92,8 @@ export function filterDocuments(
     if (needle) {
       const inName = doc.name.toLowerCase().includes(needle);
       const inKeywords = doc.keywords.some((k) => k.toLowerCase().includes(needle));
-      if (!inName && !inKeywords) return false;
+      const inTopics = doc.topics.some((t) => t.toLowerCase().includes(needle));
+      if (!inName && !inKeywords && !inTopics) return false;
     }
     return true;
   });

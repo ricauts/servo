@@ -163,12 +163,26 @@ export default function KbDocumentList({
             {status.hint ? (
               <p className="mt-1 pl-6 text-xs text-muted-foreground">{status.hint}</p>
             ) : (
-              doc.summary && (
-                <p className="mt-1 line-clamp-1 pl-6 text-xs text-muted-foreground">{doc.summary}</p>
+              (doc.aiSummary || doc.summary) && (
+                <p className="mt-1 line-clamp-1 pl-6 text-xs text-muted-foreground">{doc.aiSummary || doc.summary}</p>
               )
             )}
-            {shown.length > 0 && (
+            {(doc.topics.length > 0 || shown.length > 0) && (
               <div className="mt-1.5 flex flex-wrap items-center gap-1 pl-6" aria-label="Keywords">
+                {/* kb-lib-2: topics first (model-written, Title Case), then the deterministic keywords. */}
+                {doc.topics.map((t) => (
+                  <button
+                    key={`t:${t}`}
+                    type="button"
+                    title={`Filter by "${t}"`}
+                    onClick={() => setText(t)}
+                    className={`rounded-full border px-1.5 py-px font-heading text-[10.5px] leading-4 transition-colors hover:bg-accent ${
+                      text.trim().toLowerCase() === t.toLowerCase() ? "border-foreground/40 bg-accent" : "border-primary/40 text-foreground"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
                 {shown.map((k) => (
                   <button
                     key={k}

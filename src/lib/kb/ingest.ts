@@ -17,6 +17,7 @@ import { getKbExtractBudgetMs, getDoclingConfig } from "@/lib/kb/settings";
 import { documentProfile, keywordPass } from "@/lib/kb/keywords";
 import { persistFactsForDocument } from "@/lib/kb/facts/persist";
 import { rebuildEdgesFor } from "@/lib/kb/graph";
+import { enrichAfterIngest } from "@/lib/kb/enrich";
 
 /** Stored-byte cap, enforced before anything touches the database. */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -228,6 +229,10 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       },
     );
     await rebuildEdgesFor(document.documentId).catch(() => 0);
+    // kb-lib-2: the OPT-IN model pass, after everything deterministic has
+    // landed. Fire-and-forget: the upload answers now; topics arrive on the
+    // next page load. Off by default — see enrich.ts for why.
+    enrichAfterIngest(document.documentId);
   }
 
   return {

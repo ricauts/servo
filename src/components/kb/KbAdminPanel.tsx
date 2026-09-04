@@ -11,6 +11,11 @@ export interface KbAdminSettings {
   embedDimensions: string;
   autodeliverCategories: string[];
   dailyCap: string;
+  /** kb-lib-2: the opt-in model enrichment switch, its filing switch, and
+   *  how many indexed documents have no enrichment yet. */
+  enrichEnabled: boolean;
+  enrichAutoFile: boolean;
+  enrichPending: number;
 }
 
 /** The Knowledge admin panel (kb-17): collections, embeddings configuration
@@ -54,7 +59,30 @@ export default function KbAdminPanel({
     embed.embedBaseUrl.length > 0 &&
     !/localhost|127\.0\.0\.1|::1/i.test(embed.embedBaseUrl);
 
-  async function put(payload: Record<string, string>) {
+  const [enriching, setEnriching] = useState(false);
+  const [enrichNote, setEnrichNote] = useState<string | null>(null);
+
+  async function enrichPending() {
+    setEnriching(true);
+    setEnrichNote(null);
+    try {
+      const res = await fetch("/api/kb/enrich", { method: "POST" });
+      const body = (await res.json().catch(() => null)) as
+        | { walked?: number; enriched?: number; failed?: number; skipped?: number; error?: string }
+        | null;
+      if (!res.ok) throw new Error(body?.error ?? "Enrichment failed.");
+      setEnrichNote(
+        `Walked ${body?.walked ?? 0}: ${body?.enriched ?? 0} enriched, ${body?.failed ?? 0} failed, ${body?.skipped ?? 0} skipped.`,
+      );
+      router.refresh();
+    } catch (err) {
+      setEnrichNote(err instanceof Error ? err.message : "Enrichment failed.");
+    } finally {
+      setEnriching(false);
+    }
+  }
+
+  async function put(payload: Record<string, string | boolean>) {
     setBusy(true);
     setError(null);
     try {
@@ -213,6 +241,68 @@ export default function KbAdminPanel({
             </div>
           </>
         )}
+      </div>
+
+      {/* --- AI enrichment (kb-lib-2) ------------------------------------- */}
+      <div className="mt-5" data-testid="kb-enrichment">
+        <p className="font-heading text-[13px] font-medium">AI enrichment (optional)</p>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+          Off by default. When on, every newly indexed document is sent (a sample
+          of up to 12k characters) to the configured model provider, which writes
+          topics, a summary in the document&apos;s language and a shelf to file it on.
+          This is the one place ingest sends document CONTENT outside this
+          container — the same provider and key your tickets already use.
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            aria-pressed={embed.enrichEnabled}
+            onClick={() => {
+              const next = !embed.enrichEnabled;
+              setEmbed({ ...embed, enrichEnabled: next });
+              void put({ kbEnrichEnabled: next });
+            }}
+            className="rounded-full border px-2 py-px font-mono text-[10.5px] uppercase tracking-wider disabled:opacity-50"
+            style={{
+              borderColor: embed.enrichEnabled ? "var(--brand-chip-line)" : "var(--line)",
+              background: embed.enrichEnabled ? "var(--brand-chip)" : "transparent",
+              color: embed.enrichEnabled ? "var(--brand-chip-ink)" : "var(--text-muted)",
+            }}
+          >
+            Enrichment {embed.enrichEnabled ? "on" : "off"}
+          </button>
+          <button
+            type="button"
+            disabled={busy || !embed.enrichEnabled}
+            aria-pressed={embed.enrichAutoFile}
+            onClick={() => {
+              const next = !embed.enrichAutoFile;
+              setEmbed({ ...embed, enrichAutoFile: next });
+              void put({ kbEnrichAutoFile: next });
+            }}
+            className="rounded-full border px-2 py-px font-mono text-[10.5px] uppercase tracking-wider disabled:opacity-50"
+            style={{
+              borderColor: embed.enrichAutoFile ? "var(--brand-chip-line)" : "var(--line)",
+              background: embed.enrichAutoFile ? "var(--brand-chip)" : "transparent",
+              color: embed.enrichAutoFile ? "var(--brand-chip-ink)" : "var(--text-muted)",
+            }}
+            title="File unfiled documents on the shelf the model names, creating the collection when it is new. Documents a person already filed are never moved."
+          >
+            Auto-file {embed.enrichAutoFile ? "on" : "off"}
+          </button>
+          <button
+            type="button"
+            disabled={enriching || !embed.enrichEnabled || settings.enrichPending === 0}
+            onClick={() => void enrichPending()}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-[12.5px] font-medium disabled:opacity-50"
+          >
+            {enriching
+              ? "Enriching…"
+              : `Enrich ${settings.enrichPending} pending document${settings.enrichPending === 1 ? "" : "s"}`}
+          </button>
+          {enrichNote && <span className="text-xs text-muted-foreground">{enrichNote}</span>}
+        </div>
       </div>
 
       {/* --- Embeddings -------------------------------------------------- */}
