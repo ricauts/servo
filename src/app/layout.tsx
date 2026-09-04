@@ -1,28 +1,16 @@
 import type { Metadata } from "next";
-import { Lato, Merriweather, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/shell/Sidebar";
 import CommandPalette from "@/components/shell/CommandPalette";
 import ThemeProvider from "@/components/shell/ThemeProvider";
 import { navForUser } from "@/components/shell/nav-items";
 import { Toaster } from "@/components/ui/sonner";
-import { cn } from "@/lib/utils";
 import { getCurrentUserOrNull } from "@/lib/auth";
 
-const lato = Lato({
-  subsets: ["latin"],
-  weight: ["400", "700", "900"],
-  variable: "--font-lato",
-});
-const merriweather = Merriweather({
-  subsets: ["latin"],
-  weight: ["300", "400", "700"],
-  variable: "--font-merriweather",
-});
-const robotoMono = Roboto_Mono({
-  subsets: ["latin"],
-  variable: "--font-roboto-mono",
-});
+// Type is the design system's: Chivo + IBM Plex Mono, loaded by
+// servo_design_system/tokens/fonts.css through globals.css. The previous
+// identity's Lato / Merriweather / Roboto Mono next/font families are gone —
+// nothing in src referenced their variables any more.
 
 export const metadata: Metadata = {
   title: "Servo — the AI desk for the whole team",
@@ -43,11 +31,7 @@ export default async function RootLayout({
   const user = await getCurrentUserOrNull();
   const entries = user ? navForUser(user) : [];
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={cn(lato.variable, merriweather.variable, robotoMono.variable)}
-    >
+    <html lang="en" suppressHydrationWarning>
       <body className="bg-background font-sans text-foreground antialiased">
         <ThemeProvider
           attribute="class"

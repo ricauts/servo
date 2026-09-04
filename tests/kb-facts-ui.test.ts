@@ -528,11 +528,12 @@ describe("the client components' state discipline", () => {
   });
 
   it("neither component ships a focus utility the design system's own rule would override", () => {
-    // servo_design_system/tokens/base.css styles :focus-visible OUTSIDE every
-    // cascade layer, so a Tailwind ring utility on a focusable element there
-    // never wins. Shipping one anyway is a dead class that reads like an
-    // override — and, in the one case that matters, replaces the UA outline
-    // with nothing.
+    // servo_design_system/tokens/base.css paints the 3px --focus-ring on every
+    // :focus-visible element. It is imported into Tailwind's `base` layer
+    // (spec question 135), so a utility CAN override it now — which is the
+    // point: a per-component ring utility on a focusable element there is a
+    // second focus recipe competing with the design system's own, and the
+    // one it would replace is the one the whole app shares.
     for (const file of ["src/components/kb/KbFactChips.tsx", "src/components/kb/KbSearch.tsx"]) {
       expect(readFileSync(file, "utf8"), file).not.toContain("focus-visible:ring-[var(--focus-ring)]");
     }

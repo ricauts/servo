@@ -44,7 +44,7 @@ export default function SidebarNav({
         return (
           <div key={item.href}>
             {showSection && (
-              <p className="mt-3 px-2.5 pb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/45">
+              <p className="mt-4 px-2.5 pb-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-faint">
                 {SECTION_LABELS[item.section]}
               </p>
             )}
@@ -53,22 +53,29 @@ export default function SidebarNav({
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group flex items-center gap-2.5 rounded-md px-2.5 py-2 font-heading text-[13.5px] font-medium transition-colors",
+                "relative flex h-8 items-center gap-2.5 rounded-md px-2.5 font-heading text-[13.5px] font-medium transition-colors",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                  ? // The ds active item: a quiet brand-soft wash and a 2px brand
+                    // bar down the left edge — no filled pill.
+                    "bg-brand-soft text-text-strong before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary"
+                  : "text-text-muted hover:bg-surface-hover hover:text-text-strong",
               )}
             >
-              <Icon size={16} strokeWidth={2} className="shrink-0" />
+              <Icon
+                size={16}
+                strokeWidth={2}
+                className={cn("shrink-0", active && "text-primary-strong")}
+              />
               <span className="flex-1">{item.label}</span>
               {count !== undefined && count > 0 && (
                 <span
                   className={cn(
-                    "rounded-full border px-1.5 py-px font-mono text-[10.5px] leading-4",
+                    "inline-flex h-[18px] items-center rounded-full border px-1.5 font-mono text-[10.5px] font-semibold leading-none",
                     item.href === "/approvals"
-                      ? // Pending approvals read as critical: the ds chip triple.
-                        "border-[color:var(--critical-chip-line)] bg-[color:var(--critical-chip)] font-semibold text-[color:var(--critical-chip-ink)]"
-                      : "border-transparent bg-sidebar-accent text-sidebar-foreground/70",
+                      ? // Pending approvals are the one count that blocks a run:
+                        // the ds critical chip triple. Every other count is neutral.
+                        "border-critical-chip-line bg-critical-chip text-critical-chip-ink"
+                      : "border-neutral-chip-line bg-neutral-chip text-neutral-chip-ink",
                   )}
                 >
                   {count}

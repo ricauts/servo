@@ -20,7 +20,11 @@
 @import "../../servo_design_system/tokens/spacing.css";
 @import "../../servo_design_system/tokens/typography.css";
 @import "../../servo_design_system/tokens/themes.css";
-@import "../../servo_design_system/tokens/base.css";
+/* base.css carries bare element rules (h1..h6, a, :focus-visible). It MUST
+   sit in Tailwind's `base` layer — imported unlayered it outranked every
+   utility, so `a{color}` beat text-primary-foreground on asChild buttons and
+   the tickets page CTA rendered at 1.3:1 (spec question 135). */
+@import "../../servo_design_system/tokens/base.css" layer(base);
 
 @custom-variant dark (&:is(.dark *));
 
@@ -87,8 +91,8 @@
 }
 
 @theme inline {
-  /* Type — the ds faces (Chivo + IBM Plex Mono). next/font vars remain on
-     <html> for any pre-migration markup but no longer drive utilities. */
+  /* Type — the ds faces (Chivo + IBM Plex Mono), loaded by tokens/fonts.css;
+     the previous identity's next/font families are gone from layout.tsx. */
   --font-sans: var(--font-core);
   --font-heading: var(--font-display);
   --font-body: var(--font-core);
@@ -172,6 +176,60 @@
   --radius-card: var(--radius);
   --shadow-card: var(--shadow-sm);
   --shadow-pop: var(--shadow-lg);
+
+  /* ds text ramp + surfaces as utilities (text-text-strong, bg-surface-inset…)
+     so components never reach for an alpha tint to get a quieter ink. */
+  --color-text-strong: var(--text-strong);
+  --color-text-body: var(--text-body);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-text-brand: var(--text-brand);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-surface-inset: var(--surface-inset);
+  --color-line-brand: var(--line-brand);
+  --color-brand-soft-line: var(--brand-soft-line);
+
+  /* Status CHIP triples — opaque surface + hairline + ink, never an alpha
+     tint (readme → "A badge is a deep tinted chip"). bg-good-chip,
+     border-good-chip-line, text-good-chip-ink, and so on per tone. */
+  --color-neutral-chip: var(--neutral-chip);
+  --color-neutral-chip-line: var(--neutral-chip-line);
+  --color-neutral-chip-ink: var(--neutral-chip-ink);
+  --color-brand-chip: var(--brand-chip);
+  --color-brand-chip-line: var(--brand-chip-line);
+  --color-brand-chip-ink: var(--brand-chip-ink);
+  --color-good-chip: var(--good-chip);
+  --color-good-chip-line: var(--good-chip-line);
+  --color-good-chip-ink: var(--good-chip-ink);
+  --color-warn-chip: var(--warn-chip);
+  --color-warn-chip-line: var(--warn-chip-line);
+  --color-warn-chip-ink: var(--warn-chip-ink);
+  --color-serious-chip: var(--serious-chip);
+  --color-serious-chip-line: var(--serious-chip-line);
+  --color-serious-chip-ink: var(--serious-chip-ink);
+  --color-critical-chip: var(--critical-chip);
+  --color-critical-chip-line: var(--critical-chip-line);
+  --color-critical-chip-ink: var(--critical-chip-ink);
+  --color-info-chip: var(--info-chip);
+  --color-info-chip-line: var(--info-chip-line);
+  --color-info-chip-ink: var(--info-chip-ink);
+
+  /* Status quiet surfaces' hairlines, and the info tone (`violet` is its
+     legacy alias above). */
+  --color-good-line: var(--good-line);
+  --color-warn-line: var(--warn-line);
+  --color-serious-line: var(--serious-line);
+  --color-critical-line: var(--critical-line);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-neutral-line: var(--neutral-line);
+
+  /* Dataviz chrome: hairline gridlines and mono axis labels. */
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
 }
 
 @layer base {

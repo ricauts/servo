@@ -53,23 +53,23 @@ export default function UserSwitcher({
       <DropdownMenuTrigger asChild>
         <button
           disabled={pending}
-          className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-sidebar-accent disabled:opacity-60"
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-60"
           title="Switch demo user"
         >
           <Avatar name={current.name} color={current.color} size={28} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-heading text-[13px] font-medium">
+            <span className="block truncate font-heading text-[13px] font-medium text-text-strong">
               {current.name}
             </span>
-            <span className="block font-mono text-[10px] uppercase tracking-wider text-sidebar-foreground/50">
+            <span className="block font-mono text-[10px] uppercase tracking-wider text-text-faint">
               {ROLE_LABEL[current.role] ?? current.role}
             </span>
           </span>
-          <ChevronsUpDown size={14} className="text-sidebar-foreground/40" />
+          <ChevronsUpDown size={14} className="text-text-faint" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-52">
-        <DropdownMenuLabel className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <DropdownMenuLabel className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-text-faint">
           Switch demo user
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
