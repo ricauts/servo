@@ -3,13 +3,15 @@ import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import Link from "next/link";
-import { BookOpen, Lock } from "lucide-react";
+import { BookOpen, Lock, Waypoints } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
 import KbUpload from "@/components/kb/KbUpload";
 import KbDocumentList from "@/components/kb/KbDocumentList";
 import KbAdminPanel from "@/components/kb/KbAdminPanel";
 import KbSearch from "@/components/kb/KbSearch";
 import PageHeader from "@/components/shell/PageHeader";
+import { stringList } from "@/lib/kb/library";
+import { getEnrichSettings } from "@/lib/kb/enrich";
 
 export const dynamic = "force-dynamic";
 
@@ -57,16 +59,19 @@ export default async function KnowledgePage({
       visibility: true,
       updatedAt: true,
       keywords: true,
+      topics: true,
+      aiSummary: true,
       collectionId: true,
       collection: { select: { name: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
-  // kb-lib-1: the library rows — keywords as a plain string[] (the column is
-  // Json) and the collection name flattened for the filter chips.
-  const documents = rows.map(({ collection, keywords, ...doc }) => ({
+  // kb-lib-1: the library rows — keywords/topics as plain string[] (the
+  // columns are Json) and the collection name flattened for the filter chips.
+  const documents = rows.map(({ collection, keywords, topics, ...doc }) => ({
     ...doc,
-    keywords: Array.isArray(keywords) ? keywords.filter((k): k is string => typeof k === "string") : [],
+    keywords: stringList(keywords),
+    topics: stringList(topics),
     collectionName: collection?.name ?? null,
   }));
   // The collection filter lists every collection with at least one readable
@@ -84,7 +89,7 @@ export default async function KnowledgePage({
   // warning beside the field, auto-delivery toggles — kb.manage only.
   let admin: React.ReactNode = null;
   if (can(user, "kb.manage")) {
-    const [settings, collections, health, fallbackQueue] = await Promise.all([
+    const [settings, collections, health, fallbackQueue, enrich, enrichPending] = await Promise.all([
       db.setting.findMany({ where: { key: { startsWith: "kb." } } }),
       db.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } } ),
       // dcl-09: the extractor health surface and the fallback queue.
@@ -94,6 +99,9 @@ export default async function KnowledgePage({
         orderBy: { extractedAt: "asc" },
         select: { id: true, name: true, extractorFallback: true },
       }),
+      // kb-lib-2: the enrichment switch and how many documents await it.
+      getEnrichSettings(),
+      db.document.count({ where: { textStatus: "EXTRACTED", kind: "FILE", enrichedAt: null } }),
     ]);
     const map = new Map(settings.map((s) => [s.key, s.value]));
     const autodeliverCategories = settings
@@ -107,6 +115,9 @@ export default async function KnowledgePage({
           embedDimensions: map.get("kb.embed.dimensions") ?? "",
           autodeliverCategories,
           dailyCap: map.get("kb.autodeliver.dailyCap") ?? "",
+          enrichEnabled: enrich.enabled,
+          enrichAutoFile: enrich.autoFile,
+          enrichPending,
         }}
         collections={collections}
         extractorHealth={health}
@@ -126,7 +137,15 @@ export default async function KnowledgePage({
 
   return (
     <div>
-      <PageHeader title="Knowledge" description="The company's own documents — manuals, spreadsheets, procedures — searchable by the desk's agents with citations back to the exact page, sheet or lines." />
+      <PageHeader
+        title="Knowledge"
+        description="The company's own documents — manuals, spreadsheets, procedures — searchable by the desk's agents with citations back to the exact page, sheet or lines."
+        actions={
+          <Link href="/kb/graph" className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-[12.5px] font-medium hover:bg-accent/40">
+            <Waypoints size={13} /> Graph
+          </Link>
+        }
+      />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
       {can(user, "kb.upload") && <KbUpload />}
       {/* ext-08: search with the parse shown back as removable chips. */}

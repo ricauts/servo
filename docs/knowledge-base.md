@@ -74,6 +74,42 @@ at once: **text** (name or keyword), **visibility** (private / staff /
 public) and **collection**, with an *Uncategorized* shelf for documents no
 one has filed. Chips on a document page link back to the list pre-filtered
 on that keyword. Documents indexed before this view existed get their
-profile from `npx tsx scripts/ops/kb-backfill-keywords.ts` (`--force`
+profile from `scripts/ops/kb-backfill-keywords.ts`, run with `npx tsx` (`--force`
 recomputes every document after a stopword or tokenizer change); the
 Re-extract button recomputes one.
+
+## AI enrichment — opt-in, and why
+
+Everything above is computed without a model call. **AI enrichment**
+(Knowledge admin → *AI enrichment*, or `KB_ENRICH_ENABLED=true`) is the one
+switch that changes that: when it is on, every newly indexed document sends
+a sample of its text (up to 12k characters — opening, middle, end) to the
+configured model provider, which writes **topics**, a one-line **summary in
+the document's language** and a **shelf** to file it on. Those land in four
+additive fields; the deterministic summary and keyword profile are never
+overwritten, and a re-extract leaves the enrichment in place.
+
+Filing (*Auto-file*, on by default while enrichment is on) fills empty
+shelves only: the model may reuse an existing collection by name or propose
+a new one, which is created — but a document a person already filed is
+never moved. Any owner or admin can move a document by hand from its page,
+and *Enrich now* re-runs the model on one document; the admin panel's
+*Enrich pending* walks the documents that have none yet, 25 per press,
+one at a time.
+
+## The graph page
+
+**Knowledge → Graph** draws every document the reader may see as a node
+(a circle for an uploaded file, a hollow diamond for a catalog card whose
+data lives elsewhere), each collection as a shelf node with a *member* link
+to its documents, each external **data source** (S3, PostgreSQL) as a typed
+node with a *from source* link to the records crawled or described from it —
+shown only when at least one of those records is readable — and
+the knowledge-graph edges (shared names, keywords, facts) between documents
+— only when **both** ends are readable, the same rule the related-files
+panel applies, so a link to a document you cannot read is not drawn and its
+evidence is not sent. The layout is seeded: the same corpus draws the same
+picture on every load. Search and the visibility, shelf and **data type**
+filters (files, catalog cards, S3, PostgreSQL) dim what does not match rather
+than removing it; clicking a node opens its topics,
+keywords and links, with a jump into the library.
