@@ -50,14 +50,16 @@ export default async function DashboardPage() {
   const last14 = kpis.createdByDay.slice(-14);
 
   return (
-    <>
+    // At xl the page is a column the height of the viewport: the header takes
+    // its own height and the board takes the rest, so no header-height
+    // constant has to be kept in sync. The board fits one viewport when the
+    // rows' floors allow it and scrolls (never clips) when they do not.
+    <div className="xl:flex xl:h-dvh xl:flex-col">
       <PageHeader
         title="Dashboard"
         description="Operational KPIs across tickets, agents and approvals — last 30 days."
       />
-      {/* One viewport at xl when it fits; the board scrolls rather than clips
-          when the rows' floors need more height than the window has. */}
-      <div className="grid grid-cols-12 gap-3 p-4 md:px-8 md:py-4 xl:h-[calc(100vh-97px)] xl:grid-rows-[auto_minmax(260px,5fr)_minmax(224px,4fr)] xl:overflow-y-auto">
+      <div className="grid grid-cols-12 gap-3 p-4 md:px-8 md:py-4 xl:min-h-0 xl:flex-1 xl:grid-rows-[auto_minmax(260px,5fr)_minmax(224px,4fr)] xl:overflow-y-auto">
         {/* KPI tile row */}
         <div className="col-span-12 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
           <StatTile
@@ -87,7 +89,9 @@ export default async function DashboardPage() {
               better: "down",
               unit: "min",
             })}
-            caption="no responses yet"
+            caption={
+              totals.avgFirstResponseMinutes === null ? "no responses yet" : "no earlier window"
+            }
           />
           <StatTile
             label="Avg resolution"
@@ -102,7 +106,7 @@ export default async function DashboardPage() {
               better: "down",
               unit: "h",
             })}
-            caption="nothing resolved yet"
+            caption={totals.avgResolutionHours === null ? "nothing resolved yet" : "no earlier window"}
           />
           <StatTile
             label="AI resolution rate"
@@ -176,6 +180,6 @@ export default async function DashboardPage() {
           <SkillsTile skills={skills} />
         </Card>
       </div>
-    </>
+    </div>
   );
 }

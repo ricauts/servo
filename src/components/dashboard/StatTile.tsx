@@ -4,10 +4,11 @@ import type { DeltaChip, DeltaTone } from "@/components/dashboard/kpi-delta";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+// Opaque chip triples (surface + hairline + ink) — never an alpha tint.
 const CHIP: Record<DeltaTone, string> = {
-  good: "bg-(--good-chip) text-(--good-chip-ink) ring-(--good-chip-line)",
-  critical: "bg-(--critical-chip) text-(--critical-chip-ink) ring-(--critical-chip-line)",
-  neutral: "bg-(--neutral-chip) text-(--neutral-chip-ink) ring-(--neutral-chip-line)",
+  good: "bg-good-chip text-good-chip-ink ring-good-chip-line",
+  critical: "bg-critical-chip text-critical-chip-ink ring-critical-chip-line",
+  neutral: "bg-neutral-chip text-neutral-chip-ink ring-neutral-chip-line",
 };
 
 const ARROW = { up: ArrowUpRight, down: ArrowDownRight, flat: Minus } as const;
@@ -42,11 +43,7 @@ export default function StatTile({
   sparklineLabel?: string;
 }) {
   const critical = tone === "critical";
-  const ink = highlight
-    ? critical
-      ? "text-(--critical-chip-ink)"
-      : "text-(--warn-chip-ink)"
-    : null;
+  const ink = highlight ? (critical ? "text-critical-chip-ink" : "text-warn-chip-ink") : null;
   const Arrow = delta ? ARROW[delta.direction] : null;
 
   return (
@@ -55,14 +52,14 @@ export default function StatTile({
         "gap-2 px-4 py-3",
         highlight &&
           (critical
-            ? "bg-(--critical-chip) ring-(--critical-chip-line)"
-            : "bg-(--warn-chip) ring-(--warn-chip-line)"),
+            ? "bg-critical-chip ring-1 ring-critical-chip-line"
+            : "bg-warn-chip ring-1 ring-warn-chip-line"),
       )}
     >
       <div
         className={cn(
           "truncate font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em]",
-          ink ?? "text-(--text-faint)",
+          ink ?? "text-text-faint",
         )}
       >
         {label}
@@ -72,7 +69,7 @@ export default function StatTile({
           <span
             className={cn(
               "font-heading text-[28px] font-semibold leading-none tracking-tight tabular-nums",
-              ink ?? "text-(--text-strong)",
+              ink ?? "text-text-strong",
             )}
           >
             {value}
@@ -97,13 +94,13 @@ export default function StatTile({
               <Arrow size={11} strokeWidth={2.25} aria-hidden="true" />
               {delta.label}
             </span>
-            <span className={cn("font-mono text-[10.5px]", ink ?? "text-(--text-faint)")}>
+            <span className={cn("font-mono text-[10.5px]", ink ?? "text-text-faint")}>
               vs prev 30d
             </span>
           </>
         ) : (
           caption && (
-            <span className={cn("truncate font-mono text-[10.5px]", ink ?? "text-(--text-faint)")}>
+            <span className={cn("truncate font-mono text-[10.5px]", ink ?? "text-text-faint")}>
               {caption}
             </span>
           )
