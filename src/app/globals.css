@@ -1,3 +1,6 @@
+/* Fonts first: an @import must precede every other rule, and the design
+   system's fonts.css is itself imported after Tailwind (see that file). */
+@import url("https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,300..900;1,300..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";

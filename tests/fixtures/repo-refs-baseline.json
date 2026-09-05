@@ -17,6 +17,11 @@
       "owner": "hyg-09"
     },
     {
+      "path": "src/components/ui/tabs.tsx",
+      "reason": "unused shadcn primitive since Settings moved onto the master-detail shell (2026-09-05); deletion is build-safe but npx shadcn add can re-create it, so it is kept like the other primitives",
+      "owner": "question-31"
+    },
+    {
       "path": "src/components/ui/avatar.tsx",
       "reason": "unused shadcn primitive; deletion is build-safe today but npx shadcn add can re-create it, so it is kept",
       "owner": "question-31"

@@ -55,7 +55,7 @@
   --scrim:#080A0ECC;
 
   /* --- Semantic: lines -------------------------------------------------- */
-  --line:#232A35;
+  --line:#2B3341;
   --line-strong:#313A48;
   --line-brand:#2B3A6B;
 
@@ -126,7 +126,7 @@
   --text-strong:#10131A;
   --text-body:#232936;
   --text-muted:#5B6577;
-  --text-faint:#8A93A3;
+  --text-faint:#7F8899;
   --text-invert:var(--white);
   --text-brand:var(--accent-700);
   --text-link:var(--accent-700);

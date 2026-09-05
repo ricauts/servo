@@ -1,6 +1,8 @@
 /* Servo webfonts. Both faces are Google Fonts, loaded from the Google CDN —
    no self-hosted binaries ship with this system (see readme.md → Fonts). */
-@import url("https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,300..900;1,300..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+/* The Google Fonts @import moved to src/app/globals.css line 1: CSS requires
+   @import to precede every other rule, and this file is itself imported after
+   Tailwind's rules, so Turbopack rejected the compiled sheet. */
 
 :root{
   --font-core:"Chivo","Helvetica Neue",Arial,sans-serif;
