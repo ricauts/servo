@@ -12,8 +12,14 @@ import GroupsManager, {
 
 export const dynamic = "force-dynamic";
 
-export default async function GroupsPage() {
+export default async function GroupsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ group?: string | string[] }>;
+}) {
   const user = await getCurrentUser();
+  const params = (await searchParams) ?? {};
+  const initialGroup = typeof params.group === "string" ? params.group : undefined;
   if (!can(user, "group.view")) {
     return (
       <>
@@ -63,13 +69,13 @@ export default async function GroupsPage() {
         title="Groups"
         description="Assignment groups with JUNIOR → MID → SENIOR escalation tiers. Triage routes tickets to the group that owns their category; priority sets the minimum tier."
       />
-      <div className="p-4 md:p-8">
-        <GroupsManager
-          groups={groupViews}
-          users={memberOptions}
-          canManage={can(user, "group.manage")}
-        />
-      </div>
+      {/* One rail, one pane: `?group=<id>` keeps the place across visits. */}
+      <GroupsManager
+        groups={groupViews}
+        users={memberOptions}
+        canManage={can(user, "group.manage")}
+        initialId={initialGroup}
+      />
     </>
   );
 }

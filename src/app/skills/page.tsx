@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function SkillsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ distill?: string }>;
+  searchParams: Promise<{ distill?: string; skill?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!can(user, "skills.view")) {
@@ -81,14 +81,15 @@ export default async function SkillsPage({
         title="Skills"
         description="What the desk has decided to always do. Each skill is Markdown with frontmatter (name, description, categories); resolvers see only the name and description, and load the body with read_skill when a ticket calls for it. QA reviews the run against the skills that applied."
       />
-      <div className="space-y-4 p-4 md:p-8">
-        <SkillsManager
-          skills={skills}
-          canManage={can(user, "skills.manage")}
-          prefillMarkdown={prefillMarkdown}
-          prefillSourceTicketId={prefillSourceTicketId}
-        />
-      </div>
+      {/* One rail, one pane: `?skill=<slug>` keeps the place across visits;
+          `?distill=` still opens the create editor prefilled. */}
+      <SkillsManager
+        skills={skills}
+        canManage={can(user, "skills.manage")}
+        prefillMarkdown={prefillMarkdown}
+        prefillSourceTicketId={prefillSourceTicketId}
+        initialSlug={typeof params.skill === "string" ? params.skill : undefined}
+      />
     </>
   );
 }
