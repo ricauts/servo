@@ -94,14 +94,16 @@ export default function ApprovalCard({
           </div>
         </div>
 
-        <div className="rounded-lg border border-warn/30 bg-warn-soft/50 p-3 dark:bg-warn/10">
+        {/* The paused call: the ds warn quiet surface + its hairline (opaque
+            tokens in both modes — no alpha tint), the input in an inset. */}
+        <div className="rounded-lg border border-warn-line bg-warn-soft p-3">
           <div className="font-heading text-[13px] font-medium text-foreground">
             Tool call: <span className="font-mono">{approval.toolName}</span>
           </div>
           <p className="mt-0.5 font-sans text-xs text-muted-foreground">
             This action is paused until a human approves or rejects it.
           </p>
-          <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs leading-relaxed text-foreground">
+          <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-surface-inset p-3 font-mono text-xs leading-relaxed text-foreground">
             {approval.toolInput}
           </pre>
         </div>

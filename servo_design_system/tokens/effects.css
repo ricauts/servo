@@ -26,3 +26,17 @@
   --dot-grid-size:24px 24px;
   --scanline:repeating-linear-gradient(180deg,#FFFFFF08 0 1px,transparent 1px 4px); /* @kind other */
 }
+
+/* Light mode — paper-tuned depth. Shadows are ink at low alpha (the dark
+   values are black over black and read as mud on paper); the top inset is a
+   white highlight that only shows on tinted surfaces; the glow follows the
+   light brand; the dot grid is a faint ink dot. */
+.servo-light{
+  --shadow-1:0 1px 2px #0D0F1414;
+  --shadow-2:0 2px 6px #0D0F141F,0 1px 2px #0D0F1414;
+  --shadow-3:0 12px 32px -8px #0D0F1433,0 2px 6px #0D0F141A;
+  --inset-top:inset 0 1px 0 #FFFFFFB3;
+  --glow-brand:0 0 0 1px #3447B01F,0 8px 28px -10px #3447B026;
+  --dot-grid:radial-gradient(#0D0F1414 1px,transparent 1px); /* @kind other */
+  --scanline:repeating-linear-gradient(180deg,#0D0F1408 0 1px,transparent 1px 4px); /* @kind other */
+}

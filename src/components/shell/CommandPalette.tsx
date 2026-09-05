@@ -30,6 +30,10 @@ interface TicketHit {
   status: string;
 }
 
+// Group headings in the ds mono micro-label: 10.5px caps, 0.14em, faint ink.
+const GROUP_LABEL =
+  "**:[[cmdk-group-heading]]:font-mono **:[[cmdk-group-heading]]:text-[10.5px] **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.14em] **:[[cmdk-group-heading]]:text-text-faint";
+
 export default function CommandPalette({ entries = [] }: { entries?: NavEntry[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -79,11 +83,15 @@ export default function CommandPalette({ entries = [] }: { entries?: NavEntry[] 
   );
 
   return (
+    // The ds palette: a floating surface with a hairline and --shadow-3 (the
+    // dialog's alpha ring is replaced by a real border), mono caps group
+    // labels, mono ids.
     <CommandDialog
       open={open}
       onOpenChange={setOpen}
       title="Command palette"
       description="Jump to a page or search tickets"
+      className="rounded-[10px]! border border-input shadow-lg ring-0"
     >
       {/* Ticket search is server-side; cmdk must not re-filter those hits away. */}
       <Command shouldFilter={false}>
@@ -91,15 +99,16 @@ export default function CommandPalette({ entries = [] }: { entries?: NavEntry[] 
         value={query}
         onValueChange={setQuery}
         placeholder="Search tickets or jump to a page…"
+        className="font-sans"
       />
       <CommandList>
-        <CommandEmpty>
+        <CommandEmpty className="font-sans text-text-muted">
           {searching ? "Searching…" : "No results found."}
         </CommandEmpty>
 
         {hits.length > 0 && (
           <>
-            <CommandGroup heading="Tickets">
+            <CommandGroup heading="Tickets" className={GROUP_LABEL}>
               {hits.map((t) => (
                 <CommandItem
                   key={t.id}
@@ -107,7 +116,7 @@ export default function CommandPalette({ entries = [] }: { entries?: NavEntry[] 
                   onSelect={() => go(`/tickets/${t.id}`)}
                 >
                   <Ticket size={15} className="text-primary-strong" />
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-[12.5px] text-text-faint">
                     #{t.number}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{t.title}</span>
@@ -121,7 +130,7 @@ export default function CommandPalette({ entries = [] }: { entries?: NavEntry[] 
           </>
         )}
 
-        <CommandGroup heading="Go to">
+        <CommandGroup heading="Go to" className={GROUP_LABEL}>
           {/* The registry filtered by the server — same single owner as the
               sidebar; no page list lives in this file. */}
           {entries.filter(

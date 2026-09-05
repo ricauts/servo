@@ -11,6 +11,8 @@ import type {
   TicketStatus,
 } from "@/lib/types";
 
+// The ds status vocabulary: good / warn / serious / critical / info / neutral
+// (+ brand). `violet` is the legacy name of `info` and renders identically.
 export type BadgeTone =
   | "neutral"
   | "brand"
@@ -18,6 +20,7 @@ export type BadgeTone =
   | "warn"
   | "serious"
   | "critical"
+  | "info"
   | "violet";
 
 export const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -32,7 +35,7 @@ export const STATUS_LABEL: Record<TicketStatus, string> = {
 export const STATUS_TONE: Record<TicketStatus, BadgeTone> = {
   OPEN: "serious",
   TRIAGED: "brand",
-  IN_PROGRESS: "violet",
+  IN_PROGRESS: "info",
   WAITING_APPROVAL: "warn",
   RESOLVED: "good",
   CLOSED: "neutral",
@@ -71,7 +74,7 @@ export const SENIORITY_LABEL: Record<MemberTier, string> = {
 
 export const SENIORITY_TONE: Record<MemberTier, BadgeTone> = {
   JUNIOR: "neutral",
-  MID: "violet",
+  MID: "info",
   SENIOR: "serious",
   STANDALONE: "brand",
 };
@@ -96,7 +99,7 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
 };
 
 export const RUN_STATUS_TONE: Record<RunStatus, BadgeTone> = {
-  RUNNING: "violet",
+  RUNNING: "info",
   WAITING_APPROVAL: "warn",
   COMPLETED: "good",
   FAILED: "critical",
