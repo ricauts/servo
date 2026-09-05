@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Share2 } from "lucide-react";
+import { ChevronRight, Share2 } from "lucide-react";
+import { Chip } from "@/components/kb/KbChip";
+import { BTN_PRIMARY, INPUT, LABEL, SELECT_TEXT } from "@/components/kb/kb-controls";
 
 /** The share panel (kb-17): share/revoke USER / GROUP / AGENT grants and the
  *  effective-readers preview that resolves through the SAME entitlement CTE
@@ -49,21 +51,25 @@ export default function KbSharePanel({ documentId }: { documentId: string }) {
   }
 
   return (
-    <div className="mt-4 rounded-md border border-border bg-card p-3.5">
+    <div className="mt-4 rounded-lg border border-border bg-card px-3.5 py-3">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 font-heading text-[13px] font-medium"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 font-heading text-[13px] font-semibold text-foreground"
       >
-        <Share2 size={14} /> Share
+        <ChevronRight size={13} className={`text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+        <Share2 size={13} /> Share
       </button>
       {open && (
         <div className="mt-3 flex flex-col gap-3">
+          {/* One 32px control row: subject kind, subject id, the action. */}
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={subjectType}
               onChange={(e) => setSubjectType(e.target.value as "USER" | "GROUP" | "AGENT")}
-              className="rounded-md border border-input bg-background px-2 py-1.5 font-mono text-xs"
+              aria-label="Subject kind"
+              className={SELECT_TEXT}
             >
               <option value="USER">User</option>
               <option value="GROUP">Group</option>
@@ -73,39 +79,30 @@ export default function KbSharePanel({ documentId }: { documentId: string }) {
               value={subjectId}
               onChange={(e) => setSubjectId(e.target.value)}
               placeholder="user/group/agent id — e.g. builtin:resolver"
-              className="min-w-56 flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs"
+              aria-label="Subject id"
+              className={`${INPUT} min-w-56 flex-1 px-2.5 font-mono text-xs`}
             />
             <button
               type="button"
               disabled={busy || !subjectId.trim()}
               onClick={() => void share()}
-              className="rounded-md bg-primary px-3 py-1.5 font-heading text-[12.5px] font-medium text-primary-foreground disabled:opacity-50"
+              className={BTN_PRIMARY}
             >
               {busy ? "Sharing…" : "Grant read"}
             </button>
           </div>
-          {error && (
-            <p className="font-mono text-[11px]" style={{ color: "var(--critical-chip-ink)" }}>
-              {error}
-            </p>
-          )}
+          {error && <p className="font-mono text-[11px] text-(--critical-chip-ink)">{error}</p>}
           <div>
-            <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
-              Who can read this now
-            </p>
+            <p className={LABEL}>Who can read this now</p>
             {readers === null ? (
               <p className="mt-1 text-xs text-muted-foreground">Resolving…</p>
             ) : readers.length === 0 ? (
               <p className="mt-1 text-xs text-muted-foreground">Only the owner.</p>
             ) : (
-              <ul className="mt-1 flex flex-wrap gap-1.5">
+              <ul className="mt-1.5 flex flex-wrap gap-1">
                 {readers.map((r) => (
-                  <li
-                    key={r.id}
-                    className="rounded-full border px-2 py-px font-mono text-[10.5px]"
-                    style={{ borderColor: "var(--line)", color: "var(--text-muted)" }}
-                  >
-                    {r.name}
+                  <li key={r.id}>
+                    <Chip tone="neutral" title={r.id}>{r.name}</Chip>
                   </li>
                 ))}
               </ul>

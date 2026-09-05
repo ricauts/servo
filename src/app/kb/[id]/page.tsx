@@ -13,10 +13,26 @@ import KbDocumentFiling from "@/components/kb/KbDocumentFiling";
 import KbSharePanel from "@/components/kb/KbSharePanel";
 import KbReextractButton from "@/components/kb/KbReextractButton";
 import KbFactChips from "@/components/kb/KbFactChips";
+import KbChunkList from "@/components/kb/KbChunkList";
+import { Chip, chipClass, textStatusTone, visibilityTone, type ChipTone } from "@/components/kb/KbChip";
+import { BTN_OUTLINE, LABEL, NOTE_WARN } from "@/components/kb/kb-controls";
 import PageHeader from "@/components/shell/PageHeader";
 import EmptyState from "@/components/common/EmptyState";
 
 export const dynamic = "force-dynamic";
+
+/** The graph's edge kinds → the chip tone the related-files list uses; the
+ *  same mapping the graph page draws its links with. */
+const RELATED_TONE: Record<string, ChipTone> = {
+  SHARED_ENTITY: "brand",
+  SHARED_FACT: "warn",
+  SHARED_KEYWORD: "neutral",
+  SAME_COLLECTION: "neutral",
+};
+
+function kb(size: number): string {
+  return size > 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
+}
 
 /** Document detail (kb-16): chunk locators, the ACL-filtered related-files
  *  panel, and download. The anchor id resolves through the same entitlement
@@ -89,48 +105,48 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
         <ArrowLeft size={13} /> Knowledge
       </Link>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2.5">
-        <h1 className="font-heading text-[20px] font-bold tracking-tight">{doc.name}</h1>
-        <span
-          className="rounded-full border px-1.5 py-px font-mono text-[10.5px] leading-4"
-          style={{ color: status.tone, borderColor: "var(--line)" }}
-        >
-          {status.label}
-        </span>
-        <span className="font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">
-          {doc.visibility} · {(doc.byteSize / 1024).toFixed(0)} KB · {doc.contentType}
-        </span>
-        <a
-          href={`/api/kb/documents/${doc.id}/download`}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-[12.5px] font-medium hover:bg-accent/40"
-        >
+      {/* The title band: name, then the document's state as chips. */}
+      <div className="mt-3 flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="break-words font-heading text-[22px] font-bold tracking-tight">{doc.name}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <Chip tone={textStatusTone(doc.textStatus)} caps>{status.label}</Chip>
+            <Chip tone={visibilityTone(doc.visibility)} caps>{doc.visibility}</Chip>
+            {doc.collection ? (
+              <Chip tone="neutral" icon={<FolderOpen size={11} />} title="Shelf">{doc.collection.name}</Chip>
+            ) : (
+              <Chip tone="neutral">uncategorized</Chip>
+            )}
+            {doc.kind === "CATALOG" && <Chip tone="info" caps className="border-dashed">catalog card</Chip>}
+            <span className="font-mono text-[10.5px] text-muted-foreground">
+              {kb(doc.byteSize)} · {doc.contentType} · updated {doc.updatedAt.toISOString().slice(0, 10)}
+            </span>
+          </div>
+        </div>
+        <a href={`/api/kb/documents/${doc.id}/download`} className={BTN_OUTLINE}>
           <Download size={13} /> Download
         </a>
       </div>
-      {status.hint && <p className="mt-1.5 text-xs text-muted-foreground">{status.hint}</p>}
+      {status.hint && <p className="mt-2 text-xs text-muted-foreground">{status.hint}</p>}
       {/* kb-lib-2: the model's summary when there is one, the deterministic
           extract otherwise — never both, never blended. */}
       {doc.aiSummary ? (
-        <p className="mt-2 max-w-3xl text-[13px] leading-relaxed" title={`Written by ${doc.enrichModel}`}>{doc.aiSummary}</p>
+        <p className="mt-3 max-w-3xl text-[13.5px] leading-relaxed" title={`Written by ${doc.enrichModel}`}>{doc.aiSummary}</p>
       ) : (
-        doc.summary && <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{doc.summary}</p>
+        doc.summary && <p className="mt-3 max-w-3xl text-[13.5px] leading-relaxed text-muted-foreground">{doc.summary}</p>
       )}
 
-      {/* kb-lib-1: the document-level keyword profile and its shelf. Chips
-          link back to the library pre-filtered on that keyword; topics
-          (kb-lib-2) come first when the model wrote any. */}
-      {(keywords.length > 0 || topics.length > 0 || doc.collection) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1" aria-label="Keywords">
-          {doc.collection && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-px font-mono text-[10.5px] leading-4 text-muted-foreground">
-              <FolderOpen size={11} /> {doc.collection.name}
-            </span>
-          )}
+      {/* kb-lib-1: the document-level keyword profile. Chips link back to the
+          library pre-filtered on that keyword; topics (kb-lib-2) come first
+          when the model wrote any. */}
+      {(keywords.length > 0 || topics.length > 0) && (
+        <div className="mt-3 flex flex-wrap items-center gap-1" aria-label="Keywords">
           {topics.map((t) => (
             <Link
               key={`t:${t}`}
               href={`/kb?q=${encodeURIComponent(t)}`}
-              className="rounded-full border border-primary/40 px-1.5 py-px font-heading text-[10.5px] leading-4 transition-colors hover:bg-accent"
+              className={`${chipClass("brand", { face: "ui" })} hover:border-(--brand)`}
+              title={`Find documents about "${t}"`}
             >
               {t}
             </Link>
@@ -139,7 +155,8 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
             <Link
               key={k}
               href={`/kb?q=${encodeURIComponent(k)}`}
-              className="rounded-full border border-border px-1.5 py-px font-mono text-[10.5px] leading-4 text-muted-foreground transition-colors hover:bg-accent"
+              className={`${chipClass("neutral")} hover:border-(--line-strong)`}
+              title={`Find documents with "${k}"`}
             >
               {k}
             </Link>
@@ -148,14 +165,12 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       )}
 
       {/* dcl-09: extractor provenance — NEVER a silent baseline. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-sans text-xs">
-        <span className="font-heading font-semibold uppercase tracking-wide text-muted-foreground">Extractor</span>
+      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs">
+        <span className={LABEL}>Extractor</span>
         <span className="font-mono text-[11px]">{doc.extractor || "baseline"}{doc.extractorVersion ? ` · ${doc.extractorVersion}` : ""}</span>
         {doc.extractorFallback ? (
           <>
-            <span className="rounded-full border border-border px-1.5 py-px font-mono text-[10.5px]" style={{ color: "var(--warn)" }}>
-              fallback
-            </span>
+            <Chip tone="warn" caps>fallback</Chip>
             <span className="text-muted-foreground">
               Baseline extraction — the high-fidelity extractor was unavailable ({doc.extractorFallback}).
             </span>
@@ -177,14 +192,7 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
       {can(user, "kb.share") && <KbSharePanel documentId={doc.id} />}
 
       {agentReaders === 0 && (
-        <p
-          className="mt-4 rounded-md border px-3 py-2 font-mono text-[11.5px]"
-          style={{
-            borderColor: "var(--warn-chip-line)",
-            background: "var(--warn-chip)",
-            color: "var(--warn-chip-ink)",
-          }}
-        >
+        <p className={`${NOTE_WARN} mt-4`}>
           No agent can read this yet — agents search only what a grant gives
           them. This is deliberate: share the document to make it searchable.
         </p>
@@ -195,45 +203,24 @@ export default async function KbDocumentPage({ params }: { params: Promise<{ id:
           facts renders NOTHING here — absence is the ordinary case on prose. */}
       <KbFactChips documentId={doc.id} />
 
-      <div className="mt-6 grid gap-6 md:grid-cols-[1fr_240px]">
-        <div className="flex flex-col gap-2">
-          <h2 className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
-            Chunks · {chunks.length}
-          </h2>
-          {chunks.map((chunk) => (
-            <article
-              key={chunk.id}
-              // The anchor a fact chip links to (ext-08). scroll-mt clears the
-              // sticky header so the chunk a chip names is actually visible.
-              id={`chunk-${chunk.id}`}
-              className="scroll-mt-20 rounded-md border border-border bg-card p-3"
-            >
-              <p className="font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">
-                {describeLocator(chunk.locator)}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed">{chunk.text}</p>
-            </article>
-          ))}
-          {chunks.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              No indexed text — see the status above.
-            </p>
-          )}
-        </div>
+      <div className="mt-6 grid gap-6 md:grid-cols-[minmax(0,1fr)_260px]">
+        <KbChunkList
+          chunks={chunks.map((chunk) => ({ id: chunk.id, index: chunk.index, text: chunk.text, locator: describeLocator(chunk.locator) }))}
+        />
 
-        <aside className="flex flex-col gap-2">
-          <h2 className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
-            Related files
-          </h2>
+        {/* Related files stay in view while the chunks scroll past. */}
+        <aside className="flex flex-col gap-2 md:sticky md:top-20 md:self-start">
+          <h2 className={LABEL}>Related files · {related.length}</h2>
           {related.map((r) => (
             <Link
               key={r.id}
               href={`/kb/${r.id}`}
-              className="rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-accent/40"
+              className="rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:border-(--line-strong)"
             >
               <p className="truncate font-heading text-[13px] font-medium">{r.name}</p>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                {r.kind.replaceAll("_", " ").toLowerCase()} · {r.weight.toFixed(2)}
+              <p className="mt-1 flex items-center gap-1.5">
+                <Chip tone={RELATED_TONE[r.kind] ?? "neutral"} caps>{r.kind.replaceAll("_", " ").toLowerCase()}</Chip>
+                <span className="font-mono text-[10.5px] text-muted-foreground">{r.weight.toFixed(2)}</span>
               </p>
             </Link>
           ))}

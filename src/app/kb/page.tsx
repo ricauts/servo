@@ -3,12 +3,13 @@ import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { entitledDocumentIds } from "@/lib/kb/entitlement";
 import Link from "next/link";
-import { BookOpen, Lock, Waypoints } from "lucide-react";
+import { BookOpen, Lock, Settings2, Waypoints } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
 import KbUpload from "@/components/kb/KbUpload";
 import KbDocumentList from "@/components/kb/KbDocumentList";
 import KbAdminPanel from "@/components/kb/KbAdminPanel";
 import KbSearch from "@/components/kb/KbSearch";
+import { BTN_OUTLINE, LABEL } from "@/components/kb/kb-controls";
 import PageHeader from "@/components/shell/PageHeader";
 import { stringList } from "@/lib/kb/library";
 import { getEnrichSettings } from "@/lib/kb/enrich";
@@ -87,8 +88,9 @@ export default async function KnowledgePage({
 
   // The admin panel (kb-17): collections, embeddings with the query-egress
   // warning beside the field, auto-delivery toggles — kb.manage only.
+  const manages = can(user, "kb.manage");
   let admin: React.ReactNode = null;
-  if (can(user, "kb.manage")) {
+  if (manages) {
     const [settings, collections, health, fallbackQueue, enrich, enrichPending] = await Promise.all([
       db.setting.findMany({ where: { key: { startsWith: "kb." } } }),
       db.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } } ),
@@ -141,45 +143,54 @@ export default async function KnowledgePage({
         title="Knowledge"
         description="The company's own documents — manuals, spreadsheets, procedures — searchable by the desk's agents with citations back to the exact page, sheet or lines."
         actions={
-          <Link href="/kb/graph" className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-[12.5px] font-medium hover:bg-accent/40">
-            <Waypoints size={13} /> Graph
-          </Link>
+          <>
+            {manages && (
+              <a href="#kb-admin" className={BTN_OUTLINE}>
+                <Settings2 size={13} /> Admin
+              </a>
+            )}
+            <Link href="/kb/graph" className={BTN_OUTLINE}>
+              <Waypoints size={13} /> Graph
+            </Link>
+            {can(user, "kb.upload") && <KbUpload />}
+          </>
         }
       />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
-      {can(user, "kb.upload") && <KbUpload />}
-      {/* ext-08: search with the parse shown back as removable chips. */}
-      <KbSearch />
-      <KbDocumentList
-        documents={documents}
-        collections={filterCollections}
-        anyAgentGrant={agentGrants > 0}
-        initialText={initialText}
-      />
-      {documents.length === 0 && (
-        <div className="mt-6">
-        <EmptyState
-          icon={BookOpen}
-          title="No documents yet"
-          hint="Upload a manual or spreadsheet; agents can only search what someone shared with them."
+        {/* ext-08: search with the parse shown back as removable chips. */}
+        <KbSearch />
+        <KbDocumentList
+          documents={documents}
+          collections={filterCollections}
+          anyAgentGrant={agentGrants > 0}
+          initialText={initialText}
         />
-        </div>
-      )}
+        {documents.length === 0 && (
+          <div className="mt-6">
+            <EmptyState
+              icon={BookOpen}
+              title="No documents yet"
+              hint="Upload a manual or spreadsheet; agents can only search what someone shared with them."
+            />
+          </div>
+        )}
         {admin}
 
         {autoDelivered.length > 0 && (
-          <section className="mt-6 rounded-md border border-border bg-card p-4">
-            <h2 className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
+          <section id="kb-audit" className="mt-6 scroll-mt-20 overflow-hidden rounded-lg border border-border bg-card">
+            <h2 className={`${LABEL} border-b border-border bg-(--surface-2) px-4 py-2.5`}>
               Auto-delivered replies · audit
             </h2>
-            <ul className="mt-2 flex flex-col gap-1.5">
+            <ul className="divide-y divide-border">
               {autoDelivered.map((d) => (
-                <li key={d.id} className="text-xs text-muted-foreground">
-                  <span className="font-mono">#{d.ticket.number}</span>{" "}
-                  <Link href={`/tickets/${d.ticketId}`} className="underline-offset-2 hover:underline">
+                <li key={d.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
+                  <span className="font-mono text-[10.5px] text-muted-foreground">#{d.ticket.number}</span> {/* no-hex-lint:allow */}
+                  <Link href={`/tickets/${d.ticketId}`} className="min-w-0 flex-1 truncate font-medium underline-offset-2 hover:underline">
                     {d.ticket.title}
-                  </Link>{" "}
-                  · sent {d.decidedAt?.toISOString().slice(0, 16).replace("T", " ")} UTC
+                  </Link>
+                  <span className="font-mono text-[10.5px] text-muted-foreground">
+                    sent {d.decidedAt?.toISOString().slice(0, 16).replace("T", " ")} UTC
+                  </span>
                 </li>
               ))}
             </ul>

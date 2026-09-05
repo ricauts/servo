@@ -5,6 +5,7 @@ import { can } from "@/lib/permissions";
 import EmptyState from "@/components/common/EmptyState";
 import PageHeader from "@/components/shell/PageHeader";
 import KbGraph from "@/components/kb/KbGraph";
+import { BTN_OUTLINE } from "@/components/kb/kb-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,9 @@ export default async function KnowledgeGraphPage() {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Knowledge graph"
-        description="Every document you can read, the shelf it sits on, and what links it to the others — shared names, keywords and facts. Search highlights; click a node for its details."
+        description="Every document you can read, the shelf it sits on, and what links it to the others — shared names, keywords and facts. Search highlights; click a node for its details; hover a link for what it shares."
         actions={
-          <Link href="/kb" className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-[12.5px] font-medium hover:bg-accent/40">
+          <Link href="/kb" className={BTN_OUTLINE}>
             <ArrowLeft size={13} /> Library
           </Link>
         }

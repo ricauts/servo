@@ -195,6 +195,37 @@ function round(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
+/** A point on the canvas. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** How far a curved edge bows, as a fraction of its length — gentle, so
+ *  two links between neighbouring nodes stay apart without looping. */
+export const EDGE_BOW = 0.14;
+
+/** The control point of the curve from a to b: off the midpoint, along the
+ *  perpendicular, always on the same side for the same ordered pair. */
+function edgeControlPoint(a: Point, b: Point, bow: number): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return { x: (a.x + b.x) / 2 - dy * bow, y: (a.y + b.y) / 2 + dx * bow };
+}
+
+/** A quadratic path from a to b with a gentle bow. Pure: the same ends draw
+ *  the same curve, so the picture never wobbles between renders. */
+export function curvedEdgePath(a: Point, b: Point, bow = EDGE_BOW): string {
+  const c = edgeControlPoint(a, b, bow);
+  return `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`;
+}
+
+/** The point halfway along that curve (t = 0.5) — where a hover label sits. */
+export function curvedEdgeMidpoint(a: Point, b: Point, bow = EDGE_BOW): Point {
+  const c = edgeControlPoint(a, b, bow);
+  return { x: 0.25 * a.x + 0.5 * c.x + 0.25 * b.x, y: 0.25 * a.y + 0.5 * c.y + 0.25 * b.y };
+}
+
 /** The text a search box matches a node on: name, topics, keywords. */
 export function nodeMatches(node: GraphNode, needle: string): boolean {
   const q = needle.trim().toLowerCase();
