@@ -1,9 +1,9 @@
-// Regenerates the README screenshots in the charcoal + servo-blue dark theme
-// (owner ask; spec §0.5). Shoots the running app (docker compose, demo
-// dataset) with the system Chrome via puppeteer-core, authenticating as a
-// demo user through the same /api/auth/switch the user switcher uses.
-//
-//   node scripts/media/readme-screenshots.mjs [baseUrl]
+// Regenerates the README screenshots — the desk in its LIGHT theme by default
+// (owner ask, 2026-09-04; spec §0.5), --theme=dark for the dark variants. Shoots
+// the running app (docker compose, demo dataset) with the system Chrome via
+// puppeteer-core, authenticating as a demo user through the same
+// /api/auth/switch the user switcher uses.
+//   node scripts/media/readme-screenshots.mjs [baseUrl] [--theme=light|dark] [--out=<dir>]
 import puppeteer from "puppeteer-core";
 import { existsSync } from "node:fs";
 
