@@ -1,16 +1,14 @@
 "use client";
 
+// Specialist agents: the resolver personas the repository ships in
+// agents/<slug>.md, on the shared MasterDetail shell — one rail listing every
+// specialist with its On/Off chip, one pane with the key, the tool allowlist
+// and the .md itself (rendered read-only, edited inline). Create stays a
+// dialog in the actions slot; the tool picker stays a dialog too.
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -29,10 +27,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import Badge from "@/components/common/Badge";
 import Spinner from "@/components/common/Spinner";
 import EmptyState from "@/components/common/EmptyState";
+import MasterDetail, {
+  type MasterDetailItem,
+} from "@/components/common/MasterDetail";
+import Markdown from "@/components/tickets/Markdown";
+import MarkdownEditor, {
+  stripFrontmatter,
+} from "@/components/agents/MarkdownEditor";
 import { CATEGORY_LABEL, RISK_LABEL, RISK_TONE } from "@/lib/labels";
 import type { Category, RiskLevel } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -79,6 +83,9 @@ what to check first, what to be careful with, and when to hand off to a
 human instead of acting.
 `;
 
+const EDITOR_HELP =
+  "Markdown with YAML frontmatter: name, description, categories, tools. The body is the agent's system prompt.";
+
 async function api(
   path: string,
   method: string,
@@ -96,74 +103,6 @@ async function api(
   } catch {
     return { ok: false, error: "Network error — nothing was changed." };
   }
-}
-
-function EditorDialog({
-  title,
-  description,
-  initial,
-  open,
-  onOpenChange,
-  onSave,
-}: {
-  title: string;
-  description: string;
-  initial: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (markdown: string) => Promise<string | null>;
-}) {
-  const [markdown, setMarkdown] = useState(initial);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Reset the buffer each time the dialog opens with fresh content.
-  const [lastInitial, setLastInitial] = useState(initial);
-  if (initial !== lastInitial) {
-    setLastInitial(initial);
-    setMarkdown(initial);
-  }
-
-  async function save() {
-    setBusy(true);
-    setError(null);
-    const err = await onSave(markdown);
-    setBusy(false);
-    if (err) setError(err);
-    else onOpenChange(false);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <Textarea
-          value={markdown}
-          onChange={(e) => setMarkdown(e.target.value)}
-          rows={18}
-          spellCheck={false}
-          className="font-mono text-[12.5px] leading-relaxed"
-        />
-        {error && <p className="text-[13px] text-critical">{error}</p>}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            disabled={busy}
-          >
-            Cancel
-          </Button>
-          <Button type="button" onClick={save} disabled={busy || !markdown.trim()}>
-            Save agent
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 /** Checkbox picker for a profile's tool allowlist. Empty selection = every
@@ -238,8 +177,10 @@ function ToolPickerDialog({
               <label
                 key={tool.name}
                 className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-2 transition-colors",
-                  checked ? "bg-accent/40" : "hover:bg-muted/50",
+                  "flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors",
+                  checked
+                    ? "border-line-brand bg-brand-soft"
+                    : "border-border hover:bg-surface-hover",
                   tool.core && "cursor-default opacity-90",
                 )}
               >
@@ -248,7 +189,7 @@ function ToolPickerDialog({
                   checked={checked}
                   disabled={tool.core || busy}
                   onChange={() => toggle(tool.name)}
-                  className="mt-1 h-4 w-4 accent-[var(--primary)]"
+                  className="mt-1 h-4 w-4 accent-primary"
                 />
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-1.5">
@@ -291,7 +232,13 @@ function ToolPickerDialog({
   );
 }
 
-function AgentCard({
+const ROW_LABEL =
+  "w-16 shrink-0 font-mono text-[10.5px] tracking-[0.14em] text-text-faint uppercase";
+
+/** The detail pane: identity strip, key, tools, the .md (read-only or the
+ *  inline editor) and the delete footer. The shell's header already carries
+ *  the name and description. */
+function AgentDetail({
   profile,
   catalog,
   credentials,
@@ -331,87 +278,95 @@ function AgentCard({
   }
 
   return (
-    <Card size="sm" className={profile.enabled ? "" : "opacity-70"}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bot size={16} className="text-primary-strong" />
-          {profile.name}
-        </CardTitle>
-        <CardDescription>{profile.description}</CardDescription>
-        {canManage && (
-          <CardAction>
+    <div className="flex flex-col gap-4 font-sans">
+      {/* Identity strip: the handle, the run count, scope, the on/off control. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Bot size={16} aria-hidden className="text-text-brand" />
+          <code
+            className="rounded border border-border bg-surface-inset px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+            title="The profile's handle. It never changes when you rename the agent."
+          >
+            {profile.slug}
+          </code>
+          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+            {profile.runCount} run{profile.runCount === 1 ? "" : "s"}
+          </span>
+          {profile.categories.map((c) => (
+            <Badge key={c} tone="brand">
+              {CATEGORY_LABEL[c as Category] ?? c}
+            </Badge>
+          ))}
+        </div>
+        {canManage ? (
+          <label className="flex items-center gap-2 font-mono text-[10.5px] tracking-[0.14em] text-text-faint uppercase">
+            {profile.enabled ? "Enabled" : "Disabled"}
             <Switch
               checked={profile.enabled}
               disabled={busy}
               onCheckedChange={(v) => void toggleEnabled(v)}
               aria-label={`${profile.name} enabled`}
             />
-          </CardAction>
+          </label>
+        ) : (
+          <Badge tone={profile.enabled ? "good" : "neutral"}>
+            {profile.enabled ? "On" : "Off"}
+          </Badge>
         )}
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 font-sans">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {profile.categories.map((c) => (
-            <Badge key={c} tone="brand">
-              {CATEGORY_LABEL[c as Category] ?? c}
-            </Badge>
-          ))}
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {profile.runCount} run{profile.runCount === 1 ? "" : "s"}
-          </span>
-        </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(profile.tools.length > 0 ? profile.tools : ["all enabled tools"]).map(
-            (t) => (
-              <span
+      {canManage && credentials.length > 0 && (
+        <div className="flex items-center gap-3">
+          <span className={ROW_LABEL}>API key</span>
+          <Select
+            value={profile.credentialId ?? DEFAULT_CREDENTIAL}
+            disabled={busy}
+            onValueChange={(value) => {
+              void (async () => {
+                setBusy(true);
+                const res = await api(`/api/agents/${profile.id}`, "PATCH", {
+                  credentialId: value === DEFAULT_CREDENTIAL ? null : value,
+                });
+                if (!res.ok) setError(res.error ?? null);
+                else router.refresh();
+                setBusy(false);
+              })();
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full max-w-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_CREDENTIAL}>Default provider</SelectItem>
+              <SelectSeparator />
+              {credentials.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className="flex items-start gap-3">
+        <span className={cn(ROW_LABEL, "pt-1.5")}>Tools</span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          {profile.tools.length > 0 ? (
+            profile.tools.map((t) => (
+              <code
                 key={t}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground"
+                className="rounded border border-border bg-surface-inset px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground"
               >
                 {t}
-              </span>
-            ),
-          )}
-        </div>
-
-        {canManage && credentials.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="font-heading text-xs text-muted-foreground">
-              API key
+              </code>
+            ))
+          ) : (
+            <span className="text-[12.5px] text-muted-foreground">
+              all enabled tools
             </span>
-            <Select
-              value={profile.credentialId ?? DEFAULT_CREDENTIAL}
-              disabled={busy}
-              onValueChange={(value) => {
-                void (async () => {
-                  setBusy(true);
-                  const res = await api(`/api/agents/${profile.id}`, "PATCH", {
-                    credentialId: value === DEFAULT_CREDENTIAL ? null : value,
-                  });
-                  if (!res.ok) setError(res.error ?? null);
-                  else router.refresh();
-                  setBusy(false);
-                })();
-              }}
-            >
-              <SelectTrigger size="sm" className="min-w-0 flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={DEFAULT_CREDENTIAL}>Default provider</SelectItem>
-                <SelectSeparator />
-                {credentials.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {canManage && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          )}
+          {canManage && (
             <Button
               type="button"
               variant="outline"
@@ -421,65 +376,94 @@ function AgentCard({
               <SlidersHorizontal size={13} />
               Tools
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditing(true)}
-            >
-              <Pencil size={13} />
-              Edit .md
-            </Button>
-            {confirmDelete ? (
-              <>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => void remove()}
-                >
-                  Delete
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  Keep
-                </Button>
-              </>
-            ) : (
+          )}
+        </div>
+      </div>
+
+      {/* The document: rendered read-only, or the same text in the editor. */}
+      <section className="overflow-hidden rounded-lg border border-border">
+        <header className="flex min-h-9 items-center justify-between gap-2 border-b border-border bg-surface-inset px-3 py-1">
+          <span className="truncate font-mono text-[12px] text-muted-foreground">
+            agents/{profile.slug}.md
+          </span>
+          {editing ? (
+            <span className="font-mono text-[10.5px] tracking-[0.14em] text-text-brand uppercase">
+              Editing
+            </span>
+          ) : (
+            canManage && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={() => setConfirmDelete(true)}
+                onClick={() => setEditing(true)}
               >
-                <Trash2 size={13} />
+                <Pencil size={13} />
+                Edit .md
+              </Button>
+            )
+          )}
+        </header>
+        <div className="p-4">
+          {editing ? (
+            <MarkdownEditor
+              initial={profile.markdown}
+              help={EDITOR_HELP}
+              saveLabel="Save agent"
+              autoFocus
+              onCancel={() => setEditing(false)}
+              onSave={async (markdown) => {
+                const res = await api(`/api/agents/${profile.id}`, "PATCH", { markdown });
+                if (!res.ok) return res.error ?? "Save failed.";
+                router.refresh();
+                setEditing(false);
+                return null;
+              }}
+            />
+          ) : (
+            <Markdown>{stripFrontmatter(profile.markdown)}</Markdown>
+          )}
+        </div>
+      </section>
+
+      {canManage && (
+        <footer className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          {confirmDelete ? (
+            <>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={busy}
+                onClick={() => void remove()}
+              >
                 Delete
               </Button>
-            )}
-          </div>
-        )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmDelete(false)}
+              >
+                Keep
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 size={13} />
+              Delete
+            </Button>
+          )}
+        </footer>
+      )}
 
-        {error && <p className="text-[13px] text-critical">{error}</p>}
-      </CardContent>
-
-      <EditorDialog
-        title={`Edit ${profile.name}`}
-        description="Markdown with YAML frontmatter: name, description, categories, tools. The body is the agent's system prompt."
-        initial={profile.markdown}
-        open={editing}
-        onOpenChange={setEditing}
-        onSave={async (markdown) => {
-          const res = await api(`/api/agents/${profile.id}`, "PATCH", { markdown });
-          if (res.ok) router.refresh();
-          return res.ok ? null : (res.error ?? "Save failed.");
-        }}
-      />
+      {error && <p className="text-[13px] text-critical">{error}</p>}
 
       <ToolPickerDialog
         open={pickingTools}
@@ -492,7 +476,7 @@ function AgentCard({
           return res.ok ? null : (res.error ?? "Save failed.");
         }}
       />
-    </Card>
+    </div>
   );
 }
 
@@ -501,62 +485,97 @@ export default function AgentsManager({
   toolCatalog,
   credentials,
   canManage,
+  initialSlug,
 }: {
   profiles: AgentProfileView[];
   toolCatalog: ToolCatalogItem[];
   credentials: CredentialOption[];
   canManage: boolean;
+  /** From /agents?agent=<slug>: the rail row to open first. */
+  initialSlug?: string;
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
 
-  return (
-    <div className="space-y-4">
-      {canManage && (
-        <div className="flex justify-end">
-          <Button onClick={() => setCreating(true)}>
-            <Plus size={15} />
-            New agent
-          </Button>
-        </div>
-      )}
+  // Enabled first, then by name — the rail reads as "who resolves today".
+  const ordered = [...profiles].sort(
+    (a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name),
+  );
 
-      {profiles.length === 0 ? (
-        <EmptyState
-          icon={Bot}
-          title="No specialized agents yet"
-          hint={
-            canManage
-              ? "Create one from a .md template, or drop files into the repo's agents/ directory and reseed."
-              : "An admin can create specialized agents from .md definitions."
-          }
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {profiles.map((p) => (
-            <AgentCard
-              key={p.id}
-              profile={p}
-              catalog={toolCatalog}
-              credentials={credentials}
-              canManage={canManage}
-            />
-          ))}
-        </div>
-      )}
-
-      <EditorDialog
-        title="New specialized agent"
-        description="Markdown with YAML frontmatter: name, description, categories, tools. The body is the agent's system prompt."
-        initial={NEW_AGENT_TEMPLATE}
-        open={creating}
-        onOpenChange={setCreating}
-        onSave={async (markdown) => {
-          const res = await api("/api/agents", "POST", { markdown });
-          if (res.ok) router.refresh();
-          return res.ok ? null : (res.error ?? "Save failed.");
-        }}
+  const items: MasterDetailItem[] = ordered.map((profile) => ({
+    id: profile.slug,
+    title: profile.name,
+    subtitle: profile.description,
+    icon: <Bot size={16} />,
+    status: profile.enabled
+      ? { label: "On", tone: "good" }
+      : { label: "Off", tone: "neutral" },
+    keywords: [
+      profile.slug,
+      ...profile.categories,
+      ...profile.categories.map((c) => CATEGORY_LABEL[c as Category] ?? c),
+      ...profile.tools,
+    ],
+    body: (
+      <AgentDetail
+        profile={profile}
+        catalog={toolCatalog}
+        credentials={credentials}
+        canManage={canManage}
       />
-    </div>
+    ),
+  }));
+
+  const newAgent = canManage ? (
+    <Button onClick={() => setCreating(true)}>
+      <Plus size={15} />
+      New agent
+    </Button>
+  ) : undefined;
+
+  return (
+    <>
+      <MasterDetail
+        title="Agents"
+        param="agent"
+        initialId={initialSlug}
+        keepMounted
+        items={items}
+        actions={newAgent}
+        emptyState={
+          <EmptyState
+            icon={Bot}
+            title="No specialized agents yet"
+            hint={
+              canManage
+                ? "Create one from a .md template, or drop files into the repo's agents/ directory and reseed."
+                : "An admin can create specialized agents from .md definitions."
+            }
+            action={newAgent}
+          />
+        }
+      />
+
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New specialized agent</DialogTitle>
+            <DialogDescription>{EDITOR_HELP}</DialogDescription>
+          </DialogHeader>
+          <MarkdownEditor
+            initial={NEW_AGENT_TEMPLATE}
+            saveLabel="Save agent"
+            onCancel={() => setCreating(false)}
+            onSave={async (markdown) => {
+              const res = await api("/api/agents", "POST", { markdown });
+              if (!res.ok) return res.error ?? "Save failed.";
+              router.refresh();
+              setCreating(false);
+              return null;
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
