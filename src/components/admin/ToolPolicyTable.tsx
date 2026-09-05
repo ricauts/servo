@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Search } from "lucide-react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,18 @@ export default function ToolPolicyTable({
   const [policies, setPolicies] = useState(initialPolicies);
   const [savingTool, setSavingTool] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  // The search only narrows what is shown; every policy stays in state, so
+  // an optimistic update on a filtered row still lands on the right tool.
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? policies.filter(
+        (p) =>
+          p.toolName.toLowerCase().includes(needle) ||
+          p.description.toLowerCase().includes(needle),
+      )
+    : policies;
 
   async function update(
     toolName: string,
@@ -80,6 +93,28 @@ export default function ToolPolicyTable({
           <AlertTitle>{error}</AlertTitle>
         </Alert>
       )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="relative block w-full max-w-xs">
+          <span className="sr-only">Filter tools</span>
+          <Search
+            size={14}
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-(--text-faint)"
+          />
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter tools…"
+            className="pl-8"
+          />
+        </label>
+        <span className="font-mono text-[10.5px] tracking-[0.14em] text-(--text-faint) uppercase">
+          {visible.length === policies.length
+            ? `${policies.length} tools`
+            : `${visible.length} of ${policies.length} tools`}
+        </span>
+      </div>
       <div className="rounded-lg border border-border">
         <Table>
           <TableHeader>
@@ -91,7 +126,17 @@ export default function ToolPolicyTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {policies.map((p) => (
+            {visible.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="py-6 text-center font-mono text-xs text-(--text-faint)"
+                >
+                  No tools match.
+                </TableCell>
+              </TableRow>
+            )}
+            {visible.map((p) => (
               <TableRow key={p.toolName}>
                 <TableCell className="whitespace-normal">
                   <div className="flex flex-col gap-0.5">

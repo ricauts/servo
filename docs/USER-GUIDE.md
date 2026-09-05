@@ -67,7 +67,7 @@ setting, so the run continues instead of failing.
 > `localhost`, add that host here or the integration starts returning
 > "Blocked". Integrations aimed at public APIs are unaffected.
 
-### Settings
+### Settings (same left rail — one section per concern, each with its live status)
 
 - **AI provider (BYOK):** pick `anthropic`, `zai`, `openai`-compatible or
   `mock` (offline). Keys can come from env vars or be stored — stored secrets

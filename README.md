@@ -33,19 +33,13 @@ Runs self-hosted on PostgreSQL with one `docker compose up`. Bring your own mode
 
 **Plugs into what you run.** SSO, SMTP in and out, GitHub, Azure, MCP servers (every imported tool quarantined until an admin enables it), custom HTTP tools, signed webhooks, local plugin bundles — and **Packs**, the catalog that shows what is connected and what is available.
 
-## A real ticket, end to end
+## A ticket, end to end
 
-Someone emailed the desk to say a button on a landing page was unreadable. Servo triaged it, the frontend specialist read the source, diagnosed the CSS, and **captured what it looked like before and after its fix — from the branch, before anything was merged** — so a human could approve on evidence rather than on a diff:
-
-<p align="center">
-  <img src="docs/assets/before-after-fix.png" alt="Before: the button label is unreadable at 2.4:1 contrast. After: the agent's fix restores the intended dark label at 9.4:1, passing WCAG AA" width="100%" />
-</p>
-
-Both screenshots land on the ticket next to the AI-drafted reply waiting for review. The run folds into one line — agent, outcome, QA verdict, the tools it used and who approved what — and unfolds to the full trace. The commit and the merge each stopped for a human.
+A requester asks for a production hotfix. Triage prioritizes it and hands it to the resolver; the resolver reads the desk's deployment skill, inspects the repository, and reaches `cloud_apply_deployment` — a gated tool — so the run pauses and an approval lands in the inbox with the exact input a human will sign off. The run folds into one line on the ticket — agent, outcome, the tools it used and who approved what — and unfolds to the full step-by-step trace. Nothing risky happens without a named person deciding it.
 
 | The ticket, with the run folded into its story | Approvals — tool sign-offs and reply drafts, one queue |
 |---|---|
-| ![Ticket detail with the agent's screenshots, the AI reply draft and the folded run](docs/assets/screenshot-ticket-detail.png) | ![The approvals inbox with a pending tool call, its exact input, and drafts awaiting review](docs/assets/screenshot-approvals.png) |
+| ![Ticket detail with the agent run paused for approval and the folded trace](docs/assets/screenshot-ticket-detail.png) | ![The approvals inbox with a pending tool call, its exact input, and drafts awaiting review](docs/assets/screenshot-approvals.png) |
 
 ## Screenshots
 

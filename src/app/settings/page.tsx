@@ -1,25 +1,24 @@
-import { Lock } from "lucide-react";
+import {
+  Blocks,
+  KeyRound,
+  Lock,
+  Sparkles,
+  Timer,
+  Users,
+  Wrench,
+} from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { getAiSettings } from "@/lib/ai/settings";
 import type { RiskLevel } from "@/lib/types";
 import PageHeader from "@/components/shell/PageHeader";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import Avatar from "@/components/common/Avatar";
 import Badge from "@/components/common/Badge";
 import EmptyState from "@/components/common/EmptyState";
+import MasterDetail, {
+  type MasterDetailItem,
+} from "@/components/common/MasterDetail";
 import type { BadgeTone } from "@/lib/labels";
 import AiProviderForm, {
   type AiSettingsView,
@@ -49,8 +48,16 @@ const ROLE_TONE: Record<string, BadgeTone> = {
   AI_AGENT: "violet",
 };
 
-export default async function SettingsPage() {
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ section?: string | string[] }>;
+}) {
   const user = await getCurrentUser();
+  const params = (await searchParams) ?? {};
+  const initialSection = typeof params.section === "string" ? params.section : undefined;
 
   if (user.role !== "ADMIN") {
     return (
@@ -146,121 +153,150 @@ export default async function SettingsPage() {
     };
   });
 
+  // Rail statuses: the effective provider (mock when the key is unusable),
+  // key-pool size, enabled/total tools, and the team size.
+  const enabledTools = policyViews.filter((p) => p.enabled).length;
+  const escalating = slaViews.filter((p) => p.escalateOnBreach).length;
+  const providerStatus: MasterDetailItem["status"] =
+    ai.provider === "mock"
+      ? { label: "Mock", tone: aiSettings.fallingBackToMock ? "warn" : "neutral" }
+      : { label: ai.provider, tone: "good" };
+
+  const sections: MasterDetailItem[] = [
+    {
+      id: "ai",
+      title: "AI provider",
+      subtitle: "Bring your own key, model and automation",
+      description:
+        "Pick the provider and model every agent runs on. Keys can come from env vars or be stored encrypted; an unusable key falls back to mock so nothing breaks.",
+      icon: <Sparkles size={16} />,
+      status: providerStatus,
+      keywords: ["byok", "anthropic", "openai", "zai", "mock", "model", "triage", "draft", "qa"],
+      body: <AiProviderForm initial={aiSettings} />,
+    },
+    {
+      id: "credentials",
+      title: "API key pool",
+      subtitle: "Named keys, one per specialist agent",
+      description:
+        "Register several named keys and assign one per specialist agent; the Agents page reports tokens and latency per key.",
+      icon: <KeyRound size={16} />,
+      status: {
+        label: plural(credentialViews.length, "key"),
+        tone: credentialViews.length > 0 ? "good" : "neutral",
+      },
+      keywords: ["credentials", "keys", "pool", "throughput"],
+      body: <CredentialsManager credentials={credentialViews} />,
+    },
+    {
+      id: "tools",
+      title: "Tools",
+      subtitle: "Enabled, risk level and approval per tool",
+      description:
+        "Per tool: enabled, risk level and whether it requires human approval. Approval gates on mutating tools are a security boundary.",
+      icon: <Wrench size={16} />,
+      status: {
+        label: `${enabledTools}/${policyViews.length} tools`,
+        tone: enabledTools > 0 ? "good" : "neutral",
+      },
+      keywords: ["permissions", "policy", "risk", "approval", ...policyViews.map((p) => p.toolName)],
+      body: <ToolPolicyTable initialPolicies={policyViews} />,
+    },
+    {
+      id: "custom-tools",
+      title: "Custom tools",
+      subtitle: "HTTP tools agents may call, behind the same gates",
+      description:
+        "Declare a tool as an HTTP call with a JSON schema; Servo's guarded runtime executes it behind the same risk and approval policy as the built-ins.",
+      icon: <Blocks size={16} />,
+      status:
+        customToolViews.length > 0
+          ? { label: plural(customToolViews.length, "tool"), tone: "good" }
+          : { label: "None", tone: "neutral" },
+      keywords: ["http", "integration", "webhook", "rest", "schema", ...customToolViews.map((t) => t.name)],
+      body: <CustomToolsManager tools={customToolViews} />,
+    },
+    {
+      id: "sla",
+      title: "SLA",
+      subtitle: "Response and resolution targets per priority",
+      description:
+        "Response and resolution targets per priority; a breach escalates the ticket a tier automatically when the scan runs (POST /api/sla/scan).",
+      icon: <Timer size={16} />,
+      status: {
+        label: `${escalating}/${slaViews.length} escalate`,
+        tone: escalating > 0 ? "good" : "neutral",
+      },
+      keywords: ["targets", "escalation", "breach", "priority", "response", "resolution"],
+      body: <SlaPolicyTable initialPolicies={slaViews} />,
+    },
+    {
+      id: "team",
+      title: "Team",
+      subtitle: "Roles for everyone who signs in",
+      description:
+        "Admins change team roles here; new SSO sign-ins start as REQUESTER and only ever see their own tickets.",
+      icon: <Users size={16} />,
+      status: { label: plural(users.length, "member"), tone: "neutral" },
+      keywords: ["roles", "admin", "agent", "requester", ...users.map((u) => u.name)],
+      body: (
+        <div className="flex flex-col gap-3 font-sans">
+          <ul className="flex flex-col divide-y divide-border">
+            {users.map((u) => (
+              <li key={u.id} className="flex items-center gap-3 px-1 py-2.5">
+                <Avatar
+                  name={u.name}
+                  color={u.color}
+                  size={28}
+                  isAi={u.role === "AI_AGENT"}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {u.name}
+                  </span>
+                  <span className="block truncate font-mono text-xs text-muted-foreground">
+                    {u.email}
+                  </span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  {u.role !== "AI_AGENT" && u.id !== user.id ? (
+                    <RoleSelect userId={u.id} role={u.role} />
+                  ) : (
+                    <Badge tone={ROLE_TONE[u.role] ?? "neutral"}>
+                      {u.role.replace("_", " ")}
+                    </Badge>
+                  )}
+                  {u.role === "AI_AGENT" && u.aiKind && (
+                    <Badge tone="neutral">{u.aiKind}</Badge>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Separator />
+          <p className="font-body text-sm text-muted-foreground">
+            Admins can change team roles here; new SSO sign-ins start as REQUESTER.
+          </p>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
         title="Settings"
-        description="Configure the AI provider (bring your own key), tool permissions, integrations and review your team."
+        description="Configure the AI provider (bring your own key), tool permissions, SLA targets and review your team."
       />
-      {/* Tabs keep each concern on one screen instead of one long scroll. */}
-      <Tabs defaultValue="ai" className="max-w-4xl gap-4 p-4 md:p-8">
-        <TabsList>
-          <TabsTrigger value="ai">AI provider</TabsTrigger>
-          <TabsTrigger value="tools">Tools</TabsTrigger>
-          <TabsTrigger value="sla">SLA</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="ai" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>AI provider (BYOK)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AiProviderForm initial={aiSettings} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>API key pool</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CredentialsManager credentials={credentialViews} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="tools" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tool permissions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ToolPolicyTable initialPolicies={policyViews} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Custom tools & integrations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CustomToolsManager tools={customToolViews} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="sla">
-          <Card>
-            <CardHeader>
-              <CardTitle>SLA targets & auto-escalation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SlaPolicyTable initialPolicies={slaViews} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="team">
-        <Card>
-          <CardHeader>
-            <CardTitle>Team</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 font-sans">
-            <ul className="flex flex-col">
-              {users.map((u) => (
-                <li
-                  key={u.id}
-                  className="flex items-center gap-3 rounded-md px-1 py-2"
-                >
-                  <Avatar
-                    name={u.name}
-                    color={u.color}
-                    size={28}
-                    isAi={u.role === "AI_AGENT"}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {u.name}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {u.email}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    {u.role !== "AI_AGENT" && u.id !== user.id ? (
-                      <RoleSelect userId={u.id} role={u.role} />
-                    ) : (
-                      <Badge tone={ROLE_TONE[u.role] ?? "neutral"}>
-                        {u.role.replace("_", " ")}
-                      </Badge>
-                    )}
-                    {u.role === "AI_AGENT" && u.aiKind && (
-                      <Badge tone="neutral">{u.aiKind}</Badge>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <Separator />
-            <p className="font-body text-sm text-muted-foreground">
-              Admins can change team roles here; new SSO sign-ins start as REQUESTER.
-            </p>
-          </CardContent>
-        </Card>
-        </TabsContent>
-      </Tabs>
+      {/* One rail, one pane: every concern stays on one screen instead of
+          one long scroll, and `?section=` keeps the place across visits. */}
+      <MasterDetail
+        title="Settings"
+        param="section"
+        initialId={initialSection}
+        keepMounted
+        items={sections}
+      />
     </>
   );
 }

@@ -19,11 +19,11 @@
   /* Servo blue — the brand accent */
   --accent-100:#E7EBFC;
   --accent-200:#C2CCF6;
-  --accent-300:#93A8F7;
-  --accent-400:#6A7FEA;
-  --accent-500:#4E66E4;
-  --accent-600:#2F44C9;
-  --accent-700:#26389F;
+  --accent-300:#9EAEEC;   /* dark text-brand / link — 8.9:1 on --bg */
+  --accent-400:#596DD4;   /* dark hover fill — white 4.6:1 */
+  --accent-500:#4A5ECF;   /* dark --brand — white 5.5:1 */
+  --accent-600:#3447B0;   /* light --brand, dark press — white 7.9:1 */
+  --accent-700:#2C3A8C;   /* light text-brand / link / press — 10:1 on white */
   --accent-900:#16203D;
   --accent-950:#0C1230;
 
@@ -36,12 +36,13 @@
   --slate-500:#5B6577;
   --slate-600:#798394;
 
-  /* Wire + label hues: gold spec plate, orange signal, red power, teal, green */
-  --gold-400:#E0B84E;
-  --orange-400:#F0894F;
-  --red-400:#E97C72;
-  --teal-400:#62BFD1;
-  --green-400:#66C79A;
+  /* Wire + label hues: gold spec plate, orange signal, red power, teal, green.
+     Chroma pulled back ~25% for the dark room — legible, never fluorescent. */
+  --gold-400:#D4B25E;
+  --orange-400:#E09468;
+  --red-400:#DF8A81;
+  --teal-400:#7AB9C8;
+  --green-400:#78BD9C;
 
   /* --- Semantic: surfaces ------------------------------------------------ */
   --bg:var(--ink-950);
@@ -72,10 +73,10 @@
   --brand:var(--accent-500);
   --brand-hover:var(--accent-400);
   --brand-press:var(--accent-600);
-  --brand-ink:#FFFFFF;           /* white on servo blue — 7:1 */
+  --brand-ink:#FFFFFF;           /* white on servo blue — 5.5:1 dark, 7.9:1 light */
   --brand-soft:#182034;
   --brand-soft-line:#2B3A6B;
-  --focus-ring:#4E66E466;
+  --focus-ring:#4A5ECF66;
 
   /* --- Semantic: status foregrounds + quiet surfaces -------------------- */
   --good:var(--green-400);      --good-soft:#132A20;     --good-line:#1F4735;
@@ -85,14 +86,17 @@
   --info:var(--teal-400);       --info-soft:#122228;     --info-line:#204049;
   --neutral-soft:#1B212B;       --neutral-line:#2C3441;
 
-  /* --- Status CHIPS: tinted surface, tinted hairline, bright ink -------- */
-  --good-chip:#0F2E20;     --good-chip-line:#1F5A3C;     --good-chip-ink:#6BD9A3;
-  --warn-chip:#2E2510;     --warn-chip-line:#5E4C18;     --warn-chip-ink:#EFC85F;
-  --serious-chip:#33200F;  --serious-chip-line:#6A3C18;  --serious-chip-ink:#F5975F;
-  --critical-chip:#331A18; --critical-chip-line:#6A302B; --critical-chip-ink:#F58C82;
-  --info-chip:#10262C;     --info-chip-line:#1E4C57;     --info-chip-ink:#79D3E4;
+  /* --- Status CHIPS: tinted surface, tinted hairline, bright ink --------
+     Inks desaturated ~25-30% at the same lightness; every ink stays ≥ 6.9:1
+     on its own chip (good 7.6, warn 8.4, serious 7.1, critical 6.9, info 8.4,
+     neutral 7.3, brand 8.0). */
+  --good-chip:#0F2E20;     --good-chip-line:#1F5A3C;     --good-chip-ink:#82C9A6;
+  --warn-chip:#2E2510;     --warn-chip-line:#5E4C18;     --warn-chip-ink:#DDBE6E;
+  --serious-chip:#33200F;  --serious-chip-line:#6A3C18;  --serious-chip-ink:#E5A078;
+  --critical-chip:#331A18; --critical-chip-line:#6A302B; --critical-chip-ink:#E5958D;
+  --info-chip:#10262C;     --info-chip-line:#1E4C57;     --info-chip-ink:#8EC7D4;
   --neutral-chip:#1F242E;  --neutral-chip-line:#333B49;  --neutral-chip-ink:#A9B2C0;
-  --brand-chip:#16203D;    --brand-chip-line:#2B3A6B;    --brand-chip-ink:#9FB2F9;
+  --brand-chip:#16203D;    --brand-chip-line:#2B3A6B;    --brand-chip-ink:#A9B6E6;
 
   /* --- Dataviz: fixed order; green is always "resolved/positive" -------- */
   --chart-1:var(--green-400);
@@ -128,13 +132,13 @@
   --text-link:var(--accent-700);
   --text-link-hover:var(--accent-600);
 
-  --brand:var(--accent-600);
-  --brand-hover:var(--accent-500);
+  --brand:var(--accent-600);     /* #3447B0 — white 7.9:1 */
+  --brand-hover:#4A5CC8;         /* one stop lighter — white 5.7:1 */
   --brand-press:var(--accent-700);
   --brand-ink:#FFFFFF;
   --brand-soft:#EDF0FD;
   --brand-soft-line:#C2CCF6;
-  --focus-ring:#2F44C959;
+  --focus-ring:#3447B059;
 
   --good:#1C6640;      --good-soft:#EAF4EE;     --good-line:#C7E2D2;
   --warn:#6B5210;      --warn-soft:#F9F3E2;     --warn-line:#E6D7AC;
@@ -149,10 +153,10 @@
   --critical-chip:#FBE9E7; --critical-chip-line:#EFC6C1; --critical-chip-ink:#9E332A;
   --info-chip:#E4F1F5;     --info-chip-line:#B4D8E1;     --info-chip-ink:#175C6B;
   --neutral-chip:#EEF0F5;  --neutral-chip-line:#D9DEE8;  --neutral-chip-ink:#4A5464;
-  --brand-chip:#E7EBFC;    --brand-chip-line:#C2CCF6;    --brand-chip-ink:#26389F;
+  --brand-chip:#E7EBFC;    --brand-chip-line:#C2CCF6;    --brand-chip-ink:var(--accent-700);
 
   --chart-1:#1C6640;
-  --chart-2:#2F44C9;
+  --chart-2:#3A4BA8;
   --chart-3:#175C6B;
   --chart-4:#8A6410;
   --chart-5:#A84E1C;
