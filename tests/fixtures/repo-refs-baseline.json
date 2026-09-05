@@ -12,11 +12,6 @@
       "owner": "hyg-09"
     },
     {
-      "path": "scripts/media/screenshot.mjs",
-      "reason": "media rig that captures the README stills; archived under scripts/media/, never deleted",
-      "owner": "hyg-09"
-    },
-    {
       "path": "src/components/ui/tabs.tsx",
       "reason": "unused shadcn primitive since Settings moved onto the master-detail shell (2026-09-05); deletion is build-safe but npx shadcn add can re-create it, so it is kept like the other primitives",
       "owner": "question-31"

@@ -105,7 +105,7 @@ function FlowPanel({ data }: { data: Point[] }) {
         />
         <Area
           dataKey="created"
-          type="monotone"
+          type="linear"
           fill={SERIES.created}
           fillOpacity={FILL_OPACITY}
           stroke={SERIES.created}
@@ -114,7 +114,7 @@ function FlowPanel({ data }: { data: Point[] }) {
         />
         <Area
           dataKey="resolved"
-          type="monotone"
+          type="linear"
           fill={SERIES.resolved}
           fillOpacity={FILL_OPACITY}
           stroke={SERIES.resolved}

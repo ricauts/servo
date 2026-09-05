@@ -58,7 +58,7 @@ export default function StatTile({
     >
       <div
         className={cn(
-          "truncate font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em]",
+          "line-clamp-2 font-mono text-[10.5px] font-semibold uppercase leading-tight tracking-[0.14em]",
           ink ?? "text-text-faint",
         )}
       >

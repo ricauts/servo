@@ -114,10 +114,15 @@ try {
     }
     if (job.clickSelector) {
       await new Promise((r) => setTimeout(r, 1200));
-      const nodes = await page.$$(job.clickSelector);
       // The first document node: a selected node opens the side panel, which
-      // is the point of the graph shot.
-      if (nodes[0]) await nodes[0].click();
+      // is the point of the graph shot. Dispatch the click in the page rather
+      // than through the mouse — an SVG group's geometric centre can land on
+      // a label plate or between glyphs, and React's onClick only needs a
+      // bubbling click event.
+      await page.evaluate((selector) => {
+        const node = document.querySelector(selector);
+        node?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      }, job.clickSelector);
     }
     await new Promise((r) => setTimeout(r, job.wait ?? 1200));
     await page.screenshot({ path: job.out });
