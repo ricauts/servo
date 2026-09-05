@@ -10,14 +10,29 @@ is a guarded dynamic import — a missing one is a message with the exact
 
 | script | produces | regenerates |
 |---|---|---|
-| `readme-screenshots.mjs` | the desk's UI stills | `docs/assets/screenshot-{dashboard,tickets,ticket-detail,approvals,agents,integrations,settings,knowledge,graph,packs,skills,runs,mobile}.png` (the README stills) |
+| `readme-screenshots.mjs` | the desk's UI stills, light by default (`--theme=dark` for the dark variants) | `docs/assets/screenshot-{dashboard,tickets,ticket-detail,approvals,agents,integrations,settings,knowledge,graph,packs,skills,runs,mobile}.png` (the README stills) |
 | `make-before-after.mjs` | a before/after figure from a ticket's two attachments, in the light frame the README uses | nothing committed today — the 2026-08 figure was retired on 2026-09-04 because its screenshots showed the landing page's retired green palette; the script stays for the next real before/after |
 | `shoot-og.mjs` | the Open Graph card at exactly 1200x630 | `assets/og-card.png` **inside the servoai-site repository** (its site directory is a REQUIRED argument — see below) |
 | `record-hero.mjs` | HERO-FILM, one full desk loop, pixel-identical start and end | the landing page's hero film |
 | `record-approval.mjs` | the approval-flow capture | the approvals still / film source |
 | `record-cursor.mjs` | the synthetic cursor helper | (imported by the recorders, not run directly) |
-| `screenshot.mjs` | the generic one-page capture the above share | (helper) |
+| `screenshot.mjs` | the generic one-page capture the recorders share (light by default; `--theme=dark` for dark) | (helper) |
 | `make-capture-db.mjs` | `servo_capture`, the throwaway copy of the working database | nothing committed — rebuilt before every take |
+
+## Which theme a shot renders in
+
+The desk defaults to light, and light is what the README ships. next-themes
+persists the viewer's choice as the theme NAME under the localStorage key
+`theme`; `readme-screenshots.mjs` and `screenshot.mjs` both take
+`--theme=light|dark` (default `light`) and write that key with
+`page.evaluateOnNewDocument` before navigating, so the first paint is already
+in the requested theme and no flash reaches the capture. `screenshot.mjs`'s
+old `--dark` flag is gone — passing it exits 1 with the replacement named,
+rather than silently producing a light shot.
+
+```bash
+node scripts/media/screenshot.mjs <url> <outfile> [--theme=light|dark] [--width=1440] [--height=900] [--click="Tab label"]
+```
 
 ## The capture privacy rules `make-capture-db.mjs` encodes
 

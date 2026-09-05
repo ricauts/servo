@@ -5,12 +5,12 @@ export const CURSOR = () => {
   const dot = document.createElement("div");
   dot.style.cssText =
     "position:fixed;z-index:2147483647;width:14px;height:14px;border-radius:50%;" +
-    "background:#eef7f1;opacity:.85;pointer-events:none;left:1200px;top:700px;transform:translate(-50%,-50%);" +
+    "background:#FFFFFF;opacity:.85;pointer-events:none;left:1200px;top:700px;transform:translate(-50%,-50%);" +
     "box-shadow:0 0 0 1px rgba(0,0,0,.35)";
   const ring = document.createElement("div");
   ring.style.cssText =
     "position:fixed;z-index:2147483646;width:14px;height:14px;border-radius:50%;" +
-    "border:2px solid #25d97f;pointer-events:none;opacity:0;transform:translate(-50%,-50%)";
+    "border:2px solid #4E66E4;pointer-events:none;opacity:0;transform:translate(-50%,-50%)";
   const mount = () => document.body && document.body.append(dot, ring);
   if (document.readyState === "loading") addEventListener("DOMContentLoaded", mount);
   else mount();

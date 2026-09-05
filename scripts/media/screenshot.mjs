@@ -1,6 +1,10 @@
 // Screenshot helper for docs/assets — drives the system Chrome via puppeteer-core.
-// Usage: node scripts/media/screenshot.mjs <url> <outfile> [--dark] [--width=1440]
-//        [--height=900] [--click="Tab label"]
+// Usage: node scripts/media/screenshot.mjs <url> <outfile> [--theme=light|dark]
+//        [--width=1440] [--height=900] [--click="Tab label"]
+// --theme pins next-themes' persisted choice before the page loads (the stored
+// value is the theme NAME, under the localStorage key "theme"), so the shot
+// renders in that theme from first paint. Default light — the desk's default
+// and the theme the README ships.
 // --click clicks the first element whose trimmed text matches, before shooting
 // (used to capture a specific tab).
 import puppeteer from "puppeteer-core";
@@ -12,12 +16,24 @@ const CHROME_PATHS = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 ];
 
+const USAGE =
+  'Usage: node scripts/media/screenshot.mjs <url> <outfile> [--theme=light|dark] [--width=N] [--height=N] [--click="Text"]';
+
 const [url, outfile, ...flags] = process.argv.slice(2);
 if (!url || !outfile) {
-  console.error("Usage: node scripts/media/screenshot.mjs <url> <outfile> [--dark] [--width=N] [--height=N]");
+  console.error(USAGE);
   process.exit(1);
 }
-const dark = flags.includes("--dark");
+if (flags.includes("--dark")) {
+  // The old boolean flag would now be silently ignored and yield a light shot.
+  console.error("--dark was replaced by --theme=dark.\n" + USAGE);
+  process.exit(1);
+}
+const theme = flags.find((f) => f.startsWith("--theme="))?.slice(8) ?? "light";
+if (theme !== "light" && theme !== "dark") {
+  console.error(`--theme must be light or dark, got "${theme}".\n${USAGE}`);
+  process.exit(1);
+}
 const width = Number(flags.find((f) => f.startsWith("--width="))?.split("=")[1] ?? 1440);
 const height = Number(flags.find((f) => f.startsWith("--height="))?.split("=")[1] ?? 900);
 
@@ -32,10 +48,15 @@ const browser = await puppeteer.launch({ executablePath, headless: "shell" });
 try {
   const page = await browser.newPage();
   await page.setViewport({ width, height, deviceScaleFactor: 2 });
-  if (dark) {
-    // next-themes reads this key before first paint, so the page renders dark from the start
-    await page.evaluateOnNewDocument(() => localStorage.setItem("theme", "dark"));
-  }
+  // next-themes reads this key before first paint; ThemeProvider maps "light"
+  // to the .servo-light class and "dark" to Tailwind's .dark.
+  await page.evaluateOnNewDocument((t) => {
+    try {
+      localStorage.setItem("theme", t);
+    } catch {
+      /* storage unavailable — the app default (light) applies */
+    }
+  }, theme);
   await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 });
   const clickText = flags.find((f) => f.startsWith("--click="))?.slice(8);
   if (clickText) {
@@ -53,7 +74,7 @@ try {
   }
   await new Promise((r) => setTimeout(r, 900));
   await page.screenshot({ path: outfile });
-  console.log(`saved ${outfile} (${width}x${height}${dark ? ", dark" : ""})`);
+  console.log(`saved ${outfile} (${width}x${height}, ${theme})`);
 } finally {
   await browser.close();
 }
