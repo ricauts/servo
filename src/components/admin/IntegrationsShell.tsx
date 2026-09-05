@@ -1,10 +1,12 @@
 "use client";
 
-// Master-detail shell for /integrations: a left rail listing every
-// integration with its live status, one detail panel on the right. Replaces
-// the old stacked-cards page that scrolled forever and wasted the viewport.
+// Master-detail shell for /integrations — a thin wrapper over the shared
+// MasterDetail: it owns the per-integration icons and hands the page's
+// sections through. Every section stays mounted so unsaved edits survive
+// switching; the selection is mirrored to `?section=<id>` so the Packs
+// catalog links straight to a form and Back returns to it.
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Cloud,
   GitBranch,
@@ -13,12 +15,11 @@ import {
   KeyRound,
   Mail,
   Plug2,
+  Server,
   Webhook,
   type LucideIcon,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import Badge from "@/components/common/Badge";
-import { cn } from "@/lib/utils";
+import MasterDetail from "@/components/common/MasterDetail";
 
 const ICONS: Record<string, LucideIcon> = {
   sso: KeyRound,
@@ -29,12 +30,18 @@ const ICONS: Record<string, LucideIcon> = {
   webhooks: Webhook,
   egress: Globe,
   mcp: Plug2,
+  "mcp-servers": Server,
 };
 
 export interface IntegrationSection {
   id: string;
   title: string;
+  /** Detail-pane description — the long, honest sentence. */
   blurb: string;
+  /** One-line rail subtitle; falls back to the blurb, truncated. */
+  subtitle?: string;
+  /** Extra rail-search terms (provider names, tool names…). */
+  keywords?: string[];
   status: { label: string; tone: "good" | "brand" | "neutral" | "warn" };
   body: ReactNode;
 }
@@ -48,69 +55,25 @@ export default function IntegrationsShell({
    *  catalog links straight to the form it describes. */
   initialId?: string;
 }) {
-  const [activeId, setActiveId] = useState(
-    initialId && sections.some((s) => s.id === initialId) ? initialId : sections[0]?.id,
-  );
-  const active = sections.find((s) => s.id === activeId) ?? sections[0];
-
   return (
-    <div className="grid grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start xl:h-[calc(100vh-97px)] xl:overflow-hidden">
-      {/* Rail */}
-      <nav
-        aria-label="Integrations"
-        className="flex flex-row gap-1 overflow-x-auto lg:flex-col lg:overflow-x-visible"
-      >
-        {sections.map((section) => {
-          const Icon = ICONS[section.id] ?? Plug2;
-          const selected = section.id === active?.id;
-          return (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => setActiveId(section.id)}
-              aria-current={selected ? "page" : undefined}
-              className={cn(
-                "flex shrink-0 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors lg:w-full",
-                selected
-                  ? "border-primary/40 bg-primary/10"
-                  : "border-transparent hover:bg-muted/60",
-              )}
-            >
-              <Icon
-                size={16}
-                className={selected ? "text-primary-strong" : "text-muted-foreground"}
-              />
-              <span className="min-w-0 flex-1">
-                <span
-                  className={cn(
-                    "block truncate font-heading text-[13px] font-semibold",
-                    selected ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  {section.title}
-                </span>
-              </span>
-              <Badge tone={section.status.tone}>{section.status.label}</Badge>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Detail panel */}
-      <Card className="min-h-0 xl:flex xl:h-full xl:flex-col">
-        <CardHeader>
-          <CardTitle className="font-heading">{active?.title}</CardTitle>
-          <p className="text-sm text-muted-foreground">{active?.blurb}</p>
-        </CardHeader>
-        <CardContent className="min-h-0 xl:flex-1 xl:overflow-y-auto">
-          {/* Every section stays mounted so unsaved edits survive switching. */}
-          {sections.map((section) => (
-            <div key={section.id} hidden={section.id !== active?.id}>
-              {section.body}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
+    <MasterDetail
+      title="Integrations"
+      param="section"
+      initialId={initialId}
+      keepMounted
+      items={sections.map((section) => {
+        const Icon = ICONS[section.id] ?? Plug2;
+        return {
+          id: section.id,
+          title: section.title,
+          subtitle: section.subtitle ?? section.blurb,
+          description: section.blurb,
+          icon: <Icon size={16} />,
+          status: section.status,
+          keywords: section.keywords,
+          body: section.body,
+        };
+      })}
+    />
   );
 }

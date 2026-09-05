@@ -156,6 +156,8 @@ export default async function IntegrationsPage({
     {
       id: "sso",
       title: "Single sign-on",
+      subtitle: "OIDC identity provider",
+      keywords: ["oidc", "login", "google", "entra", "okta", "keycloak", "auth0"],
       blurb:
         "Connect any OIDC identity provider (Google, Entra ID, Okta, Keycloak…). Without a tenant Servo stays in the offline demo mode.",
       status:
@@ -165,6 +167,8 @@ export default async function IntegrationsPage({
     {
       id: "smtp",
       title: "Email notifications",
+      subtitle: "Outbound mail over SMTP",
+      keywords: ["smtp", "mail", "notify", "approval alerts"],
       blurb:
         "Outbound mail over any SMTP server: ticket confirmations, resolutions, approval alerts and approved AI replies.",
       status: smtpSettings.enabled
@@ -177,6 +181,8 @@ export default async function IntegrationsPage({
     {
       id: "inbound",
       title: "Inbound email",
+      subtitle: "Mail becomes tickets",
+      keywords: ["imap", "gmail", "relay", "webhook", "mail"],
       blurb:
         "Mail becomes tickets: point a provider webhook (or the bundled IMAP relay for Gmail) at POST /api/inbound/email.",
       status: inboundSettings.enabled
@@ -189,6 +195,8 @@ export default async function IntegrationsPage({
     {
       id: "github",
       title: "GitHub",
+      subtitle: "Repos, branches and pull requests",
+      keywords: ["git", "token", "pat", "pull request", "repository"],
       blurb:
         "Personal access token for real repository, branch and pull-request tools; without one they run simulated.",
       status: githubSettings.tokenSet ? { label: "Connected", tone: "good" } : off,
@@ -197,6 +205,8 @@ export default async function IntegrationsPage({
     {
       id: "azure",
       title: "Azure",
+      subtitle: "Read-only Resource Manager queries",
+      keywords: ["cloud", "service principal", "reader", "arm", "subscription"],
       blurb:
         "Read-only service principal (Reader role) for live Resource Manager queries; mutations stay simulated behind approvals.",
       status: azureSettings.configured ? { label: "Connected", tone: "good" } : off,
@@ -205,6 +215,8 @@ export default async function IntegrationsPage({
     {
       id: "webhooks",
       title: "Outbound webhooks",
+      subtitle: "Signed JSON events to your systems",
+      keywords: ["hmac", "events", "delivery", "endpoint"],
       blurb:
         "Stream ticket, approval and reply events to any endpoint as HMAC-signed JSON, with a per-endpoint delivery log.",
       status:
@@ -214,6 +226,8 @@ export default async function IntegrationsPage({
     {
       id: "egress",
       title: "Outbound web access",
+      subtitle: "Host allowlist for the web tools",
+      keywords: ["egress", "allowlist", "fetch_url", "take_screenshot", "hosts"],
       blurb:
         "Which hosts agents may open with fetch_url, take_screenshot and HTTP integrations. Private and link-local addresses are always refused unless named here.",
       status:
@@ -225,6 +239,8 @@ export default async function IntegrationsPage({
     {
       id: "mcp",
       title: "MCP server",
+      subtitle: "Servo as a tool server for other agents",
+      keywords: ["model context protocol", "bearer token", "claude code", "claude desktop"],
       blurb:
         "Servo as a Model Context Protocol server: external agents file and search tickets and operate the tool registry.",
       status: mcpView.tokenSet ? { label: "Active", tone: "good" } : off,
@@ -233,6 +249,8 @@ export default async function IntegrationsPage({
     {
       id: "mcp-servers",
       title: "MCP servers",
+      subtitle: "External tool catalogues, synced",
+      keywords: ["model context protocol", "streamable http", "client", "tool catalogue"],
       blurb:
         "Servo as an MCP client: connect an external server over Streamable HTTP and sync its tool catalogue. Synced tools land disabled, approval-required and HIGH risk.",
       status:
