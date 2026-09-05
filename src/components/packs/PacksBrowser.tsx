@@ -6,15 +6,11 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight, Blocks, Search, X } from "lucide-react";
 import { CATEGORY_LABEL, type PackCategory } from "@/lib/packs/catalog";
 import type { BundleItem, BundleView, PackView, PacksResponse } from "@/lib/packs/state";
+import { Chip, chipClass, packStateTone } from "@/components/kb/KbChip";
+import { BTN_OUTLINE_SM, INPUT, LABEL, NOTE_CRITICAL, SEGMENT_GROUP, SELECT, segmentClass } from "@/components/kb/kb-controls";
 
 const CATEGORIES = ["all", "sources", "extraction", "models", "identity", "tools", "bundles"] as const;
 type CategoryFilter = (typeof CATEGORIES)[number];
-
-const STATE_STYLE: Record<PackView["state"], { label: string; tone: string; line: string }> = {
-  configured: { label: "configured", tone: "var(--good-chip-ink)", line: "var(--good-chip-line)" },
-  available: { label: "available", tone: "var(--text-muted)", line: "var(--line)" },
-  planned: { label: "planned", tone: "var(--warn-chip-ink)", line: "var(--warn-chip-line)" },
-};
 
 /** Pure: the cards that survive the search and category filter. */
 export function filterPacks(packs: readonly PackView[], query: string, category: CategoryFilter): PackView[] {
@@ -68,16 +64,17 @@ export default function PacksBrowser({ initial, canManage }: { initial: PacksRes
 
   return (
     <div className="flex flex-col gap-4">
+      {/* One 32px control row: search, category, the install-state counts as chips. */}
       <div className="flex flex-wrap items-center gap-2" data-testid="packs-filters">
         <div className="relative min-w-[220px] flex-1">
-          <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search connectors, tools, data types…"
             aria-label="Search packs"
-            className="h-8 w-full rounded-md border border-border bg-background pl-7 pr-7 text-[12.5px] outline-none focus:ring-2 focus:ring-ring"
+            className={`${INPUT} pl-7 pr-7`}
           />
           {query && (
             <button type="button" aria-label="Clear" onClick={() => setQuery("")} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground">
@@ -85,57 +82,67 @@ export default function PacksBrowser({ initial, canManage }: { initial: PacksRes
             </button>
           )}
         </div>
-        <div role="group" aria-label="Category" className="flex flex-wrap overflow-hidden rounded-md border border-border">
+        {/* Seven segments need ~640px; below md the same choice is a select,
+            so nothing wraps into a clipped second row. */}
+        <div role="group" aria-label="Category" className={`${SEGMENT_GROUP} max-md:hidden`}>
           {CATEGORIES.map((c) => (
-            <button
-              key={c}
-              type="button"
-              aria-pressed={category === c}
-              onClick={() => setCategory(c)}
-              className={`h-8 px-2.5 font-mono text-[10.5px] uppercase tracking-wider transition-colors ${category === c ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/40"}`}
-            >
+            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={segmentClass(category === c)}>
               {c === "all" ? "All" : CATEGORY_LABEL[c as PackCategory]}
             </button>
           ))}
         </div>
-        <span className="font-mono text-[10.5px] text-muted-foreground">
-          {counts.configured} configured · {counts.available} available · {counts.planned} planned
+        <select value={category} onChange={(e) => setCategory(e.target.value as CategoryFilter)} aria-label="Category" className={`${SELECT} md:hidden`}>
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>{c === "all" ? "All" : CATEGORY_LABEL[c as PackCategory]}</option>
+          ))}
+        </select>
+        <span className="flex items-center gap-1" aria-label="Install state">
+          <Chip tone={packStateTone("configured")} caps>{counts.configured} configured</Chip>
+          <Chip tone={packStateTone("available")} caps>{counts.available} available</Chip>
+          <Chip tone={packStateTone("planned")} caps>{counts.planned} planned</Chip>
         </span>
       </div>
 
       {packs.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="packs-grid">
           {packs.map((p) => {
-            const style = STATE_STYLE[p.state];
+            const planned = p.state === "planned";
             return (
-              <article key={p.id} className="flex flex-col gap-2 rounded-md border border-border bg-card p-3.5" data-pack={p.id}>
-                <div className="flex items-start justify-between gap-2">
+              <article
+                key={p.id}
+                className={`flex flex-col overflow-hidden rounded-lg border border-border ${planned ? "bg-(--surface-2) text-(--text-muted)" : "bg-card text-foreground"}`}
+                data-pack={p.id}
+                data-state={p.state}
+              >
+                {/* Header: category in mono caps, the name, the state chip. */}
+                <header className="flex items-start justify-between gap-2 px-4 pt-3.5">
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{CATEGORY_LABEL[p.category]}</p>
-                    <h3 className="font-heading text-[14px] font-semibold leading-tight">{p.name}</h3>
+                    <p className={LABEL}>{CATEGORY_LABEL[p.category]}</p>
+                    <h3 className={`mt-0.5 font-heading text-[14px] font-semibold leading-tight ${planned ? "text-(--text-muted)" : "text-foreground"}`}>{p.name}</h3>
                   </div>
-                  <span className="shrink-0 rounded-full border px-1.5 py-px font-mono text-[10.5px] leading-4" style={{ color: style.tone, borderColor: style.line }}>
-                    {style.label}
-                  </span>
+                  <Chip tone={packStateTone(p.state)} caps>{p.state}</Chip>
+                </header>
+                <div className="flex flex-1 flex-col gap-2 px-4 py-3">
+                  <p className="text-xs leading-relaxed text-muted-foreground">{p.description}</p>
+                  {p.detail && <p className="font-mono text-[11px]">{p.detail}</p>}
+                  {(p.dataTypes?.length ?? 0) > 0 && (
+                    <div className="mt-auto flex flex-wrap gap-1 pt-1" aria-label="Data types">
+                      {p.dataTypes!.map((t) => (
+                        <Chip key={t} tone="neutral" caps>{t}</Chip>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">{p.description}</p>
-                {p.detail && <p className="font-mono text-[11px]">{p.detail}</p>}
-                {(p.dataTypes?.length ?? 0) > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {p.dataTypes!.map((t) => (
-                      <span key={t} className="rounded-full border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{t}</span>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-auto flex items-center gap-2 pt-1">
-                  {p.href && p.state !== "planned" && (
-                    <Link href={p.href} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-heading text-[11.5px] font-medium hover:bg-accent/40">
+                {/* Footer: the one action, and where the docs live. */}
+                <footer className={`flex items-center gap-2 border-t border-border px-4 py-2 ${planned ? "" : "bg-(--surface-2)"}`}>
+                  {p.href && !planned && (
+                    <Link href={p.href} className={BTN_OUTLINE_SM}>
                       {p.state === "configured" ? "Manage" : "Set up"} <ArrowUpRight size={11} />
                     </Link>
                   )}
-                  {p.state === "planned" && <span className="text-[11px] text-muted-foreground">Not installable yet.</span>}
-                  {p.docs && <span className="ml-auto font-mono text-[10px] text-muted-foreground">{p.docs}</span>}
-                </div>
+                  {planned && <span className="font-mono text-[10.5px] text-muted-foreground">Not installable yet.</span>}
+                  {p.docs && <span className="ml-auto truncate font-mono text-[10px] text-muted-foreground">{p.docs}</span>}
+                </footer>
               </article>
             );
           })}
@@ -144,7 +151,7 @@ export default function PacksBrowser({ initial, canManage }: { initial: PacksRes
 
       {showBundles && (
         <section className="mt-2" data-testid="packs-bundles">
-          <h2 className="inline-flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
+          <h2 className={`${LABEL} inline-flex items-center gap-1.5`}>
             <Blocks size={12} /> Bundles · local plugins
           </h2>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
@@ -152,22 +159,22 @@ export default function PacksBrowser({ initial, canManage }: { initial: PacksRes
             shipping skills, agent profiles and MCP server entries. Placing the directory and restarting is the install; everything arrives
             disabled and an admin promotes items one by one. Fetching bundles from elsewhere is on the roadmap, not here.
           </p>
-          {note && <p className="mt-2 text-xs" style={{ color: "var(--critical-chip-ink)" }}>{note}</p>}
+          {note && <p className={`${NOTE_CRITICAL} mt-2`}>{note}</p>}
           {initial.bundles.length === 0 ? (
-            <p className="mt-3 rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+            <p className="mt-3 rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
               No bundles on this install.
             </p>
           ) : (
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {initial.bundles.map((b: BundleView) => (
-                <article key={b.id} className="rounded-md border border-border bg-card p-3.5" data-bundle={b.name}>
-                  <div className="flex items-center justify-between gap-2">
+                <article key={b.id} className="overflow-hidden rounded-lg border border-border bg-card" data-bundle={b.name}>
+                  <div className="flex items-center justify-between gap-2 border-b border-border bg-(--surface-2) px-4 py-2.5">
                     <h3 className="font-heading text-[14px] font-semibold">{b.name}</h3>
                     <span className="font-mono text-[10.5px] text-muted-foreground">{b.enabledCount} of {b.items.length} enabled</span>
                   </div>
-                  <ul className="mt-2 flex flex-col gap-1.5">
+                  <ul className="divide-y divide-border">
                     {b.items.map((item) => (
-                      <li key={item.id} className="flex items-center gap-2 text-xs">
+                      <li key={item.id} className="flex items-center gap-2 px-4 py-1.5 text-xs">
                         <span className="w-14 shrink-0 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{item.kind}</span>
                         <span className="min-w-0 flex-1 truncate" title={item.slug}>{item.name}</span>
                         {canManage ? (
@@ -176,17 +183,12 @@ export default function PacksBrowser({ initial, canManage }: { initial: PacksRes
                             disabled={busy === item.id}
                             aria-pressed={item.enabled}
                             onClick={() => void toggle(item)}
-                            className="rounded-full border px-2 py-px font-mono text-[10.5px] uppercase tracking-wider disabled:opacity-50"
-                            style={{
-                              borderColor: item.enabled ? "var(--brand-chip-line)" : "var(--line)",
-                              background: item.enabled ? "var(--brand-chip)" : "transparent",
-                              color: item.enabled ? "var(--brand-chip-ink)" : "var(--text-muted)",
-                            }}
+                            className={`${chipClass(item.enabled ? "brand" : "neutral", { caps: true })} transition-colors hover:border-(--line-strong) disabled:opacity-50`}
                           >
                             {item.enabled ? "enabled" : "disabled"}
                           </button>
                         ) : (
-                          <span className="font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">{item.enabled ? "enabled" : "disabled"}</span>
+                          <Chip tone={item.enabled ? "brand" : "neutral"} caps>{item.enabled ? "enabled" : "disabled"}</Chip>
                         )}
                       </li>
                     ))}
@@ -199,7 +201,7 @@ export default function PacksBrowser({ initial, canManage }: { initial: PacksRes
       )}
 
       {packs.length === 0 && !showBundles && (
-        <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">Nothing matches.</p>
+        <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">Nothing matches.</p>
       )}
     </div>
   );

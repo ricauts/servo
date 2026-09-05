@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
+import { BTN_PRIMARY } from "@/components/kb/kb-controls";
 
 /** The upload control (kb-16). The 25 MB cap is enforced server-side before
  *  anything touches the database; the client offers the same courtesy. */
@@ -33,7 +34,7 @@ export default function KbUpload() {
   }
 
   return (
-    <div className="mt-4">
+    <span className="inline-flex flex-col items-end gap-1">
       <input
         ref={inputRef}
         type="file"
@@ -43,20 +44,18 @@ export default function KbUpload() {
           if (file) void upload(file);
         }}
       />
+      {/* The page's one primary action: a flat brand fill, no glow — shadows
+          belong to floating surfaces only. */}
       <button
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
-        className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2 font-heading text-[13.5px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+        className={BTN_PRIMARY}
       >
-        <Upload size={15} />
+        <Upload size={14} />
         {busy ? "Uploading…" : "Upload document"}
       </button>
-      {error && (
-        <p className="mt-2 font-mono text-xs" style={{ color: "var(--critical-chip-ink)" }}>
-          {error}
-        </p>
-      )}
-    </div>
+      {error && <span className="font-mono text-[11px] text-(--critical-chip-ink)">{error}</span>}
+    </span>
   );
 }

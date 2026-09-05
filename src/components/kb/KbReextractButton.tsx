@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
+import { BTN_OUTLINE_SM } from "@/components/kb/kb-controls";
 
 /**
  * The re-extract action (dcl-09): re-runs extraction on the stored bytes
@@ -34,13 +35,8 @@ export default function KbReextractButton({ documentId }: { documentId: string }
 
   return (
     <span className="ml-auto inline-flex items-center gap-2">
-      {error && <span className="text-critical-fore" style={{ color: "var(--critical)" }}>{error}</span>}
-      <button
-        type="button"
-        onClick={run}
-        disabled={busy}
-        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 font-heading text-[11.5px] font-medium hover:bg-accent/40 disabled:opacity-50"
-      >
+      {error && <span className="font-mono text-[11px] text-(--critical-chip-ink)">{error}</span>}
+      <button type="button" onClick={run} disabled={busy} className={BTN_OUTLINE_SM}>
         <RefreshCw size={12} className={busy ? "animate-spin" : undefined} />
         {busy ? "Re-extracting…" : "Re-extract"}
       </button>

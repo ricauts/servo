@@ -5,6 +5,7 @@ import { QUERY_INPUT_CAP } from "@/lib/kb/query-filters";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 import type { KbSearchResponse } from "@/lib/kb/filter-view";
+import { BTN_PRIMARY, LABEL } from "@/components/kb/kb-controls";
 
 /**
  * The KB search box, with the parse made visible (ext-08).
@@ -125,7 +126,7 @@ export default function KbSearch() {
         {/* The ring rides on the WRAPPER, because the wrapper is what looks
             like the field: the input's own outline is suppressed, so
             focus-within is what keeps a keyboard user visible. */}
-        <div className="flex min-w-64 flex-1 items-center gap-2 rounded-md border border-input bg-background px-2.5 py-1.5 transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+        <div className="flex h-8 min-w-64 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-2.5 transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
           <Search size={14} className="shrink-0 text-muted-foreground" />
           <input
             value={query}
@@ -135,29 +136,19 @@ export default function KbSearch() {
             maxLength={QUERY_INPUT_CAP}
             placeholder="Search the knowledge base — e.g. invoices over $2,000 from last quarter"
             aria-label="Search the knowledge base"
-            className="min-w-0 flex-1 bg-transparent font-sans text-[13px] outline-none"
+            className="min-w-0 flex-1 bg-transparent font-sans text-[13px] outline-none placeholder:text-(--text-faint)"
           />
         </div>
-        <button
-          type="submit"
-          disabled={busy || query.trim() === ""}
-          className="rounded-md bg-primary px-3 py-1.5 font-heading text-[12.5px] font-medium text-primary-foreground disabled:opacity-50"
-        >
+        <button type="submit" disabled={busy || query.trim() === ""} className={BTN_PRIMARY}>
           {busy ? "Searching…" : "Search"}
         </button>
       </form>
 
-      {error && (
-        <p className="mt-2 font-mono text-[11px]" style={{ color: "var(--critical-chip-ink)" }}>
-          {error}
-        </p>
-      )}
+      {error && <p className="mt-2 font-mono text-[11px] text-(--critical-chip-ink)">{error}</p>}
 
       {data && (data.filters.length > 0 || data.queryUsed !== "") && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
-            Read as
-          </span>
+          <span className={LABEL}>Read as</span>
           {data.filters.map((f) => (
             <span
               key={f.index}
@@ -251,16 +242,14 @@ export default function KbSearch() {
       {data && data.hits.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2">
           {data.hits.map((h) => (
-            <li key={h.chunkId} className="rounded-md border border-border bg-card p-3">
+            <li key={h.chunkId} className="rounded-lg border border-border bg-card p-3">
               <Link
                 href={`/kb/${h.documentId}#chunk-${h.chunkId}`}
                 className="font-heading text-[13px] font-medium underline-offset-2 hover:underline"
               >
                 {h.docName}
               </Link>
-              <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
-                {h.locator}
-              </p>
+              <p className={LABEL}>{h.locator}</p>
               <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-muted-foreground">
                 {h.text}
               </p>

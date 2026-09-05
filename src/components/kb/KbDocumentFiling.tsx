@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FolderOpen, Sparkles } from "lucide-react";
+import { BTN_OUTLINE, LABEL, SELECT_TEXT } from "@/components/kb/kb-controls";
 
 /**
  * Filing controls on a document page (kb-lib-2): the shelf (collection)
@@ -72,8 +73,10 @@ export default function KbDocumentFiling({
   }
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-sans text-xs" data-testid="kb-filing">
-      <span className="inline-flex items-center gap-1 font-heading font-semibold uppercase tracking-wide text-muted-foreground">
+    // One 32px control row: mono micro-labels, two selects in the UI face
+    // (their options are sentences, not enums), the optional action flush right.
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-testid="kb-filing">
+      <span className={`${LABEL} inline-flex items-center gap-1`}>
         <FolderOpen size={12} /> Shelf
       </span>
       <select
@@ -81,7 +84,7 @@ export default function KbDocumentFiling({
         disabled={busy}
         aria-label="Collection"
         onChange={(e) => void patch({ collectionId: e.target.value === "" ? null : e.target.value })}
-        className="h-7 rounded-md border border-border bg-background px-2 font-mono text-[11px]"
+        className={SELECT_TEXT}
       >
         <option value="">Uncategorized</option>
         {collections.map((c) => (
@@ -90,13 +93,13 @@ export default function KbDocumentFiling({
           </option>
         ))}
       </select>
-      <span className="font-heading font-semibold uppercase tracking-wide text-muted-foreground">Visibility</span>
+      <span className={LABEL}>Visibility</span>
       <select
         value={visibility}
         disabled={busy}
         aria-label="Visibility"
         onChange={(e) => void patch({ visibility: e.target.value })}
-        className="h-7 rounded-md border border-border bg-background px-2 font-mono text-[11px]"
+        className={SELECT_TEXT}
       >
         <option value="PRIVATE">PRIVATE — owner and grants</option>
         <option value="STAFF">STAFF — every admin and agent</option>
@@ -107,7 +110,7 @@ export default function KbDocumentFiling({
           type="button"
           disabled={busy}
           onClick={() => void enrichNow()}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 font-heading text-[12px] font-medium disabled:opacity-50"
+          className={`${BTN_OUTLINE} ml-auto`}
           title={
             enrichment.enrichedAt
               ? `Last enriched ${enrichment.enrichedAt.slice(0, 16).replace("T", " ")} UTC by ${enrichment.model}`
