@@ -7,11 +7,14 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { SERIES } from "@/lib/chart-series";
 
+// AI = the brand series, people = teal — the same pair the flow card's
+// Resolutions view stacks per day.
 const config = {
   count: { label: "Resolved" },
-  ai: { label: "AI agents", color: "var(--chart-1)" },
-  human: { label: "Humans", color: "var(--chart-2)" },
+  ai: { label: "AI agents", color: SERIES.ai },
+  human: { label: "Humans", color: SERIES.human },
 } satisfies ChartConfig;
 
 export default function AiVsHumanBar({
@@ -25,15 +28,19 @@ export default function AiVsHumanBar({
 
   if (total === 0) {
     return (
-      <div className="flex h-[clamp(120px,19vh,180px)] items-center justify-center font-sans text-sm text-muted-foreground">
+      <div className="flex h-[clamp(120px,19vh,180px)] items-center justify-center font-sans text-sm text-muted-foreground xl:h-full">
         No resolutions in the last 30 days.
       </div>
     );
   }
 
   const data = [
-    { kind: "ai", count: ai, fill: "var(--chart-2)" },
-    { kind: "human", count: human, fill: "var(--chart-1)" },
+    { kind: "ai", count: ai, fill: SERIES.ai },
+    { kind: "human", count: human, fill: SERIES.human },
+  ];
+  const legend = [
+    { key: "ai", label: "AI agents", value: ai, fill: SERIES.ai },
+    { key: "human", label: "Humans", value: human, fill: SERIES.human },
   ];
 
   return (
@@ -48,7 +55,8 @@ export default function AiVsHumanBar({
             data={data}
             dataKey="count"
             nameKey="kind"
-            innerRadius="55%" outerRadius="85%"
+            innerRadius="58%"
+            outerRadius="86%"
             strokeWidth={2}
             stroke="var(--card)"
             isAnimationActive={false}
@@ -66,14 +74,14 @@ export default function AiVsHumanBar({
                       <tspan
                         x={viewBox.cx}
                         y={viewBox.cy}
-                        className="fill-foreground font-heading text-2xl font-bold"
+                        className="fill-(--text-strong) font-heading text-2xl font-semibold tracking-tight"
                       >
                         {total}
                       </tspan>
                       <tspan
                         x={viewBox.cx}
-                        y={(viewBox.cy ?? 0) + 20}
-                        className="fill-muted-foreground font-sans text-xs"
+                        y={(viewBox.cy ?? 0) + 18}
+                        className="fill-(--text-faint) font-mono text-[10px] uppercase tracking-[0.12em]"
                       >
                         resolved
                       </tspan>
@@ -88,22 +96,20 @@ export default function AiVsHumanBar({
       </ChartContainer>
 
       <div className="flex items-center gap-5 font-sans text-[12.5px]">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--chart-1)]" />
-          <span className="font-mono font-semibold">{ai}</span>
-          <span>AI agents</span>
-          <span className="text-muted-foreground">
-            ({Math.round((ai / total) * 100)}%)
+        {legend.map((l) => (
+          <span key={l.key} className="flex items-center gap-1.5">
+            <span
+              className="h-2 w-2 shrink-0 rounded-[2px]"
+              style={{ background: l.fill }}
+              aria-hidden="true"
+            />
+            <span className="font-mono font-semibold tabular-nums text-foreground">{l.value}</span>
+            <span className="text-muted-foreground">{l.label}</span>
+            <span className="font-mono text-[11px] text-(--text-faint)">
+              {Math.round((l.value / total) * 100)}%
+            </span>
           </span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--chart-2)]" />
-          <span className="font-mono font-semibold">{human}</span>
-          <span>Humans</span>
-          <span className="text-muted-foreground">
-            ({Math.round((human / total) * 100)}%)
-          </span>
-        </span>
+        ))}
       </div>
     </div>
   );

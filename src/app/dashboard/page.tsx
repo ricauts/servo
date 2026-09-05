@@ -9,12 +9,12 @@ import type { KpiResponse } from "@/lib/types";
 import CardHeading from "@/components/dashboard/CardHeading";
 import StatTile from "@/components/dashboard/StatTile";
 import FlowChart from "@/components/dashboard/FlowChart";
-import CategoryBars from "@/components/dashboard/CategoryBars";
-import PriorityBars from "@/components/dashboard/PriorityBars";
+import TabbedBreakdown from "@/components/dashboard/TabbedBreakdown";
 import AiVsHumanBar from "@/components/dashboard/AiVsHumanBar";
 import ApprovalsTile from "@/components/dashboard/ApprovalsTile";
 import SkillsTile from "@/components/dashboard/SkillsTile";
 import DraftRepliesTile from "@/components/dashboard/DraftRepliesTile";
+import { kpiDelta } from "@/components/dashboard/kpi-delta";
 
 export const dynamic = "force-dynamic";
 
@@ -40,11 +40,14 @@ export default async function DashboardPage() {
   }
 
   const kpis: KpiResponse = await getKpis();
-  const { totals, approvalStats, draftStats, skills } = kpis;
+  const { totals, previous, approvalStats, draftStats, skills } = kpis;
 
   const aiResolved = kpis.aiVsHuman.find((r) => r.resolver === "AI")?.count ?? 0;
   const humanResolved =
     kpis.aiVsHuman.find((r) => r.resolver === "HUMAN")?.count ?? 0;
+
+  // Sparklines read the last two weeks of the daily series.
+  const last14 = kpis.createdByDay.slice(-14);
 
   return (
     <>
@@ -52,13 +55,24 @@ export default async function DashboardPage() {
         title="Dashboard"
         description="Operational KPIs across tickets, agents and approvals — last 30 days."
       />
-      <div className="grid grid-cols-12 gap-3 p-4 md:px-8 md:py-4 xl:h-[calc(100vh-97px)] xl:grid-rows-[auto_minmax(0,5fr)_minmax(0,4fr)] xl:overflow-hidden">
-        {/* Stat tile row */}
+      {/* One viewport at xl when it fits; the board scrolls rather than clips
+          when the rows' floors need more height than the window has. */}
+      <div className="grid grid-cols-12 gap-3 p-4 md:px-8 md:py-4 xl:h-[calc(100vh-97px)] xl:grid-rows-[auto_minmax(260px,5fr)_minmax(224px,4fr)] xl:overflow-y-auto">
+        {/* KPI tile row */}
         <div className="col-span-12 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-          <StatTile label="Open tickets" value={String(totals.open)} />
+          <StatTile
+            label="Open tickets"
+            value={String(totals.open)}
+            caption={`${totals.createdLast30d} created · 30d`}
+            sparkline={last14.map((p) => p.created)}
+            sparklineLabel="New tickets per day, last 14 days"
+          />
           <StatTile
             label="Resolved · 30d"
             value={String(totals.resolvedLast30d)}
+            delta={kpiDelta(totals.resolvedLast30d, previous.resolved, { kind: "count", better: "up" })}
+            sparkline={last14.map((p) => p.resolved)}
+            sparklineLabel="Resolved per day, last 14 days"
           />
           <StatTile
             label="Avg first response"
@@ -68,6 +82,12 @@ export default async function DashboardPage() {
                 : String(totals.avgFirstResponseMinutes)
             }
             unit={totals.avgFirstResponseMinutes === null ? undefined : "min"}
+            delta={kpiDelta(totals.avgFirstResponseMinutes, previous.avgFirstResponseMinutes, {
+              kind: "duration",
+              better: "down",
+              unit: "min",
+            })}
+            caption="no responses yet"
           />
           <StatTile
             label="Avg resolution"
@@ -77,45 +97,52 @@ export default async function DashboardPage() {
                 : String(totals.avgResolutionHours)
             }
             unit={totals.avgResolutionHours === null ? undefined : "h"}
+            delta={kpiDelta(totals.avgResolutionHours, previous.avgResolutionHours, {
+              kind: "duration",
+              better: "down",
+              unit: "h",
+            })}
+            caption="nothing resolved yet"
           />
           <StatTile
             label="AI resolution rate"
             value={String(Math.round(totals.aiResolutionRate * 100))}
             unit="%"
+            delta={kpiDelta(totals.aiResolutionRate, previous.aiResolutionRate, { kind: "rate", better: "up" })}
+            sparkline={last14.map((p) => p.resolvedAi)}
+            sparklineLabel="Resolved by AI per day, last 14 days"
           />
           <StatTile
             label="Pending approvals"
             value={String(totals.pendingApprovals)}
             highlight={totals.pendingApprovals > 0}
+            caption={totals.pendingApprovals > 0 ? "waiting on a person" : "nothing waiting"}
           />
           <StatTile
             label="SLA breached"
             value={String(totals.slaBreached)}
             highlight={totals.slaBreached > 0}
             tone="critical"
+            caption={totals.slaBreached > 0 ? "open, past target" : "all within target"}
           />
         </div>
 
-        {/* Ticket flow */}
+        {/* Ticket flow / resolutions by resolver */}
         <Card className="col-span-12 gap-3 px-5 py-4 xl:col-span-8 xl:min-h-0">
-          <CardHeading>Ticket flow — last 30 days</CardHeading>
           <FlowChart data={kpis.createdByDay} />
         </Card>
 
-        {/* Open load by category */}
+        {/* Open load by category / priority, top requesters */}
         <Card className="col-span-12 gap-3 px-5 py-4 xl:col-span-4 xl:min-h-0">
-          <CardHeading>Open load by category</CardHeading>
-          <CategoryBars data={kpis.byCategory} />
-        </Card>
-
-        {/* By priority */}
-        <Card className="col-span-12 gap-3 px-5 py-4 md:col-span-6 xl:col-span-3 xl:min-h-0">
-          <CardHeading>By priority</CardHeading>
-          <PriorityBars data={kpis.byPriority} />
+          <TabbedBreakdown
+            byCategory={kpis.byCategory}
+            byPriority={kpis.byPriority}
+            topRequesters={kpis.topRequesters}
+          />
         </Card>
 
         {/* AI vs human resolutions */}
-        <Card className="col-span-12 gap-3 px-5 py-4 md:col-span-6 xl:col-span-4 xl:min-h-0">
+        <Card className="col-span-12 gap-3 px-5 py-4 md:col-span-6 xl:col-span-3 xl:min-h-0">
           <CardHeading>AI vs human resolutions — 30d</CardHeading>
           <AiVsHumanBar ai={aiResolved} human={humanResolved} />
         </Card>
@@ -132,7 +159,7 @@ export default async function DashboardPage() {
         </Card>
 
         {/* Approvals mini-tile */}
-        <Card className="col-span-12 gap-2 px-5 py-4 md:col-span-6 xl:col-span-2 xl:min-h-0">
+        <Card className="col-span-12 gap-2 px-5 py-4 md:col-span-6 xl:col-span-3 xl:min-h-0">
           <CardHeading>Approvals</CardHeading>
           <ApprovalsTile
             approved={approvalStats.approved}

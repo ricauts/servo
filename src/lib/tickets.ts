@@ -74,13 +74,64 @@ function localYmd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Rows of the two ticket windows the KPI averages are computed over. */
+type CreatedRow = { createdAt: Date; firstResponseAt: Date | null };
+type ResolvedRow = {
+  createdAt: Date;
+  resolvedAt: Date | null;
+  assignee: { role: string } | null;
+};
+
+/** Mean minutes from creation to first response, over the tickets that got one. */
+function avgFirstResponseMinutes(rows: CreatedRow[]): number | null {
+  const responded = rows.filter((t) => t.firstResponseAt !== null);
+  if (responded.length === 0) return null;
+  return Math.round(
+    responded.reduce(
+      (sum, t) => sum + (t.firstResponseAt!.getTime() - t.createdAt.getTime()) / 60_000,
+      0,
+    ) / responded.length,
+  );
+}
+
+/** Mean hours from creation to resolution, one decimal. */
+function avgResolutionHours(rows: ResolvedRow[]): number | null {
+  if (rows.length === 0) return null;
+  return (
+    Math.round(
+      (rows.reduce(
+        (sum, t) => sum + (t.resolvedAt!.getTime() - t.createdAt.getTime()) / 3_600_000,
+        0,
+      ) /
+        rows.length) *
+        10,
+    ) / 10
+  );
+}
+
+function isAiResolved(t: ResolvedRow): boolean {
+  return t.assignee?.role === "AI_AGENT";
+}
+
 export async function getKpis(): Promise<KpiResponse> {
   const now = new Date();
-  // Last 30 calendar days inclusive of today, from local midnight.
+  // Last 30 calendar days inclusive of today, from local midnight — and the
+  // 30 days before that, for the "vs previous 30 days" deltas.
   const since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+  const prevSince = new Date(since.getFullYear(), since.getMonth(), since.getDate() - 30);
 
-  const [openTickets, resolved30, created30, allApprovals, drafts30, completedRuns30, distilledSkills, enabledSkills] =
-    await Promise.all([
+  const [
+    openTickets,
+    resolved30,
+    created30,
+    resolvedPrev,
+    createdPrev,
+    allApprovals,
+    drafts30,
+    completedRuns30,
+    distilledSkills,
+    enabledSkills,
+  ] = await Promise.all([
     db.ticket.findMany({
       where: { status: { notIn: ["RESOLVED", "CLOSED"] } },
       select: {
@@ -110,6 +161,18 @@ export async function getKpis(): Promise<KpiResponse> {
         requester: { select: { name: true } },
       },
     }),
+    db.ticket.findMany({
+      where: { resolvedAt: { gte: prevSince, lt: since } },
+      select: {
+        createdAt: true,
+        resolvedAt: true,
+        assignee: { select: { role: true } },
+      },
+    }),
+    db.ticket.findMany({
+      where: { createdAt: { gte: prevSince, lt: since } },
+      select: { createdAt: true, firstResponseAt: true },
+    }),
     db.approval.findMany({ select: { status: true } }),
     // Pending drafts (whenever created) + decisions of the last 30 days.
     db.replyDraft.findMany({
@@ -132,37 +195,20 @@ export async function getKpis(): Promise<KpiResponse> {
     }),
   ]);
 
-  // --- totals -------------------------------------------------------------
-  const responded = created30.filter((t) => t.firstResponseAt !== null);
-  const avgFirstResponseMinutes =
-    responded.length === 0
-      ? null
-      : Math.round(
-          responded.reduce(
-            (sum, t) =>
-              sum + (t.firstResponseAt!.getTime() - t.createdAt.getTime()) / 60_000,
-            0,
-          ) / responded.length,
-        );
-
-  const avgResolutionHours =
-    resolved30.length === 0
-      ? null
-      : Math.round(
-          (resolved30.reduce(
-            (sum, t) =>
-              sum + (t.resolvedAt!.getTime() - t.createdAt.getTime()) / 3_600_000,
-            0,
-          ) /
-            resolved30.length) *
-            10,
-        ) / 10;
-
-  const aiResolved = resolved30.filter(
-    (t) => t.assignee?.role === "AI_AGENT",
-  ).length;
+  // --- totals (this window) and the same numbers for the window before ----
+  const aiResolved = resolved30.filter(isAiResolved).length;
   const aiResolutionRate =
     resolved30.length === 0 ? 0 : aiResolved / resolved30.length;
+
+  const aiResolvedPrev = resolvedPrev.filter(isAiResolved).length;
+  const previous: KpiResponse["previous"] = {
+    created: createdPrev.length,
+    resolved: resolvedPrev.length,
+    avgFirstResponseMinutes: avgFirstResponseMinutes(createdPrev),
+    avgResolutionHours: avgResolutionHours(resolvedPrev),
+    aiResolutionRate:
+      resolvedPrev.length === 0 ? 0 : aiResolvedPrev / resolvedPrev.length,
+  };
 
   const approvalStats = { approved: 0, rejected: 0, pending: 0 };
   for (const a of allApprovals) {
@@ -179,11 +225,11 @@ export async function getKpis(): Promise<KpiResponse> {
   }
 
   // --- createdByDay (zero-filled, local calendar days) --------------------
-  const byDay = new Map<string, { date: string; created: number; resolved: number }>();
+  const byDay = new Map<string, KpiResponse["createdByDay"][number]>();
   for (let i = 0; i < 30; i++) {
     const d = new Date(since.getFullYear(), since.getMonth(), since.getDate() + i);
     const key = localYmd(d);
-    byDay.set(key, { date: key, created: 0, resolved: 0 });
+    byDay.set(key, { date: key, created: 0, resolved: 0, resolvedAi: 0, resolvedHuman: 0 });
   }
   for (const t of created30) {
     const bucket = byDay.get(localYmd(t.createdAt));
@@ -191,7 +237,10 @@ export async function getKpis(): Promise<KpiResponse> {
   }
   for (const t of resolved30) {
     const bucket = byDay.get(localYmd(t.resolvedAt!));
-    if (bucket) bucket.resolved++;
+    if (!bucket) continue;
+    bucket.resolved++;
+    if (isAiResolved(t)) bucket.resolvedAi++;
+    else bucket.resolvedHuman++;
   }
 
   // --- distributions (open + in-flight tickets) ---------------------------
@@ -259,15 +308,17 @@ export async function getKpis(): Promise<KpiResponse> {
   return {
     totals: {
       open: openTickets.length,
+      createdLast30d: created30.length,
       resolvedLast30d: resolved30.length,
-      avgFirstResponseMinutes,
-      avgResolutionHours,
+      avgFirstResponseMinutes: avgFirstResponseMinutes(created30),
+      avgResolutionHours: avgResolutionHours(resolved30),
       aiResolutionRate,
       pendingApprovals: approvalStats.pending,
       slaBreached: openTickets.filter(
         (t) => evaluateSla(t, now).state === "breached",
       ).length,
     },
+    previous,
     createdByDay: [...byDay.values()],
     byCategory: CATEGORIES.map((category) => ({
       category,

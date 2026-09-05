@@ -65,7 +65,7 @@ function ChartContainer({
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden", /* no-hex-lint:allow — vendored shadcn: these attribute selectors MATCH recharts' internal literal strokes; they set no colour of their own */
+          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-(--chart-axis) [&_.recharts-cartesian-axis-tick_text]:font-mono [&_.recharts-cartesian-axis-tick_text]:text-[11px] [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-(--chart-grid) [&_.recharts-curve.recharts-tooltip-cursor]:stroke-(--chart-grid) [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-(--chart-grid) [&_.recharts-radial-bar-background-sector]:fill-(--surface-2) [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-(--surface-2) [&_.recharts-reference-line_[stroke='#ccc']]:stroke-(--chart-grid) [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden", /* no-hex-lint:allow — vendored shadcn: these attribute selectors MATCH recharts' internal literal strokes; they set no colour of their own. Grid, axis and cursor route through the ds dataviz tokens (--chart-grid, --chart-axis, --surface-2). */
           className
         )}
         {...props}
@@ -161,7 +161,7 @@ function ChartTooltipContent({
 
     if (labelFormatter) {
       return (
-        <div className={cn("font-medium", labelClassName)}>
+        <div className={cn("font-mono text-[11px] text-muted-foreground", labelClassName)}>
           {labelFormatter(value, payload)}
         </div>
       )
@@ -171,7 +171,11 @@ function ChartTooltipContent({
       return null
     }
 
-    return <div className={cn("font-medium", labelClassName)}>{value}</div>
+    return (
+      <div className={cn("font-mono text-[11px] text-muted-foreground", labelClassName)}>
+        {value}
+      </div>
+    )
   }, [
     label,
     labelFormatter,
@@ -191,7 +195,7 @@ function ChartTooltipContent({
   return (
     <div
       className={cn(
-        "grid min-w-32 items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl",
+        "grid min-w-32 items-start gap-1.5 rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-sm",
         className
       )}
     >
@@ -291,8 +295,8 @@ function ChartLegendContent({
   return (
     <div
       className={cn(
-        "flex items-center justify-center gap-4",
-        verticalAlign === "top" ? "pb-3" : "pt-3",
+        "flex items-center justify-center gap-4 font-sans text-[12px] text-muted-foreground",
+        verticalAlign === "top" ? "pb-3" : "pt-2",
         className
       )}
     >

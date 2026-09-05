@@ -132,6 +132,7 @@ export const SETTING_KEYS = {
 export interface KpiResponse {
   totals: {
     open: number; // tickets not RESOLVED/CLOSED
+    createdLast30d: number;
     resolvedLast30d: number;
     avgFirstResponseMinutes: number | null;
     avgResolutionHours: number | null;
@@ -139,7 +140,25 @@ export interface KpiResponse {
     pendingApprovals: number;
     slaBreached: number; // open tickets past their active SLA target
   };
-  createdByDay: { date: string; created: number; resolved: number }[]; // last 30 days, date = "YYYY-MM-DD"
+  // The SAME window metrics for the 30 days before `totals`' window (days
+  // -59..-30), so the dashboard can show where each number moved. null keeps
+  // the "not applicable" meaning it has in totals.
+  previous: {
+    created: number;
+    resolved: number;
+    avgFirstResponseMinutes: number | null;
+    avgResolutionHours: number | null;
+    aiResolutionRate: number;
+  };
+  // Last 30 days, date = "YYYY-MM-DD". resolved = resolvedAi + resolvedHuman
+  // (the resolver is the assignee's role at resolution time).
+  createdByDay: {
+    date: string;
+    created: number;
+    resolved: number;
+    resolvedAi: number;
+    resolvedHuman: number;
+  }[];
   byCategory: { category: Category; count: number }[]; // open + in-flight tickets
   byPriority: { priority: Priority; count: number }[];
   aiVsHuman: { resolver: "AI" | "HUMAN"; count: number }[]; // resolved last 30d
