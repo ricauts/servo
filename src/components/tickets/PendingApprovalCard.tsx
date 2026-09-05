@@ -14,10 +14,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Badge from "@/components/common/Badge";
 import JsonBlock from "@/components/tickets/JsonBlock";
 import RelativeTime from "@/components/tickets/RelativeTime";
-import { RISK_LABEL, RISK_TONE } from "@/lib/labels";
+import RunChip, { RISK_CHIP, RISK_TEXT } from "@/components/runs/RunChip";
 import type { RiskLevel } from "@/lib/types";
 
 export default function PendingApprovalCard({
@@ -64,31 +63,32 @@ export default function PendingApprovalCard({
   }
 
   return (
-    <Card className="bg-warn-soft/40 ring-warn/60">
+    // The chip triple, not an alpha tint: opaque warn surface + warn hairline.
+    <Card className="bg-(--warn-chip) ring-(--warn-chip-line)">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ShieldAlert size={18} className="text-warn" />
+          <ShieldAlert size={18} className="text-(--warn-chip-ink)" aria-hidden />
           Human approval required
         </CardTitle>
         <CardDescription>
           Requested <RelativeTime value={requestedAt} />
         </CardDescription>
         <CardAction>
-          <Badge tone={RISK_TONE[riskLevel] ?? "warn"}>
-            {RISK_LABEL[riskLevel] ?? riskLevel}
-          </Badge>
+          <RunChip tone={RISK_CHIP[riskLevel] ?? "warn"}>
+            {RISK_TEXT[riskLevel] ?? riskLevel.toLowerCase()}
+          </RunChip>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 font-sans">
         <p className="text-sm text-muted-foreground">
           The agent is paused and wants to execute{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+          <code className="rounded border border-(--neutral-chip-line) bg-(--surface) px-1.5 py-0.5 font-mono text-xs text-(--text-strong)">
             {toolName}
           </code>{" "}
           with this input:
         </p>
 
-        <JsonBlock raw={toolInput} className="max-h-48 bg-background/60" />
+        <JsonBlock raw={toolInput} className="max-h-48 border border-(--warn-chip-line) bg-(--surface)" />
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="approval-reason" className="font-heading">
@@ -100,7 +100,7 @@ export default function PendingApprovalCard({
             onChange={(e) => setReason(e.target.value)}
             placeholder="Why are you approving or rejecting?"
             disabled={pending !== null}
-            className="bg-background/60"
+            className="bg-(--surface)"
           />
         </div>
 
@@ -124,7 +124,7 @@ export default function PendingApprovalCard({
           </Button>
         </div>
 
-        {error && <p className="text-[13px] text-critical">{error}</p>}
+        {error && <p className="text-[13px] text-(--critical)">{error}</p>}
       </CardContent>
     </Card>
   );
